@@ -12,6 +12,8 @@ export type MonitorSettings = {
   sensitivity: Sensitivity;
   parents: Parent[];
   myName: string;
+  /** Seconds of crying before the first alert. */
+  alertAfter: number;
   /** What this phone does in the monitor: stays with the baby, or gets the alerts. */
   role: Role | null;
   /** Parent phone only: name of the baby whose nursery phone paired with us. */
@@ -19,11 +21,12 @@ export type MonitorSettings = {
 };
 export type AlertRecord = { id: string; body: string; at: number };
 
+export const ALERT_AFTER: [number, string][] = [[0, "Right away"], [10, "10 sec"], [60, "1 min"]];
 export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.45, medium: 0.25, high: 0.12 };
 
 const KEY = "hush:monitor";
 const ALERTS_KEY = "hush:alerts";
-export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "", role: null, pairedWith: null };
+export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "", role: null, pairedWith: null, alertAfter: 0 };
 
 export async function loadMonitor(): Promise<MonitorSettings> {
   try {

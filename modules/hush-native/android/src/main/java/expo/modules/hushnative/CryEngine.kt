@@ -45,6 +45,10 @@ object CryEngine {
   private const val SCREAMING = 11
 
   @Volatile var threshold = 0.3f
+  /** How long crying has to go on before the first alert. 0 = right away. */
+  @Volatile var delayMs = 0L
+  /** Pauses shorter than this don't end a crying spell (babies stop for breath). */
+  private const val GAP_MS = 6000L
   @Volatile var babyName = "Baby"
   @Volatile var tokens: List<String> = emptyList()
 
@@ -119,7 +123,9 @@ object CryEngine {
       val pcm = ShortArray(HOP)
       var filled = 0
       val history = ArrayDeque<Boolean>()
-      var crying = false
+      var spellStart = 0L   // when the current crying spell began, 0 = none
+      var lastHeard = 0L    // last moment crying was detected
+      var alerted = false   // already alerted for this spell
       var lastAlert = 0L
 
       while (running && !Thread.currentThread().isInterrupted) {
@@ -162,15 +168,27 @@ object CryEngine {
           mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble())
         )
 
+        // A crying spell starts on the first detection and lasts until there's been no
+        // crying for GAP_MS. Alert once it has lasted delayMs, then remind every REPEAT_MS.
         val t = System.currentTimeMillis()
-        if (now && (!crying || t - lastAlert >= REPEAT_MS)) {
-          val first = !crying
-          lastAlert = t
-          listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
-          val body = if (first) "$babyName is crying" else "$babyName is still crying"
-          AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
+        if (now) {
+          if (spellStart == 0L) spellStart = t
+          lastHeard = t
+        } else if (spellStart != 0L && t - lastHeard > GAP_MS) {
+          spellStart = 0L
+          alerted = false
         }
-        crying = now
+        if (spellStart != 0L && now) {
+          val due = if (!alerted) t - spellStart >= delayMs else t - lastAlert >= REPEAT_MS
+          if (due) {
+            val first = !alerted
+            alerted = true
+            lastAlert = t
+            listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
+            val body = if (first) "$babyName is crying" else "$babyName is still crying"
+            AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
+          }
+        }
       }
     } catch (e: Exception) {
       Log.w(TAG, "Listening stopped", e)

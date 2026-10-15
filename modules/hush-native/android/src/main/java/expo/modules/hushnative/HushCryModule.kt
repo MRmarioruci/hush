@@ -23,8 +23,9 @@ class HushCryModule : Module() {
       CryEngine.listener = null
     }
 
-    Function("configure") { threshold: Double, babyName: String, tokens: List<String> ->
+    Function("configure") { threshold: Double, babyName: String, tokens: List<String>, delaySeconds: Int ->
       CryEngine.threshold = threshold.toFloat()
+      CryEngine.delayMs = delaySeconds * 1000L
       CryEngine.babyName = babyName
       CryEngine.tokens = tokens
     }

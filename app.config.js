@@ -11,7 +11,7 @@ module.exports = ({ config }) => ({
   ...config,
   name: "hush",
   slug: "hush",
-  version: "1.1.3",
+  version: "1.1.4",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",

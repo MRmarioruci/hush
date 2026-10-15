@@ -42,8 +42,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [lastCry, setLastCry] = useState<number | null>(null);
 
   useEffect(() => {
-    cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens);
-  }, [m.sensitivity, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+    cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
+  }, [m.sensitivity, m.alertAfter, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!cryDetector) return;
@@ -65,11 +65,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     }
     const problem = await askMicAndNotifications();
     if (problem) return problem;
-    cryDetector.configure(THRESHOLDS[m.sensitivity], baby, tokens);
+    cryDetector.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
     cryDetector.start();
     setListening(true);
     return tokens.length ? null : "Pair a parent phone to get alerts.";
-  }, [listening, m.sensitivity, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [listening, m.sensitivity, m.alertAfter, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby }}>{children}</Ctx.Provider>

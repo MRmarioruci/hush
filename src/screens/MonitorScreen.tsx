@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
@@ -167,14 +167,27 @@ function NurseryPhone() {
       )}
 
       {paired && (
-        <Card>
-          <Label>Sensitivity</Label>
-          <View style={styles.seg2}>
-            {(["low", "medium", "high"] as Sensitivity[]).map((s) => (
-              <Pressable key={s} onPress={() => update({ sensitivity: s })} style={[styles.seg2Item, m.sensitivity === s && styles.seg2On]}>
-                <Text style={[styles.seg2Text, m.sensitivity === s && { color: colors.cream }]}>{s[0].toUpperCase() + s.slice(1)}</Text>
-              </Pressable>
-            ))}
+        <Card style={{ gap: 16 }}>
+          <View style={{ gap: 10 }}>
+            <Label>Alert after</Label>
+            <Segmented
+              options={ALERT_AFTER.map(([v, l]) => ({ value: v, label: l }))}
+              value={m.alertAfter}
+              onChange={(alertAfter) => update({ alertAfter })}
+            />
+            <Text style={styles.roleSub}>
+              {m.alertAfter === 0
+                ? "As soon as it hears crying."
+                : `Only if ${baby} keeps crying for ${m.alertAfter === 60 ? "a minute" : "10 seconds"}. Short fusses are ignored.`}
+            </Text>
+          </View>
+          <View style={{ gap: 10 }}>
+            <Label>Sensitivity</Label>
+            <Segmented
+              options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))}
+              value={m.sensitivity}
+              onChange={(sensitivity) => update({ sensitivity })}
+            />
           </View>
         </Card>
       )}
@@ -206,8 +219,25 @@ function Hearing() {
           <Text style={styles.meterText}>Crying</Text>
         </View>
       </View>
-      <Text style={styles.roleSub}>An alert goes out when it stays past the line for about 2 seconds. To test, play a video of a baby crying near this phone.</Text>
+      <Text style={styles.roleSub}>
+        {m.alertAfter === 0
+          ? "Alerts when it stays past the line for about 2 seconds."
+          : `Alerts when crying keeps going for ${m.alertAfter === 60 ? "a minute" : "10 seconds"}.`}{" "}
+        To test, play a video of a baby crying near this phone.
+      </Text>
     </Card>
+  );
+}
+
+function Segmented<T extends string | number>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <View style={styles.seg2}>
+      {options.map((o) => (
+        <Pressable key={String(o.value)} onPress={() => onChange(o.value)} style={[styles.seg2Item, value === o.value && styles.seg2On]}>
+          <Text style={[styles.seg2Text, value === o.value && { color: colors.cream }]}>{o.label}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
