@@ -38,13 +38,15 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
                 const e = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !e.defaultPrevented) navigation.navigate(route.name);
               }}
-              style={styles.item}
+              android_ripple={null}
+              style={({ pressed }) => [styles.item, pressed && { transform: [{ scale: 0.92 }] }]}
             >
-              <View style={[styles.iconBox, focused && styles.iconBoxOn]}>
-                <Icon d={t.icon} size={22} color={focused ? colors.bg : colors.muted} width={focused ? 2 : 1.8} />
+              <View style={styles.iconBox}>
+                <Icon d={t.icon} size={23} color={focused ? colors.peach : colors.muted} width={focused ? 2.1 : 1.8} />
                 {live && <View style={[styles.dot, { backgroundColor: liveColor }]} />}
               </View>
               <Text style={[styles.text, focused && styles.textOn]}>{t.label}</Text>
+              <View style={[styles.mark, focused && styles.markOn]} />
             </Pressable>
           );
         })}
@@ -67,10 +69,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2f2943",
   },
-  item: { flex: 1, alignItems: "center", gap: 3 },
-  iconBox: { width: 52, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  iconBoxOn: { backgroundColor: colors.peach },
-  dot: { position: "absolute", top: 3, right: 10, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#221d31" },
+  item: { flex: 1, alignItems: "center", gap: 2, paddingTop: 2 },
+  iconBox: { width: 40, height: 28, alignItems: "center", justifyContent: "center" },
+  mark: { width: 4, height: 4, borderRadius: 2, marginTop: 1, backgroundColor: "transparent" },
+  markOn: { backgroundColor: colors.peach },
+  dot: { position: "absolute", top: 1, right: 4, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#221d31" },
   text: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
-  textOn: { fontFamily: fonts.bodyBold, color: colors.cream },
+  textOn: { fontFamily: fonts.bodyBold, color: colors.peach },
 });
