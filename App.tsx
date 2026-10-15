@@ -48,8 +48,8 @@ export default function App() {
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <StatusBar style="light" />
         {ready && (
-          <SleepProvider initial={settings} still={still}>
-            <MonitorProvider>
+          <MonitorProvider>
+            <SleepProvider initial={settings} still={still}>
               <Sky still={still} />
               <NavigationContainer theme={theme}>
                 <Tab.Navigator
@@ -63,8 +63,8 @@ export default function App() {
                   <Tab.Screen name="Settings" component={SettingsScreen} />
                 </Tab.Navigator>
               </NavigationContainer>
-            </MonitorProvider>
-          </SleepProvider>
+            </SleepProvider>
+          </MonitorProvider>
         )}
       </View>
     </SafeAreaProvider>

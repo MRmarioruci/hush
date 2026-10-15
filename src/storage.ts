@@ -1,8 +1,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type Settings = { sound: string; timer: number; dist: number; unit: "m" | "ft"; vol: number };
+export type Settings = {
+  sound: string;
+  timer: number;
+  dist: number;
+  unit: "m" | "ft";
+  vol: number;
+  /** Smart lowers the noise once the baby settles and raises it when the baby cries. */
+  mode: "smart" | "manual";
+  /** Smart mode listens for crying on this phone to react to it. */
+  smartCry: boolean;
+};
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70 };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true };
 
 export async function loadSettings(): Promise<Settings> {
   try {

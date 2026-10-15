@@ -86,7 +86,7 @@ export function HomeScreen() {
           <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
             <View style={[styles.levelDot, { backgroundColor: sleep.level != null && sleep.level > LIMIT_DB + 0.5 ? colors.rose : colors.sage }]} />
             <Text style={styles.quickText}>
-              {sleep.level == null ? "Volume off" : `≈${Math.round(Math.max(20, sleep.level))} dB at crib`}
+              {sleep.level == null ? "Volume off" : `${sleep.s.mode === "smart" ? "Smart · " : ""}≈${Math.round(Math.max(20, sleep.level))} dB`}
             </Text>
           </Pressable>
         </View>

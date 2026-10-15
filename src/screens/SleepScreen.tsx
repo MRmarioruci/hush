@@ -1,5 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { useEffect, useState } from "react";
+import { PermissionsAndroid, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { SMART } from "../smart";
+import { useMonitor } from "../state/monitor";
+import { askMicAndNotifications } from "../monitor";
+import Svg, { Circle, Path } from "react-native-svg";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
@@ -63,6 +67,8 @@ export function SleepScreen() {
         </View>
       </Card>
 
+      <SmartCard />
+
       <Card>
         <Label>Stop after</Label>
         <View style={styles.chips}>
@@ -98,7 +104,7 @@ export function SleepScreen() {
           <View style={[styles.gaugeMark, { left: `${pos(LIMIT_DB)}%` }]} />
         </View>
         <View>
-          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.dev ? "Phone volume" : "Volume"}</Label>
+          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? "Highest level" : z.dev ? "Phone volume" : "Volume"}</Label>
           {z.dev ? (
             <Slider label="Phone volume" value={z.dev.step} min={0} max={z.dev.max} limit={z.ceiling!} onChange={z.setStep} />
           ) : (
@@ -117,6 +123,17 @@ export function SleepScreen() {
 }
 
 const styles = StyleSheet.create({
+  modeRow: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 3 },
+  modeItem: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 99 },
+  modeOn: { backgroundColor: colors.peach },
+  modeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
+  smartRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  smartTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream, fontVariant: ["tabular-nums"] },
+  rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  allow: { alignSelf: "flex-start", backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 },
+  allowText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
+  curveAxis: { flexDirection: "row", justifyContent: "space-between", marginTop: -8 },
+  curveText: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
   now: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 24, padding: 14 },
   playBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
   nowName: { fontFamily: fonts.display, fontSize: 19, color: colors.cream },
@@ -137,3 +154,97 @@ const styles = StyleSheet.create({
   gaugeFill: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 99, backgroundColor: colors.sage },
   gaugeMark: { position: "absolute", top: -5, bottom: -5, width: 3, marginLeft: -1.5, borderRadius: 2, backgroundColor: colors.cream },
 });
+
+/** Smart vs manual volume, with a small picture of the night's volume curve. */
+function SmartCard() {
+  const z = useSleep();
+  const mon = useMonitor();
+  const smart = z.s.mode === "smart";
+  const [micMsg, setMicMsg] = useState<string | null>(null);
+  const [micOk, setMicOk] = useState(true);
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).then(setMicOk).catch(() => setMicOk(false));
+  }, [z.s.smartCry]);
+
+  const phaseText = (() => {
+    const v = z.smart;
+    if (!v) return `Starts at ${SMART.startDb} dB, then eases to ${SMART.sleepDb} dB after ${SMART.holdMin} min`;
+    const at = v.nextChange ? ` until ${new Date(v.nextChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+    switch (v.phase) {
+      case "settling": return `Helping ${mon.baby} fall asleep${at}`;
+      case "easing": return `Getting quieter${at}`;
+      case "sleeping": return `Quiet level for the night`;
+      case "calming": return `${mon.baby} cried. Louder for a while${at}`;
+    }
+  })();
+
+  return (
+    <Card style={{ gap: 14 }}>
+      <View style={styles.modeRow}>
+        {(["smart", "manual"] as const).map((m) => (
+          <Pressable key={m} onPress={() => z.set({ mode: m })} style={[styles.modeItem, z.s.mode === m && styles.modeOn]}>
+            <Text style={[styles.modeText, z.s.mode === m && { color: colors.bg }]}>{m === "smart" ? "Smart" : "Manual"}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {smart ? (
+        <>
+          <Curve phase={z.smart?.phase ?? null} startedAt={null} />
+          <View style={styles.smartRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smartTitle}>{z.smart ? `${Math.round(z.smart.db)} dB at the crib` : "Smart volume"}</Text>
+              <Text style={styles.hint}>{phaseText}</Text>
+            </View>
+          </View>
+          <View style={styles.smartRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Respond to crying</Text>
+              <Text style={styles.hint}>Turns back up when it hears {mon.baby} cry</Text>
+            </View>
+            <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
+          </View>
+          {z.s.smartCry && !micOk && (
+            <Pressable
+              onPress={async () => {
+                const problem = await askMicAndNotifications();
+                setMicMsg(problem);
+                setMicOk(!problem);
+              }}
+              style={styles.allow}
+            >
+              <Text style={styles.allowText}>Allow microphone</Text>
+            </Pressable>
+          )}
+          {micMsg && <Text style={styles.hint}>{micMsg}</Text>}
+        </>
+      ) : (
+        <Text style={styles.hint}>Stays at the level you set below.</Text>
+      )}
+    </Card>
+  );
+}
+
+/** The smart volume plan as a line: high while settling, easing down, a bump when crying. */
+function Curve({ phase }: { phase: string | null; startedAt: null }) {
+  const W = 300, H = 64;
+  const y = (db: number) => 8 + ((SMART.startDb - db) / (SMART.startDb - SMART.sleepDb)) * (H - 22);
+  const x = (min: number) => (min / 120) * W;
+  const h = SMART.holdMin, e = SMART.holdMin + SMART.easeMin;
+  const d = `M0 ${y(SMART.startDb)} L${x(h)} ${y(SMART.startDb)} L${x(e)} ${y(SMART.sleepDb)} L${x(78)} ${y(SMART.sleepDb)} L${x(80)} ${y(SMART.startDb)} L${x(85)} ${y(SMART.startDb)} L${x(95)} ${y(SMART.sleepDb)} L${W} ${y(SMART.sleepDb)}`;
+  const dot = phase === "settling" ? [x(h / 2), y(SMART.startDb)] : phase === "easing" ? [x((h + e) / 2), y((SMART.startDb + SMART.sleepDb) / 2)] : phase === "calming" ? [x(82), y(SMART.startDb)] : phase === "sleeping" ? [x(105), y(SMART.sleepDb)] : null;
+  return (
+    <View>
+      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Path d={`${d} L${W} ${H - 12} L0 ${H - 12} Z`} fill={colors.peach} opacity={0.12} />
+        <Path d={d} stroke={colors.peach} strokeWidth={2} fill="none" strokeLinejoin="round" />
+        {dot && <Circle cx={dot[0]} cy={dot[1]} r={5} fill={colors.cream} />}
+      </Svg>
+      <View style={styles.curveAxis}>
+        <Text style={styles.curveText}>Falling asleep</Text>
+        <Text style={styles.curveText}>Cry</Text>
+        <Text style={styles.curveText}>Rest of the night</Text>
+      </View>
+    </View>
+  );
+}

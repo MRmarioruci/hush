@@ -1,7 +1,7 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState } from "react-native";
+import { AppState, PermissionsAndroid } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, fmtDur, loadNights, nightKey, packNight, saveReceivedNight, unpackNight, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
@@ -26,6 +26,11 @@ type Monitor = {
   baby: string;
   /** Bumps whenever night data changes, so the Nights screen can reload. */
   nightsVersion: number;
+  /** Last moment crying was heard on this phone. */
+  cryHeardAt: number | null;
+  /** Smart white noise asks for the mic here, so it can react to crying even when the monitor is off. */
+  setSoundWantsMic: (want: boolean) => void;
+  micOn: boolean;
 };
 
 const Ctx = createContext<Monitor | null>(null);
@@ -44,9 +49,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   const baby = m.babyName.trim() || "Baby";
   const tokens = m.parents.map((p) => p.token);
+  // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
   const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
+  const [soundWantsMic, setSoundWantsMic] = useState(false);
+  const [micOn, setMicOn] = useState(() => cryDetector?.isListening() ?? false);
   const [status, setStatus] = useState<CryStatus>({});
   const [lastCry, setLastCry] = useState<number | null>(null);
+  const [cryHeardAt, setCryHeardAt] = useState<number | null>(null);
 
   useEffect(() => {
     cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
@@ -56,7 +65,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (!cryDetector) return;
     const a = cryDetector.onStatus((st) => {
       setStatus(st);
-      if (st.error) setListening(false);
+      if (st.crying) setCryHeardAt(Date.now());
+      if (st.error) { setListening(false); setMicOn(false); }
     });
     const b = cryDetector.onCry((e) => setLastCry(e.at));
     return () => { a.remove(); b.remove(); };
@@ -122,24 +132,45 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [m.role, update]);
 
+  // Start or stop the mic when either the monitor or smart white noise needs it.
+  const wantMic = listening || soundWantsMic;
+  useEffect(() => {
+    if (!cryDetector) return;
+    let cancelled = false;
+    (async () => {
+      if (wantMic && !cryDetector.isListening()) {
+        if (!listening) {
+          // Started by white noise: only if the mic is already allowed (never prompt mid-play).
+          const ok = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false);
+          if (!ok || cancelled) return;
+        }
+        cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim() || "Baby", mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
+        cryDetector.start();
+        setMicOn(true);
+      } else if (!wantMic && cryDetector.isListening()) {
+        cryDetector.stop();
+        setMicOn(false);
+        setStatus({});
+        setTimeout(syncEvents, 800);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [wantMic, listening, syncEvents]);
+
   const toggleListening = useCallback(async (): Promise<string | null> => {
     if (!cryDetector) return "Listening for crying works on Android phones.";
     if (listening) {
-      cryDetector.stop();
       setListening(false);
-      setStatus({});
-      setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 800);
+      setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 1200);
       return null;
     }
     const problem = await askMicAndNotifications();
     if (problem) return problem;
-    cryDetector.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
-    cryDetector.start();
     setListening(true);
-    return tokens.length ? null : "Pair a parent phone to get alerts.";
-  }, [listening, m.sensitivity, m.alertAfter, baby, tokens.join(","), syncEvents, sendNightSummary]); // eslint-disable-line react-hooks/exhaustive-deps
+    return mRef.current.parents.length ? null : "Pair a parent phone to get alerts.";
+  }, [listening, syncEvents, sendNightSummary]);
 
   return (
-    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn }}>{children}</Ctx.Provider>
   );
 }

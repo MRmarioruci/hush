@@ -8,6 +8,9 @@ import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
 import { capGain, fullVolumeDb, levelAtCrib, safePlan } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
 import { addEvent } from "../nights";
+import { LIMIT_DB } from "../safety";
+import { smartTarget, type SmartPhase } from "../smart";
+import { useMonitor } from "./monitor";
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -26,6 +29,8 @@ type Sleep = {
   level: number | null;
   beat: number;
   still: boolean;
+  /** Smart mode: what it's doing now and the level it's aiming for (dB at the crib). */
+  smart: { phase: SmartPhase; db: number; nextChange: number | null; hearing: boolean } | null;
 };
 
 const Ctx = createContext<Sleep | null>(null);
@@ -84,7 +89,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   const plan = dev ? safePlan(s.dist, dev.max) : null;
   const appGain = plan ? plan.appGain : capGain(s.dist) * (s.vol / 100);
-  const level = dev
+  const baseLevel = dev
     ? levelAtCrib(s.dist, dev.step, dev.max, plan!.appGain)
     : s.vol > 0 ? fullVolumeDb(s.dist) + 20 * Math.log10(appGain) : null;
 
@@ -97,6 +102,42 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const setStep = useCallback((step: number) => {
     if (deviceVolume) setDev(deviceVolume.setStep(step));
   }, []);
+
+  /* ---------- smart mode ---------- */
+  const mon = useMonitor();
+  const isSmart = s.mode === "smart";
+  const startedAt = useRef(0);
+  const smartDb = useRef(LIMIT_DB); // current level, eased toward the target
+  const [smartView, setSmartView] = useState<Sleep["smart"]>(null);
+
+  useEffect(() => {
+    if (playing && !startedAt.current) {
+      startedAt.current = Date.now();
+      smartDb.current = LIMIT_DB;
+    }
+    if (!playing) startedAt.current = 0;
+  }, [playing]);
+
+  // React to crying using this phone's mic while smart white noise plays.
+  useEffect(() => {
+    mon.setSoundWantsMic(playing && isSmart && s.smartCry);
+  }, [playing, isSmart, s.smartCry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cryRef = useRef<number | null>(null);
+  cryRef.current = mon.cryHeardAt;
+
+  /** Extra quieting from smart mode, as a volume multiplier (1 = full safe level). */
+  const smartFactor = useCallback(() => {
+    if (!isSmart || !startedAt.current) return 1;
+    const now = Date.now();
+    const cry = cryRef.current && cryRef.current >= startedAt.current ? cryRef.current : null;
+    const target = smartTarget(now, startedAt.current, cry);
+    // Rise quickly when crying starts, settle slowly.
+    const cur = smartDb.current;
+    smartDb.current = target.db > cur ? Math.min(target.db, cur + 2) : Math.max(target.db, cur - 0.2);
+    setSmartView({ phase: target.phase, db: smartDb.current, nextChange: target.nextChange, hearing: mon.micOn });
+    return Math.pow(10, (smartDb.current - LIMIT_DB) / 20);
+  }, [isSmart, mon.micOn]);
 
   /* ---------- sleep timer ---------- */
   const stopAt = useRef(0);
@@ -114,8 +155,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       if (left <= 0) { stopAt.current = 0; player.pause(); }
       else if (left < 60000) fade = left / 60000; // gentle fade over the last minute
     }
-    player.volume = gainRef.current * fade;
-  }, [player]);
+    player.volume = gainRef.current * fade * smartFactor();
+  }, [player, smartFactor]);
 
   useEffect(checkTimer, [appGain, status.currentTime, checkTimer]); // status updates keep arriving while locked
   useEffect(() => {
@@ -142,16 +183,25 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   const toggle = useCallback(() => {
     if (player.playing) return player.pause();
+    // Smart starts at the full safe level, so the phone's volume goes to the line.
+    if (s.mode === "smart" && deviceVolume) {
+      const st = deviceVolume.get();
+      const c = safePlan(s.dist, st.max).ceiling;
+      if (st.step < c) setDev(deviceVolume.setStep(c));
+    }
     player.volume = gainRef.current;
     player.play();
     try { player.setActiveForLockScreen(true, { title: `${soundById(loaded.current).name} noise`, artist: "hush" }); } catch {}
-  }, [player]);
+  }, [player, s.mode, s.dist]);
+
+  // What's actually reaching the crib, including smart mode's quieting.
+  const level = baseLevel != null && isSmart && playing && smartView ? baseLevel + (smartView.db - LIMIT_DB) : baseLevel;
 
   const timerLeft = playing && stopAt.current ? Math.max(0, stopAt.current - Date.now()) : null;
 
   return (
     <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, timerLeft, setTimer, dev, setStep, ceiling: plan?.ceiling ?? null, level, beat, still }}
+      value={{ s, set, soundId, sound, playing, toggle, timerLeft, setTimer, dev, setStep, ceiling: plan?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
     >
       {children}
     </Ctx.Provider>
