@@ -21,6 +21,8 @@ const art = (scale, bg) => `
   await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="${BG}"/></svg>`)).png().toFile(out("android-icon-background.png"));
   await sharp(Buffer.from(art(0.55, null).replaceAll(MOON, "#000").replaceAll(STAR, "#000"))).png().toFile(out("android-icon-monochrome.png"));
   await sharp(Buffer.from(art(0.5, null))).png().toFile(out("splash-icon.png"));
+  // Android notification icon: white silhouette on transparent.
+  await sharp(Buffer.from(art(0.9, null).replaceAll(MOON, "#fff").replaceAll(STAR, "#fff"))).resize(96, 96).png().toFile(out("notification-icon.png"));
   await sharp(Buffer.from(art(0.8, BG))).resize(48, 48).png().toFile(out("favicon.png"));
   console.log("icons written");
 })();

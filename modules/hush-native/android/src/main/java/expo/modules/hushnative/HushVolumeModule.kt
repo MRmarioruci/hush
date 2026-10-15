@@ -1,4 +1,4 @@
-package expo.modules.hushvolume
+package expo.modules.hushnative
 
 import android.content.BroadcastReceiver
 import android.content.Context

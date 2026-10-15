@@ -8,7 +8,7 @@ import { SvgXml } from "react-native-svg";
 import { useFonts, Fredoka_500Medium, Fredoka_600SemiBold } from "@expo-google-fonts/fredoka";
 import { Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 
-import { deviceVolume, type VolumeState } from "./modules/hush-volume/src";
+import { deviceVolume, type VolumeState } from "./modules/hush-native/src";
 import { colors, fonts } from "./src/theme";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "./src/sounds";
 import { LIMIT_DB, capGain, fullVolumeDb, levelAtCrib, safePlan } from "./src/safety";
@@ -16,6 +16,7 @@ import { DEFAULTS, loadSettings, saveSettings, type Settings } from "./src/stora
 import { Sky } from "./src/components/Sky";
 import { Moon } from "./src/components/Moon";
 import { Slider } from "./src/components/Slider";
+import { MonitorScreen } from "./src/screens/MonitorScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -59,6 +60,7 @@ function Player({ initial, still, insets }: { initial: Settings; still: boolean;
       return next;
     });
   }, []);
+  const [tab, setTab] = useState<"sleep" | "monitor">("sleep");
   const soundId = (SOUNDS.some((x) => x.id === s.sound) ? s.sound : "womb") as SoundId;
   const sound = soundById(soundId);
 
@@ -186,7 +188,7 @@ function Player({ initial, still, insets }: { initial: Settings; still: boolean;
               xml={`<svg viewBox="0 0 24 24"><path fill="${colors.moon}" d="M15.5 3.2a9 9 0 1 0 5.3 13.9A7.2 7.2 0 0 1 15.5 3.2z"/></svg>`}
             />
           </View>
-          <View style={styles.units}>
+          <View style={[styles.units, tab !== "sleep" && { opacity: 0 }]} pointerEvents={tab === "sleep" ? "auto" : "none"}>
             {(["m", "ft"] as const).map((u) => (
               <Pressable key={u} onPress={() => set({ unit: u })} style={[styles.unit, s.unit === u && styles.unitOn]}>
                 <Text style={[styles.unitText, s.unit === u && { color: colors.cream }]}>{u}</Text>
@@ -195,6 +197,17 @@ function Player({ initial, still, insets }: { initial: Settings; still: boolean;
           </View>
         </View>
 
+        <View style={styles.tabs}>
+          {(["sleep", "monitor"] as const).map((t) => (
+            <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabOn]}>
+              <Text style={[styles.tabText, tab === t && { color: colors.cream }]}>{t === "sleep" ? "Sleep" : "Monitor"}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {tab === "monitor" && <MonitorScreen />}
+
+        <View style={[styles.sleep, tab !== "sleep" && { display: "none" }]}>
         <View style={styles.stage}>
           <Moon
             playing={playing}
@@ -313,6 +326,7 @@ function Player({ initial, still, insets }: { initial: Settings; still: boolean;
         <Text style={styles.note}>
           Levels are estimates for a typical phone speaker. For an exact number, hold a decibel‑meter app at the crib.
         </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -336,6 +350,11 @@ const styles = StyleSheet.create({
   logo: { flexDirection: "row", alignItems: "flex-start" },
   h1: { fontFamily: fonts.displayBold, fontSize: 28, color: colors.moon, lineHeight: 32 },
   units: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 99, padding: 3 },
+  tabs: { flexDirection: "row", gap: 22, marginTop: -8 },
+  tab: { paddingVertical: 4, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  tabOn: { borderBottomColor: colors.peach },
+  tabText: { fontFamily: fonts.display, fontSize: 17, color: colors.muted },
+  sleep: { gap: 26 },
   unit: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99 },
   unitOn: { backgroundColor: colors.card2 },
   unitText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },

@@ -37,6 +37,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download cry-detection model (YAMNet, Apache 2.0)
+        run: |
+          DEST=modules/hush-native/android/src/main/assets/yamnet.tflite
+          mkdir -p "$(dirname "$DEST")"
+          curl -fsSL --retry 3 -o "$DEST" \
+            "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/audio_classification/android/lite-model_yamnet_classification_tflite_1.tflite"
+          SIZE=$(stat -c%s "$DEST"); echo "model size $SIZE"; test "$SIZE" -gt 1000000
+          # The detector reads classes 19-21 by index; make sure they are still the crying classes.
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv \
+            | sed -n '21p' | grep -q "Baby cry, infant cry"
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
@@ -59,6 +70,7 @@ jobs:
           retention-days: 30
 
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}

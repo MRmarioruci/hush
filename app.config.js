@@ -1,9 +1,17 @@
 // Dynamic Expo config, same shape as abfall's.
+const fs = require("fs");
+
+// Push alerts for the baby monitor. google-services.json comes from the Firebase
+// project; the Expo project ID and owner come from expo.dev.
+const EXPO_PROJECT_ID = process.env.EXPO_PROJECT_ID || "";
+const EXPO_OWNER = process.env.EXPO_OWNER || undefined;
+const hasFirebase = fs.existsSync("./google-services.json");
+
 module.exports = ({ config }) => ({
   ...config,
   name: "hush",
   slug: "hush",
-  version: "1.0.2",
+  version: "1.1.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
@@ -22,13 +30,19 @@ module.exports = ({ config }) => ({
     },
     predictiveBackGestureEnabled: false,
     package: "com.mrmarioruci.hush",
-    // Hush only plays sound. Keep plugins from adding anything it doesn't use.
+    ...(hasFirebase ? { googleServicesFile: "./google-services.json" } : {}),
+    // Keep plugins from adding permissions hush doesn't use. (The mic is used by the
+    // baby monitor and declared by modules/hush-native.)
     blockedPermissions: [
-      "android.permission.RECORD_AUDIO",
       "android.permission.SYSTEM_ALERT_WINDOW",
       "android.permission.READ_EXTERNAL_STORAGE",
       "android.permission.WRITE_EXTERNAL_STORAGE",
     ],
+  },
+  owner: EXPO_OWNER,
+  extra: {
+    ...(config.extra || {}),
+    eas: EXPO_PROJECT_ID ? { projectId: EXPO_PROJECT_ID } : undefined,
   },
   web: {
     favicon: "./assets/favicon.png",
@@ -54,6 +68,22 @@ module.exports = ({ config }) => ({
           enableMinifyInReleaseBuilds: true,
           buildArchs: ["arm64-v8a"],
         },
+      },
+    ],
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/notification-icon.png",
+        color: "#f6c7b0",
+      },
+    ],
+    [
+      "expo-camera",
+      {
+        cameraPermission: "hush uses the camera to scan the pairing code on a parent's phone.",
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        barcodeScannerEnabled: true,
       },
     ],
     [
