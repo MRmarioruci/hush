@@ -28,8 +28,4 @@ npm run icons        # regenerate the app icons
 
 ## Release
 
-Every push to `main` builds an APK (see the Actions tab). Push a tag to publish a release:
-
-```sh
-git tag v1.0.1 && git push origin v1.0.1
-```
+Every push to `main` builds an APK and publishes it as the release for the version in `package.json`. Bump the version (`npm version patch`) to start a new release; pushing the same version again replaces its APK.

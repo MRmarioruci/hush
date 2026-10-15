@@ -1,11 +1,11 @@
 name: Android APK
 
-# Builds an installable APK on every push to main.
-# Pushing a tag like v1.0.1 also publishes a GitHub Release with the APK attached.
+# Builds an installable APK on every push to main and publishes it as the GitHub
+# Release for the version in package.json (bump the version for a new release;
+# pushing the same version again replaces that release's APK).
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +47,7 @@ jobs:
       - name: Name the APK
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk "dist/hush-${VERSION}.apk"
           ls -la dist
@@ -58,9 +59,13 @@ jobs:
           retention-days: 30
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          name: hush ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          overwrite_files: true
           files: dist/*.apk
           body: |
             Download the APK below on your Android phone and open it to install.
