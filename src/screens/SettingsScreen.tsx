@@ -1,8 +1,9 @@
+import { Children, type ReactNode } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import { colors, fonts } from "../theme";
 import { LIMIT_DB } from "../safety";
-import { Card, Chip, ICONS, Icon, Label, Screen } from "../components/ui";
+import { ICONS, Icon, Screen } from "../components/ui";
 import { useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 
@@ -12,73 +13,95 @@ const STUDY = "https://www.sciencenews.org/blog/growth-curve/should-you-hush-whi
 export function SettingsScreen() {
   const { s, set } = useSleep();
   const { m, update } = useMonitor();
+  const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
 
   return (
     <Screen title="Settings">
-      <Card>
-        <Label>Distances in</Label>
-        <View style={styles.chips}>
-          <Chip label="Meters" on={s.unit === "m"} onPress={() => set({ unit: "m" })} />
-          <Chip label="Feet" on={s.unit === "ft"} onPress={() => set({ unit: "ft" })} />
+      <View style={styles.baby}>
+        <View style={styles.babyAvatar}>
+          {initial ? <Text style={styles.babyInitial}>{initial}</Text> : <Icon d={ICONS.sleep} size={30} color={colors.bg} />}
         </View>
-      </Card>
-
-      <Card>
-        <Label>Room name</Label>
         <TextInput
-          value={m.room}
-          onChangeText={(room) => update({ room })}
-          placeholder="the nursery"
+          value={m.babyName}
+          onChangeText={(babyName) => update({ babyName })}
+          placeholder="Baby's name"
           placeholderTextColor={colors.muted}
-          style={styles.input}
-          maxLength={40}
+          style={styles.babyInput}
+          maxLength={24}
+          autoCapitalize="words"
         />
-        <Text style={styles.hint}>Used in alerts, like "Crying in {m.room.trim() || "the nursery"}".</Text>
-      </Card>
+      </View>
 
-      <Card>
-        <Label>About the safe level</Label>
-        <Text style={styles.body}>
-          hush keeps white noise under {LIMIT_DB} dB at the crib, the limit hospitals use for newborn nurseries. A 2014
-          study in Pediatrics found many baby sound machines can go far above it when placed close to the crib.
-        </Text>
-        <Text style={styles.body}>
-          The level is an estimate for a typical phone speaker. For an exact number, hold a decibel‑meter app at the
-          crib.
-        </Text>
-        <Row label="Read about the study" onPress={() => Linking.openURL(STUDY)} />
-      </Card>
+      <Group title="Preferences">
+        <Row label="Distances">
+          <View style={styles.seg}>
+            {(["m", "ft"] as const).map((u) => (
+              <Pressable key={u} onPress={() => set({ unit: u })} style={[styles.segItem, s.unit === u && styles.segOn]}>
+                <Text style={[styles.segText, s.unit === u && { color: colors.bg }]}>{u === "m" ? "Meters" : "Feet"}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Row>
+      </Group>
 
-      <Card>
-        <Label>About the monitor</Label>
-        <Text style={styles.body}>
-          Crying is detected on the baby's phone itself. Sound never leaves the phone; only the alert does. hush is a
-          helper, not a medical device, so keep checking on your baby as usual.
-        </Text>
-      </Card>
+      <Group title="Safety">
+        <Row label="Max at the crib"><Text style={styles.value}>{LIMIT_DB} dB</Text></Row>
+        <Row label="Why 50 dB" onPress={() => Linking.openURL(STUDY)} />
+      </Group>
 
-      <Card>
-        <Label right={<Text style={styles.hint}>v{Constants.expoConfig?.version ?? "1"}</Text>}>hush</Label>
+      <Group title="About">
+        <Row label="Version"><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
         <Row label="Get the latest version" onPress={() => Linking.openURL(RELEASES)} />
-      </Card>
+      </Group>
+
+      <Text style={styles.foot}>Sound stays on the baby's phone. Only alerts are sent.</Text>
     </Screen>
   );
 }
 
-function Row({ label, onPress }: { label: string; onPress: () => void }) {
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Pressable onPress={onPress} style={styles.row}>
-      <Text style={styles.rowText}>{label}</Text>
-      <Icon d={ICONS.chevron} size={16} color={colors.peach} width={2} />
-    </Pressable>
+    <View style={{ gap: 8 }}>
+      <Text style={styles.groupTitle}>{title}</Text>
+      <View style={styles.group}>
+        {Children.toArray(children).map((c, i) => (
+          <View key={i} style={i > 0 && styles.divider}>{c}</View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function Row({ label, children, onPress }: { label: string; children?: ReactNode; onPress?: () => void }) {
+  const body = (
+    <>
+      <Text style={styles.rowLabel}>{label}</Text>
+      {children ?? (onPress ? <Icon d={ICONS.chevron} size={18} /> : null)}
+    </>
+  );
+  return onPress ? (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>{body}</Pressable>
+  ) : (
+    <View style={styles.row}>{body}</View>
   );
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: "row", gap: 8 },
-  input: { backgroundColor: colors.card2, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, color: colors.cream, fontFamily: fonts.body, fontSize: 15 },
-  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
-  body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, color: colors.cream, opacity: 0.9 },
-  row: { flexDirection: "row", alignItems: "center", gap: 4 },
-  rowText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
+  baby: { alignItems: "center", gap: 12, paddingVertical: 10 },
+  babyAvatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
+  babyInitial: { fontFamily: fonts.displayBold, fontSize: 36, color: colors.bg },
+  babyInput: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, textAlign: "center", minWidth: 200, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.card2, outlineWidth: 0 } as object,
+
+  groupTitle: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, letterSpacing: 0.6, textTransform: "uppercase", marginLeft: 6 },
+  group: { backgroundColor: colors.card, borderRadius: 20, paddingHorizontal: 16 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 54, gap: 12 },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
+  rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  value: { fontFamily: fonts.body, fontSize: 15, color: colors.muted },
+
+  seg: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 3 },
+  segItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 },
+  segOn: { backgroundColor: colors.cream },
+  segText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
+  foot: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, textAlign: "center", opacity: 0.75 },
 });

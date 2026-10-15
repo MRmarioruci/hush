@@ -32,7 +32,7 @@ class CryListenerService : Service() {
     val notification = builder
       .setSmallIcon(applicationInfo.icon)
       .setContentTitle("hush is listening")
-      .setContentText("You'll get an alert on your paired phones if the baby cries")
+      .setContentText("Paired phones get an alert if ${CryEngine.babyName} cries")
       .setOngoing(true)
       .setContentIntent(open)
       .build()

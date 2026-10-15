@@ -23,9 +23,9 @@ class HushCryModule : Module() {
       CryEngine.listener = null
     }
 
-    Function("configure") { threshold: Double, room: String, tokens: List<String> ->
+    Function("configure") { threshold: Double, babyName: String, tokens: List<String> ->
       CryEngine.threshold = threshold.toFloat()
-      CryEngine.room = room
+      CryEngine.babyName = babyName
       CryEngine.tokens = tokens
     }
 
@@ -46,7 +46,7 @@ class HushCryModule : Module() {
     Function("isListening") { CryEngine.running }
 
     AsyncFunction("sendAlert") { tokens: List<String>, body: String, kind: String, promise: Promise ->
-      AlertSender.send(tokens, body, mapOf("type" to kind, "room" to CryEngine.room)) { ok, detail ->
+      AlertSender.send(tokens, body, mapOf("type" to kind, "baby" to CryEngine.babyName)) { ok, detail ->
         promise.resolve(mapOf("ok" to ok, "detail" to detail))
       }
     }

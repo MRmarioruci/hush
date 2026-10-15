@@ -7,7 +7,7 @@ import { PermissionsAndroid, Platform } from "react-native";
 export type Parent = { token: string; name: string; addedAt: number };
 export type Sensitivity = "low" | "medium" | "high";
 export type MonitorSettings = {
-  room: string;
+  babyName: string;
   sensitivity: Sensitivity;
   parents: Parent[];
   myName: string;
@@ -18,7 +18,7 @@ export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.5, medium: 0.3, 
 
 const KEY = "hush:monitor";
 const ALERTS_KEY = "hush:alerts";
-export const MONITOR_DEFAULTS: MonitorSettings = { room: "the nursery", sensitivity: "medium", parents: [], myName: "" };
+export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "" };
 
 export async function loadMonitor(): Promise<MonitorSettings> {
   try {
@@ -107,10 +107,10 @@ export async function askMicAndNotifications(): Promise<string | null> {
   if (Platform.OS !== "android") return "Listening for crying works on Android phones.";
   const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
     title: "Let hush listen for crying",
-    message: "hush listens on this phone to notice when your baby cries. Sound never leaves the phone.",
+    message: "Sound stays on this phone. Only the alert is sent.",
     buttonPositive: "Allow",
   });
-  if (mic !== PermissionsAndroid.RESULTS.GRANTED) return "hush needs the microphone to listen for crying.";
+  if (mic !== PermissionsAndroid.RESULTS.GRANTED) return "Allow the microphone to listen for crying.";
   // Needed on Android 13+ to show the "listening" notification that keeps it running.
   await Notifications.requestPermissionsAsync().catch(() => {});
   return null;

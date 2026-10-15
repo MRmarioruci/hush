@@ -36,7 +36,7 @@ export function HomeScreen() {
 
   return (
     <Screen
-      eyebrow={greeting()}
+      eyebrow={mon.m.babyName.trim() ? `${greeting()}, ${mon.m.babyName.trim()}` : greeting()}
       title="hush"
       right={
         <SvgXml
@@ -105,8 +105,8 @@ export function HomeScreen() {
             <Text style={styles.monTitle}>Baby monitor</Text>
             <Text style={styles.sub}>
               {mon.listening
-                ? crying ? `Crying in ${mon.room}` : `Listening in ${mon.room}`
-                : parents ? `${parents} parent phone${parents > 1 ? "s" : ""} paired` : "Get an alert when your baby cries"}
+                ? crying ? `${mon.baby} is crying` : `Listening for ${mon.baby}`
+                : parents ? `${parents} parent phone${parents > 1 ? "s" : ""} paired` : "Alerts when the baby cries"}
             </Text>
           </View>
           <Switch
@@ -120,7 +120,7 @@ export function HomeScreen() {
         {mon.listening && (
           <View style={styles.monFoot}>
             <Pill label={monState.label} color={monState.color} />
-            <Text style={styles.small}>{mon.lastCry ? `Last alert ${fmtTime(mon.lastCry)}` : "No alerts tonight"}</Text>
+            <Text style={styles.small}>{mon.lastCry ? `Last alert ${fmtTime(mon.lastCry)}` : "Quiet so far"}</Text>
           </View>
         )}
         {note && <Text style={styles.note}>{note}</Text>}

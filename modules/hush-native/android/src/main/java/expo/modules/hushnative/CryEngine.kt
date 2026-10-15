@@ -41,7 +41,7 @@ object CryEngine {
   private const val WHIMPER = 21
 
   @Volatile var threshold = 0.3f
-  @Volatile var room = "the nursery"
+  @Volatile var babyName = "Baby"
   @Volatile var tokens: List<String> = emptyList()
 
   /** Receives "status" and "cry" events; set by the JS-facing module. */
@@ -149,8 +149,8 @@ object CryEngine {
           val first = !crying
           lastAlert = t
           listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
-          val body = if (first) "Crying in $room" else "Still crying in $room"
-          AlertSender.send(tokens, body, mapOf("type" to "cry", "room" to room, "at" to t))
+          val body = if (first) "$babyName is crying" else "$babyName is still crying"
+          AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
         }
         crying = now
       }

@@ -13,7 +13,7 @@ type VolumeNative = {
 };
 
 type CryNative = {
-  configure(threshold: number, room: string, tokens: string[]): void;
+  configure(threshold: number, babyName: string, tokens: string[]): void;
   start(): boolean;
   stop(): boolean;
   isListening(): boolean;
@@ -37,7 +37,7 @@ export const deviceVolume = volume
 
 export const cryDetector = cry
   ? {
-      configure: (threshold: number, room: string, tokens: string[]) => cry.configure(threshold, room, tokens),
+      configure: (threshold: number, babyName: string, tokens: string[]) => cry.configure(threshold, babyName, tokens),
       start: () => cry.start(),
       stop: () => cry.stop(),
       isListening: () => cry.isListening(),

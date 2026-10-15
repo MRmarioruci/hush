@@ -18,7 +18,7 @@ type Monitor = {
   status: CryStatus;
   lastCry: number | null;
   toggleListening: () => Promise<string | null>;
-  room: string;
+  baby: string;
 };
 
 const Ctx = createContext<Monitor | null>(null);
@@ -35,15 +35,15 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const room = m.room.trim() || "the nursery";
+  const baby = m.babyName.trim() || "Baby";
   const tokens = m.parents.map((p) => p.token);
   const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
   const [status, setStatus] = useState<CryStatus>({});
   const [lastCry, setLastCry] = useState<number | null>(null);
 
   useEffect(() => {
-    cryDetector?.configure(THRESHOLDS[m.sensitivity], room, tokens);
-  }, [m.sensitivity, room, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+    cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens);
+  }, [m.sensitivity, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!cryDetector) return;
@@ -65,13 +65,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     }
     const problem = await askMicAndNotifications();
     if (problem) return problem;
-    cryDetector.configure(THRESHOLDS[m.sensitivity], room, tokens);
+    cryDetector.configure(THRESHOLDS[m.sensitivity], baby, tokens);
     cryDetector.start();
     setListening(true);
-    return tokens.length ? null : "Listening. Pair a parent phone in Monitor to get alerts.";
-  }, [listening, m.sensitivity, room, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+    return tokens.length ? null : "Pair a parent phone to get alerts.";
+  }, [listening, m.sensitivity, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, room }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby }}>{children}</Ctx.Provider>
   );
 }
