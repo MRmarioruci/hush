@@ -6,11 +6,16 @@ import { PermissionsAndroid, Platform } from "react-native";
 
 export type Parent = { token: string; name: string; addedAt: number };
 export type Sensitivity = "low" | "medium" | "high";
+export type Role = "nursery" | "parent";
 export type MonitorSettings = {
   babyName: string;
   sensitivity: Sensitivity;
   parents: Parent[];
   myName: string;
+  /** What this phone does in the monitor: stays with the baby, or gets the alerts. */
+  role: Role | null;
+  /** Parent phone only: name of the baby whose nursery phone paired with us. */
+  pairedWith: string | null;
 };
 export type AlertRecord = { id: string; body: string; at: number };
 
@@ -18,7 +23,7 @@ export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.5, medium: 0.3, 
 
 const KEY = "hush:monitor";
 const ALERTS_KEY = "hush:alerts";
-export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "" };
+export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "", role: null, pairedWith: null };
 
 export async function loadMonitor(): Promise<MonitorSettings> {
   try {
@@ -76,6 +81,12 @@ export async function loadAlerts(): Promise<AlertRecord[]> {
     return [];
   }
 }
+/** Name of the baby in a "paired" message, if this notification is one. */
+export function pairedBaby(n: Notifications.Notification): string | null {
+  const data = n.request.content.data as { type?: string; baby?: string } | undefined;
+  return data?.type === "paired" ? data.baby || "Baby" : null;
+}
+
 export async function recordAlert(n: Notifications.Notification) {
   const data = n.request.content.data as { type?: string } | undefined;
   if (data?.type !== "cry") return;

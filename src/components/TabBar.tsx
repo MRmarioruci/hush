@@ -8,7 +8,7 @@ import { useMonitor } from "../state/monitor";
 
 const TABS: Record<string, { label: string; icon: string }> = {
   Home: { label: "Home", icon: ICONS.home },
-  Sleep: { label: "Sleep", icon: ICONS.sleep },
+  Sounds: { label: "Sounds", icon: ICONS.sounds },
   Monitor: { label: "Monitor", icon: ICONS.monitor },
   Settings: { label: "Settings", icon: ICONS.settings },
 };
@@ -26,7 +26,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           const focused = state.index === i;
           const t = TABS[route.name];
           const live =
-            route.name === "Sleep" ? playing : route.name === "Monitor" ? listening : false;
+            route.name === "Sounds" ? playing : route.name === "Monitor" ? listening : false;
           const liveColor = route.name === "Monitor" && status.crying ? colors.rose : colors.sage;
           return (
             <Pressable

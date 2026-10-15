@@ -6,7 +6,7 @@ import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
 import { LIMIT_DB } from "../safety";
 import { Moon } from "../components/Moon";
-import { Card, ICONS, Icon, Pill, Screen } from "../components/ui";
+import { Card, ICONS, Icon, Screen } from "../components/ui";
 import { TIMERS, fmtLeft, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 
@@ -36,7 +36,7 @@ export function HomeScreen() {
 
   return (
     <Screen
-      eyebrow={mon.m.babyName.trim() ? `${greeting()}, ${mon.m.babyName.trim()}` : greeting()}
+      eyebrow={greeting()}
       title="hush"
       right={
         <SvgXml
@@ -86,7 +86,7 @@ export function HomeScreen() {
             <Icon d={ICONS.timer} size={18} />
             <Text style={styles.quickText}>{timerText}</Text>
           </Pressable>
-          <Pressable onPress={() => nav.navigate("Sleep")} style={styles.quick}>
+          <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
             <View style={[styles.levelDot, { backgroundColor: sleep.level != null && sleep.level > LIMIT_DB + 0.5 ? colors.rose : colors.sage }]} />
             <Text style={styles.quickText}>
               {sleep.level == null ? "Volume off" : `≈${Math.round(Math.max(20, sleep.level))} dB at crib`}
@@ -95,40 +95,46 @@ export function HomeScreen() {
         </View>
       </Card>
 
-      {/* ---- baby monitor ---- */}
-      <Card>
-        <View style={styles.monHead}>
-          <View style={[styles.monIcon, mon.listening && { backgroundColor: monState.color }]}>
-            <Icon d={ICONS.monitor} size={22} color={mon.listening ? colors.bg : colors.muted} />
+      {/* ---- baby monitor: what it shows depends on this phone's role ---- */}
+      <Pressable onPress={() => nav.navigate("Monitor")}>
+        <Card>
+          <View style={styles.monHead}>
+            <View style={[styles.monIcon, mon.m.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
+              <Icon
+                d={mon.m.role === "parent" ? ICONS.bell : mon.m.role === "nursery" ? ICONS.mic : ICONS.monitor}
+                size={22}
+                color={mon.listening || mon.m.role === "parent" ? colors.bg : colors.muted}
+              />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.monTitle}>
+                {mon.m.role === "nursery" ? `Listening for ${mon.baby}` : mon.m.role === "parent" ? "Cry alerts" : "Baby monitor"}
+              </Text>
+              <Text style={styles.sub}>
+                {mon.m.role == null
+                  ? "Use a second phone to hear when the baby cries"
+                  : mon.m.role === "parent"
+                    ? mon.m.pairedWith ? `On · connected to ${mon.m.pairedWith}'s phone` : "Not connected yet"
+                    : !parents ? "Connect a parent's phone first"
+                    : mon.listening ? (crying ? `${mon.baby} is crying` : mon.lastCry ? `Last alert ${fmtTime(mon.lastCry)}` : "Quiet so far")
+                    : "Off"}
+              </Text>
+            </View>
+            {mon.m.role === "nursery" && parents > 0 ? (
+              <Switch
+                value={mon.listening}
+                onValueChange={async () => setNote(await mon.toggleListening())}
+                trackColor={{ false: colors.card2, true: colors.sage }}
+                thumbColor={colors.cream}
+                accessibilityLabel="Listen for crying"
+              />
+            ) : (
+              <Icon d={ICONS.chevron} size={20} />
+            )}
           </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.monTitle}>Baby monitor</Text>
-            <Text style={styles.sub}>
-              {mon.listening
-                ? crying ? `${mon.baby} is crying` : `Listening for ${mon.baby}`
-                : parents ? `${parents} parent phone${parents > 1 ? "s" : ""} paired` : "Alerts when the baby cries"}
-            </Text>
-          </View>
-          <Switch
-            value={mon.listening}
-            onValueChange={async () => setNote(await mon.toggleListening())}
-            trackColor={{ false: colors.card2, true: colors.sage }}
-            thumbColor={colors.cream}
-            accessibilityLabel="Listen for crying"
-          />
-        </View>
-        {mon.listening && (
-          <View style={styles.monFoot}>
-            <Pill label={monState.label} color={monState.color} />
-            <Text style={styles.small}>{mon.lastCry ? `Last alert ${fmtTime(mon.lastCry)}` : "Quiet so far"}</Text>
-          </View>
-        )}
-        {note && <Text style={styles.note}>{note}</Text>}
-        <Pressable onPress={() => nav.navigate("Monitor")} style={styles.link}>
-          <Text style={styles.linkText}>{parents ? "Monitor settings" : "Pair a parent phone"}</Text>
-          <Icon d={ICONS.chevron} size={16} color={colors.peach} width={2} />
-        </Pressable>
-      </Card>
+          {note && <Text style={styles.note}>{note}</Text>}
+        </Card>
+      </Pressable>
     </Screen>
   );
 }

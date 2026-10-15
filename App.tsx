@@ -56,7 +56,7 @@ export default function App() {
                   screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" }, animation: "fade" }}
                 >
                   <Tab.Screen name="Home" component={HomeScreen} />
-                  <Tab.Screen name="Sleep" component={SleepScreen} />
+                  <Tab.Screen name="Sounds" component={SleepScreen} />
                   <Tab.Screen name="Monitor" component={MonitorScreen} />
                   <Tab.Screen name="Settings" component={SettingsScreen} />
                 </Tab.Navigator>

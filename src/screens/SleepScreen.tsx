@@ -22,7 +22,7 @@ export function SleepScreen() {
   const pos = (x: number) => Math.max(0, Math.min(100, ((x - 20) / 60) * 100));
 
   return (
-    <Screen title="Sleep">
+    <Screen title="Sounds">
       {/* now playing */}
       <Pressable onPress={z.toggle} style={({ pressed }) => [styles.now, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityLabel={z.playing ? "Pause" : "Play"}>
         <View style={styles.playBtn}>
