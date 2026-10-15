@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo";
 type Subscription = { remove(): void };
 
 export type VolumeState = { step: number; max: number };
-export type CryStatus = { score?: number; level?: number; crying?: boolean; error?: string };
+export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string };
 
 type VolumeNative = {
   getVolume(): VolumeState;

@@ -101,7 +101,7 @@ export function HomeScreen() {
           <View style={styles.monHead}>
             <View style={[styles.monIcon, mon.m.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
               <Icon
-                d={mon.m.role === "parent" ? ICONS.bell : mon.m.role === "nursery" ? ICONS.mic : ICONS.monitor}
+                d={mon.m.role === "parent" ? ICONS.bell : mon.m.role === "nursery" ? ICONS.crib : ICONS.monitor}
                 size={22}
                 color={mon.listening || mon.m.role === "parent" ? colors.bg : colors.muted}
               />

@@ -19,7 +19,7 @@ export type MonitorSettings = {
 };
 export type AlertRecord = { id: string; body: string; at: number };
 
-export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.5, medium: 0.3, high: 0.15 };
+export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.45, medium: 0.25, high: 0.12 };
 
 const KEY = "hush:monitor";
 const ALERTS_KEY = "hush:alerts";

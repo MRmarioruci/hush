@@ -6,6 +6,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.PowerManager
 import android.util.Log
 import org.tensorflow.lite.Interpreter
@@ -18,11 +20,11 @@ import kotlin.math.sqrt
 /**
  * Listens through the mic and decides whether a baby is crying, entirely on the phone.
  *
- * - Records 16 kHz mono with the voice-call source, which turns on echo cancellation on
- *   most phones, so the white noise Hush itself is playing is largely removed.
+ * - Records 16 kHz mono, near-raw, with echo cancellation attached so the white noise
+ *   hush itself is playing is reduced.
  * - Every half second it runs YAMNet (a general sound classifier) on the last ~1 s and
- *   reads its "baby cry", "crying" and "whimper" scores.
- * - It calls it crying when at least 3 of the last 6 windows (about 3 s) pass the
+ *   combines its baby-cry, crying, whimper, wail and screaming scores.
+ * - It calls it crying when 3 of the last 6 windows (about 1.5 s of the last 3 s) pass the
  *   threshold, then sends an alert to the paired parent phones. While crying continues,
  *   a reminder goes out every [REPEAT_MS].
  *
@@ -39,6 +41,8 @@ object CryEngine {
   private const val CRYING_SOBBING = 19
   private const val BABY_CRY = 20
   private const val WHIMPER = 21
+  private const val WAIL = 22
+  private const val SCREAMING = 11
 
   @Volatile var threshold = 0.3f
   @Volatile var babyName = "Baby"
@@ -82,12 +86,16 @@ object CryEngine {
   private fun openRecorder(): AudioRecord {
     val min = AudioRecord.getMinBufferSize(SR, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
     val size = max(min, HOP * 2 * 2)
-    for (source in intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)) {
+    // VOICE_RECOGNITION gives near-raw audio on most phones. The voice-call source filters out
+    // anything that isn't speech, which can hide a baby's cry. Echo cancellation is attached
+    // separately so hush's own white noise is still reduced; noise suppression stays off.
+    for (source in intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)) {
       val rec = AudioRecord(source, SR, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
       if (rec.state == AudioRecord.STATE_INITIALIZED) {
-        if (AcousticEchoCanceler.isAvailable()) {
-          try { AcousticEchoCanceler.create(rec.audioSessionId)?.enabled = true } catch (_: Exception) {}
-        }
+        val id = rec.audioSessionId
+        if (AcousticEchoCanceler.isAvailable()) try { AcousticEchoCanceler.create(id)?.enabled = true } catch (_: Exception) {}
+        if (NoiseSuppressor.isAvailable()) try { NoiseSuppressor.create(id)?.enabled = false } catch (_: Exception) {}
+        if (AutomaticGainControl.isAvailable()) try { AutomaticGainControl.create(id)?.enabled = false } catch (_: Exception) {}
         return rec
       }
       rec.release()
@@ -136,13 +144,23 @@ object CryEngine {
         if (filled < WINDOW) continue
 
         val scores = classify(model, window, inShape, outShape, classes)
-        val score = maxOf(scores[BABY_CRY], scores[CRYING_SOBBING], scores[WHIMPER] * 0.8f)
+        // Crying usually lights up several related classes at once, so add them up.
+        val score = minOf(
+          1f,
+          scores[BABY_CRY] + 0.6f * scores[CRYING_SOBBING] + 0.5f * scores[WHIMPER] + 0.4f * scores[WAIL] + 0.3f * scores[SCREAMING]
+        )
+        var top = 0
+        for (c in 1 until classes) if (scores[c] > scores[top]) top = c
 
+        // About 1.5 s of crying within the last 3 s.
         history.addLast(score >= threshold)
         if (history.size > 6) history.removeFirst()
         val now = history.count { it } >= 3
 
-        listener?.invoke("status", mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now))
+        listener?.invoke(
+          "status",
+          mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble())
+        )
 
         val t = System.currentTimeMillis()
         if (now && (!crying || t - lastAlert >= REPEAT_MS)) {

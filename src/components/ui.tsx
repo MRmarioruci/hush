@@ -76,6 +76,7 @@ export const ICONS = {
   home: '<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10v9h4.5v-5h3v5H18v-9"/>',
   sleep: '<path d="M15.5 4.2a7.5 7.5 0 1 0 4.3 11.6A6 6 0 0 1 15.5 4.2z"/><path d="M18 3.5v2M17 4.5h2"/>',
   sounds: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+  crib: '<path d="M4 9v11M20 9v11M4 13h16M4 18h16M8 13v5M12 13v5M16 13v5"/><circle cx="9" cy="9.5" r="2"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
   phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',

@@ -5,7 +5,9 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { YAMNET_LABELS } from "../yamnetLabels";
+import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 
@@ -42,44 +44,29 @@ export function MonitorScreen() {
 function ChooseRole({ baby, onPick }: { baby: string; onPick: (r: Role) => void }) {
   return (
     <>
-      <View style={styles.diagram}>
-        <PhoneGlyph icon={ICONS.mic} label={`With ${baby}`} tone={colors.sage} />
-        <View style={styles.wire}>
-          <View style={styles.wireLine} />
-          <Text style={styles.wireText}>alert</Text>
-        </View>
-        <PhoneGlyph icon={ICONS.bell} label="With you" tone={colors.peach} />
+      <MonitorHero baby={baby} />
+      <View style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
+        <Text style={styles.lead}>Hear {baby} from anywhere</Text>
+        <Text style={styles.leadSub}>One phone stays in {baby}'s room and listens. Yours gets a notification when {baby} cries.</Text>
       </View>
-      <Text style={styles.lead}>Use two phones. Which one is this?</Text>
-
+      <Text style={styles.ask}>What will this phone do?</Text>
       <RoleCard
-        icon={ICONS.mic}
+        art={ICONS.crib}
         tone={colors.sage}
-        title={`It stays with ${baby}`}
+        title={`Stay in ${baby}'s room`}
         sub="Listens for crying"
         onPress={() => onPick("nursery")}
       />
-      <RoleCard icon={ICONS.bell} tone={colors.peach} title="It's mine" sub="Gets the alerts" onPress={() => onPick("parent")} />
+      <RoleCard art={ICONS.bell} tone={colors.peach} title="Get the alerts" sub="Notifies you when the baby cries" onPress={() => onPick("parent")} />
     </>
   );
 }
 
-function PhoneGlyph({ icon, label, tone }: { icon: string; label: string; tone: string }) {
-  return (
-    <View style={{ alignItems: "center", gap: 8 }}>
-      <View style={[styles.glyph, { borderColor: tone }]}>
-        <Icon d={icon} size={24} color={tone} />
-      </View>
-      <Text style={styles.glyphLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function RoleCard({ icon, tone, title, sub, onPress }: { icon: string; tone: string; title: string; sub: string; onPress: () => void }) {
+function RoleCard({ art, tone, title, sub, onPress }: { art: string; tone: string; title: string; sub: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.roleCard, pressed && { transform: [{ scale: 0.98 }] }]}>
       <View style={[styles.roleIcon, { backgroundColor: tone }]}>
-        <Icon d={icon} size={24} color={colors.bg} width={2} />
+        <Icon d={art} size={26} color={colors.bg} width={2} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.roleTitle}>{title}</Text>
@@ -96,11 +83,11 @@ function RoleBar({ role, baby, onChange }: { role: Role; baby: string; onChange:
   return (
     <View style={styles.roleBar}>
       <View style={[styles.roleBarIcon, { backgroundColor: nursery ? colors.sage : colors.peach }]}>
-        <Icon d={nursery ? ICONS.mic : ICONS.bell} size={18} color={colors.bg} width={2} />
+        <Icon d={nursery ? ICONS.crib : ICONS.bell} size={18} color={colors.bg} width={2} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.roleBarKicker}>This phone</Text>
-        <Text style={styles.roleBarTitle}>{nursery ? `Stays with ${baby}` : "Gets the alerts"}</Text>
+        <Text style={styles.roleBarTitle}>{nursery ? `Stays in ${baby}'s room` : "Gets the alerts"}</Text>
       </View>
       <Pressable onPress={onChange} hitSlop={10}>
         <Text style={styles.change}>Change</Text>
@@ -141,7 +128,7 @@ function NurseryPhone() {
       {!paired ? (
         <Card style={{ gap: 14 }}>
           <Text style={styles.stepTitle}>Connect a parent's phone</Text>
-          <Step n={1} text={'On your phone, open Monitor and pick "It\'s mine"'} />
+          <Step n={1} text={'On your phone, open Monitor and pick "Get the alerts"'} />
           <Step n={2} text="Scan the code it shows" />
           <Pressable onPress={() => setScanning(true)} style={styles.primary}>
             <Text style={styles.primaryText}>Scan code</Text>
@@ -155,6 +142,8 @@ function NurseryPhone() {
           </Text>
         </View>
       )}
+
+      {paired && listening && <Hearing />}
 
       {paired && (
         <Card style={{ gap: 4 }}>
@@ -193,6 +182,32 @@ function NurseryPhone() {
       {msg && <Text style={styles.msg}>{msg}</Text>}
       <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
     </>
+  );
+}
+
+/** Live view of what the baby's phone hears, so you can see the detector working. */
+function Hearing() {
+  const { m, status, baby } = useMonitor();
+  const threshold = THRESHOLDS[m.sensitivity];
+  const score = status.score ?? 0;
+  const pct = Math.min(100, (score / Math.max(threshold * 2, 0.01)) * 100); // the line sits halfway
+  const label = status.top != null && (status.topScore ?? 0) > 0.1 ? YAMNET_LABELS[status.top] : "Quiet";
+  const hot = score >= threshold;
+  return (
+    <Card style={{ gap: 12 }}>
+      <Label right={<Text style={styles.hearingNow} numberOfLines={1}>{label}</Text>}>Hearing</Label>
+      <View>
+        <View style={styles.meter}>
+          <View style={[styles.meterFill, { width: `${pct}%`, backgroundColor: hot ? colors.rose : colors.sage }]} />
+          <View style={styles.meterLine} />
+        </View>
+        <View style={styles.meterLabels}>
+          <Text style={styles.meterText}>Calm</Text>
+          <Text style={styles.meterText}>Crying</Text>
+        </View>
+      </View>
+      <Text style={styles.roleSub}>An alert goes out when it stays past the line for about 2 seconds. To test, play a video of a baby crying near this phone.</Text>
+    </Card>
   );
 }
 
@@ -370,13 +385,15 @@ const styles = StyleSheet.create({
   foot: { fontFamily: fonts.body, fontSize: 12, color: colors.muted, textAlign: "center", opacity: 0.7 },
   msg: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, textAlign: "center" },
 
-  diagram: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 14 },
-  glyph: { width: 64, height: 96, borderRadius: 16, borderWidth: 2, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
-  glyphLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
-  wire: { width: 92, alignItems: "center", marginBottom: 26, gap: 4 },
-  wireLine: { height: 2, alignSelf: "stretch", borderRadius: 1, backgroundColor: colors.card2 },
-  wireText: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
-  lead: { fontFamily: fonts.display, fontSize: 20, color: colors.cream, textAlign: "center", marginVertical: 6 },
+  lead: { fontFamily: fonts.displayBold, fontSize: 24, color: colors.cream, textAlign: "center" },
+  leadSub: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: colors.muted, textAlign: "center", paddingHorizontal: 10 },
+  ask: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, letterSpacing: 0.6, textTransform: "uppercase", marginLeft: 6, marginTop: 6 },
+  hearingNow: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, maxWidth: 200 },
+  meter: { height: 10, borderRadius: 99, backgroundColor: colors.card2, overflow: "hidden" },
+  meterFill: { height: 10, borderRadius: 99 },
+  meterLine: { position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, backgroundColor: colors.cream },
+  meterLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
+  meterText: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
 
   roleCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 22, padding: 16 },
   roleIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
