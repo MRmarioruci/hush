@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const SR = 22050, LOOP = 24, FADE = 1; // modulation periods (0.8 s, 2 s, 8 s) divide 24 s, so loops are seamless
+const SR = 16000, LOOP = 16, FADE = 1; // modulation periods (0.8 s, 2 s, 8 s) divide 16 s, so loops are seamless
 
 // Small seeded PRNG so the files are reproducible.
 function rng(seed) {

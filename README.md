@@ -2,7 +2,7 @@
 
 A calm white-noise app for babies, with a volume limit that keeps the sound under 50 dB at the crib.
 
-- Six sounds: Womb (heartbeat), Shush, Brown, Pink, White, Ocean. Seamless 24-second loops.
+- Six sounds: Womb (heartbeat), Shush, Brown, Pink, White, Ocean. Seamless 16-second loops.
 - Sleep timer with a one-minute fade-out.
 - Plays with the screen locked, with lock-screen controls.
 - Tell it how far the phone is from the crib. While it plays, the phone's media volume can't go past the safe step for that distance (Android). The app shows the estimated level at the crib next to the 50 dB limit.
