@@ -3,40 +3,31 @@ import { Animated, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View }
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
-import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
+import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
 import {
   THRESHOLDS,
-  askMicAndNotifications,
   getMyToken,
   loadAlerts,
-  loadMonitor,
   makePairCode,
   readPairCode,
   recordAlert,
-  saveMonitor,
   type AlertRecord,
   type MonitorSettings,
   type Sensitivity,
 } from "../monitor";
+import { useMonitor } from "../state/monitor";
+import { Screen } from "../components/ui";
 
 type Role = "baby" | "parent";
 const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 export function MonitorScreen() {
-  const [m, setM] = useState<MonitorSettings | null>(null);
+  const { m, update } = useMonitor();
   const [role, setRole] = useState<Role>("baby");
-  useEffect(() => { loadMonitor().then(setM); }, []);
-  const update = (patch: Partial<MonitorSettings>) =>
-    setM((prev) => {
-      const next = { ...prev!, ...patch };
-      saveMonitor(next);
-      return next;
-    });
-  if (!m) return null;
 
   return (
-    <View style={{ gap: 18 }}>
+    <Screen title="Monitor">
       <View style={styles.roles}>
         {([["baby", "Baby's phone"], ["parent", "Parent's phone"]] as const).map(([r, label]) => (
           <Pressable key={r} onPress={() => setRole(r)} style={[styles.role, role === r && styles.roleOn]}>
@@ -49,55 +40,27 @@ export function MonitorScreen() {
         hush is a helper, not a medical device. Alerts can be delayed or missed if a phone is offline, in battery saver
         or on Do Not Disturb, so keep checking on your baby as usual.
       </Text>
-    </View>
+    </Screen>
   );
 }
 
 /* ---------------- baby side ---------------- */
 
 function BabySide({ m, update }: { m: MonitorSettings; update: (p: Partial<MonitorSettings>) => void }) {
-  const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
-  const [status, setStatus] = useState<CryStatus>({});
-  const [lastCry, setLastCry] = useState<number | null>(null);
+  const { listening, status, lastCry, toggleListening, room } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const tokens = m.parents.map((p) => p.token);
 
-  useEffect(() => {
-    cryDetector?.configure(THRESHOLDS[m.sensitivity], m.room.trim() || "the nursery", tokens);
-  }, [m.sensitivity, m.room, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!cryDetector) return;
-    const a = cryDetector.onStatus((s) => {
-      setStatus(s);
-      if (s.error) { setListening(false); setMsg(s.error); }
-    });
-    const b = cryDetector.onCry((e) => setLastCry(e.at));
-    return () => { a.remove(); b.remove(); };
-  }, []);
-
   const toggle = async () => {
     setMsg(null);
-    if (!cryDetector) return setMsg("Listening for crying works on Android phones.");
-    if (listening) {
-      cryDetector.stop();
-      setListening(false);
-      setStatus({});
-      return;
-    }
-    const problem = await askMicAndNotifications();
-    if (problem) return setMsg(problem);
-    cryDetector.configure(THRESHOLDS[m.sensitivity], m.room.trim() || "the nursery", tokens);
-    cryDetector.start();
-    setListening(true);
-    if (!tokens.length) setMsg("Listening, but no parent phones are paired yet. Add one below to get alerts.");
+    setMsg(await toggleListening());
   };
 
   const test = async () => {
     if (!cryDetector) return;
     setMsg("Sending…");
-    const r = await cryDetector.sendAlert(tokens, `Test alert from ${m.room.trim() || "the nursery"}`, "test");
+    const r = await cryDetector.sendAlert(tokens, `Test alert from ${room}`, "test");
     setMsg(r.ok ? "Test alert sent. Check the parent phones." : `Couldn't send: ${r.detail.slice(0, 120)}`);
   };
 
@@ -108,7 +71,7 @@ function BabySide({ m, update }: { m: MonitorSettings; update: (p: Partial<Monit
     if (m.parents.some((p) => p.token === code.token)) return setMsg(`${code.name || "That phone"} is already paired.`);
     const parents = [...m.parents, { token: code.token, name: code.name || "Parent phone", addedAt: Date.now() }];
     update({ parents });
-    cryDetector?.sendAlert([code.token], `Paired with ${m.room.trim() || "the nursery"}. You'll get crying alerts here.`, "paired");
+    cryDetector?.sendAlert([code.token], `Paired with ${room}. You'll get crying alerts here.`, "paired");
     setMsg(`${code.name || "Parent phone"} paired.`);
   };
 
@@ -139,18 +102,6 @@ function BabySide({ m, update }: { m: MonitorSettings; update: (p: Partial<Monit
             </View>
           </View>
         )}
-
-        <View style={{ gap: 8 }}>
-          <Text style={styles.label}>Room name</Text>
-          <TextInput
-            value={m.room}
-            onChangeText={(room) => update({ room })}
-            placeholder="the nursery"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            maxLength={40}
-          />
-        </View>
 
         <View style={{ gap: 8 }}>
           <Text style={styles.label}>Sensitivity</Text>

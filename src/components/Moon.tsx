@@ -14,6 +14,7 @@ export function Moon({
   slow,
   still,
   onPress,
+  size = SIZE,
 }: {
   playing: boolean;
   beat: number;
@@ -21,7 +22,9 @@ export function Moon({
   slow: boolean;
   still: boolean;
   onPress: () => void;
+  size?: number;
 }) {
+  const k = size / SIZE;
   const press = useRef(new Animated.Value(1)).current;
   const glow = useRef(new Animated.Value(playing ? 1 : 0)).current;
   const icon = useRef(new Animated.Value(playing ? 1 : 0)).current;
@@ -47,7 +50,8 @@ export function Moon({
   }, [beat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={styles.wrap}>
+    <View style={{ width: SIZE * 1.5 * k, height: SIZE * 1.5 * k, alignItems: "center", justifyContent: "center" }}>
+    <View style={[styles.wrap, { transform: [{ scale: k }] }]}>
       {rings.map((r, i) => (
         <Animated.View
           key={i}
@@ -103,6 +107,7 @@ export function Moon({
           </View>
         </Animated.View>
       </Pressable>
+    </View>
     </View>
   );
 }
