@@ -3,7 +3,7 @@ const fs = require("fs");
 
 // Push alerts for the baby monitor. google-services.json comes from the Firebase
 // project; the Expo project ID and owner come from expo.dev.
-const EXPO_PROJECT_ID = process.env.EXPO_PROJECT_ID || "";
+const EXPO_PROJECT_ID = process.env.EXPO_PROJECT_ID || "3ff0084b-2451-476b-8b98-37acf2c1a20b";
 const EXPO_OWNER = process.env.EXPO_OWNER || undefined;
 const hasFirebase = fs.existsSync("./google-services.json");
 
@@ -11,7 +11,7 @@ module.exports = ({ config }) => ({
   ...config,
   name: "hush",
   slug: "hush",
-  version: "1.1.0",
+  version: "1.1.1",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
