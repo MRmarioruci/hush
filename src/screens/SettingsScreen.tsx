@@ -1,6 +1,7 @@
 import { Children, type ReactNode } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Constants from "expo-constants";
+import { useNavigation } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
 import { LIMIT_DB } from "../safety";
 import { ICONS, Icon, Screen } from "../components/ui";
@@ -11,12 +12,20 @@ const RELEASES = "https://github.com/MRmarioruci/hush/releases/latest";
 const STUDY = "https://www.sciencenews.org/blog/growth-curve/should-you-hush-white-noise";
 
 export function SettingsScreen() {
+  const nav = useNavigation<{ navigate: (n: string) => void }>();
   const { s, set } = useSleep();
   const { m, update } = useMonitor();
   const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
 
   return (
-    <Screen title="Settings">
+    <Screen
+      title="Settings"
+      right={
+        <Pressable onPress={() => nav.navigate("Home")} hitSlop={12} style={styles.close} accessibilityLabel="Back">
+          <Text style={styles.closeText}>Done</Text>
+        </Pressable>
+      }
+    >
       <View style={styles.baby}>
         <View style={styles.babyAvatar}>
           {initial ? <Text style={styles.babyInitial}>{initial}</Text> : <Icon d={ICONS.sleep} size={30} color={colors.bg} />}
@@ -87,6 +96,8 @@ function Row({ label, children, onPress }: { label: string; children?: ReactNode
 }
 
 const styles = StyleSheet.create({
+  close: { backgroundColor: colors.card, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9, marginBottom: 4 },
+  closeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
   baby: { alignItems: "center", gap: 12, paddingVertical: 10 },
   babyAvatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
   babyInitial: { fontFamily: fonts.displayBold, fontSize: 36, color: colors.bg },

@@ -65,6 +65,7 @@ object CryEngine {
     if (running) return
     running = true
     val app = context.applicationContext
+    EventLog.init(app)
     wakeLock = (app.getSystemService(Context.POWER_SERVICE) as PowerManager)
       .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hush:listening")
       .apply { setReferenceCounted(false); acquire(12 * 60 * 60 * 1000L) }
@@ -127,6 +128,17 @@ object CryEngine {
       var lastHeard = 0L    // last moment crying was detected
       var alerted = false   // already alerted for this spell
       var lastAlert = 0L
+      var peak = 0f
+      EventLog.add("listen_start")
+
+      // A spell is recorded once it's over (or when listening stops).
+      fun endSpell() {
+        if (spellStart == 0L) return
+        EventLog.add("cry", mapOf("start" to spellStart, "end" to lastHeard, "peak" to peak.toDouble(), "alerted" to alerted))
+        spellStart = 0L
+        alerted = false
+        peak = 0f
+      }
 
       while (running && !Thread.currentThread().isInterrupted) {
         var read = 0
@@ -174,9 +186,9 @@ object CryEngine {
         if (now) {
           if (spellStart == 0L) spellStart = t
           lastHeard = t
+          if (score > peak) peak = score
         } else if (spellStart != 0L && t - lastHeard > GAP_MS) {
-          spellStart = 0L
-          alerted = false
+          endSpell()
         }
         if (spellStart != 0L && now) {
           val due = if (!alerted) t - spellStart >= delayMs else t - lastAlert >= REPEAT_MS
@@ -185,15 +197,18 @@ object CryEngine {
             alerted = true
             lastAlert = t
             listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
+            EventLog.add("alert", mapOf("first" to first))
             val body = if (first) "$babyName is crying" else "$babyName is still crying"
             AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
           }
         }
       }
+      endSpell()
     } catch (e: Exception) {
       Log.w(TAG, "Listening stopped", e)
       listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
     } finally {
+      EventLog.add("listen_stop")
       try { rec?.stop() } catch (_: Exception) {}
       rec?.release()
       model?.close()

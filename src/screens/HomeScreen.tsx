@@ -39,12 +39,9 @@ export function HomeScreen() {
       eyebrow={greeting()}
       title="hush"
       right={
-        <SvgXml
-          width={26}
-          height={26}
-          style={{ marginBottom: 6 }}
-          xml={`<svg viewBox="0 0 24 24"><path fill="${colors.moon}" d="M15.5 3.2a9 9 0 1 0 5.3 13.9A7.2 7.2 0 0 1 15.5 3.2z"/></svg>`}
-        />
+        <Pressable onPress={() => nav.navigate("Settings")} hitSlop={12} style={styles.gear} accessibilityLabel="Settings">
+          <Icon d={ICONS.gear} size={22} color={colors.cream} />
+        </Pressable>
       }
     >
       {/* ---- white noise ---- */}
@@ -108,7 +105,7 @@ export function HomeScreen() {
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.monTitle}>
-                {mon.m.role === "nursery" ? `Listening for ${mon.baby}` : mon.m.role === "parent" ? "Cry alerts" : "Baby monitor"}
+                {mon.m.role === "nursery" ? (mon.listening ? `Listening for ${mon.baby}` : "Baby monitor") : mon.m.role === "parent" ? "Cry alerts" : "Baby monitor"}
               </Text>
               <Text style={styles.sub}>
                 {mon.m.role == null
@@ -140,6 +137,7 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  gear: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", marginBottom: 2 },
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream },
   sub: { fontFamily: fonts.body, fontSize: 13.5, color: colors.muted, fontVariant: ["tabular-nums"] },
   small: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted },

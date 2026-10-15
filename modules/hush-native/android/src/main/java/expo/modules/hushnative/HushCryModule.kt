@@ -14,6 +14,7 @@ class HushCryModule : Module() {
     Events("onStatus", "onCry")
 
     OnCreate {
+      appContext.reactContext?.let { EventLog.init(it) }
       CryEngine.listener = { type, payload ->
         try { sendEvent(if (type == "cry") "onCry" else "onStatus", payload) } catch (_: Exception) {}
       }
@@ -45,6 +46,12 @@ class HushCryModule : Module() {
     }
 
     Function("isListening") { CryEngine.running }
+
+    // Hands the app everything logged since last time, one JSON object per line.
+    Function("takeEvents") {
+      appContext.reactContext?.let { EventLog.init(it) }
+      EventLog.take()
+    }
 
     AsyncFunction("sendAlert") { tokens: List<String>, body: String, kind: String, promise: Promise ->
       AlertSender.send(tokens, body, mapOf("type" to kind, "baby" to CryEngine.babyName)) { ok, detail ->

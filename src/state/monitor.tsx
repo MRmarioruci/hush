@@ -1,7 +1,9 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { AppState } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
+import { addEvents, fmtDur, loadNights, nightKey, packNight, saveReceivedNight, unpackNight, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import {
   MONITOR_DEFAULTS,
@@ -22,6 +24,8 @@ type Monitor = {
   lastCry: number | null;
   toggleListening: () => Promise<string | null>;
   baby: string;
+  /** Bumps whenever night data changes, so the Nights screen can reload. */
+  nightsVersion: number;
 };
 
 const Ctx = createContext<Monitor | null>(null);
@@ -58,11 +62,51 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => { a.remove(); b.remove(); };
   }, []);
 
+  /* ---------- night stats ---------- */
+  const [nightsVersion, setNightsVersion] = useState(0);
+  // Move whatever the native listener logged into the app's storage.
+  const syncEvents = useCallback(async () => {
+    const raw = cryDetector?.takeEvents() ?? "";
+    const list = raw.split("\n").filter(Boolean).flatMap((line) => {
+      try { return [JSON.parse(line) as HushEvent]; } catch { return []; }
+    });
+    if (list.length) {
+      await addEvents(list);
+      setNightsVersion((v) => v + 1);
+    }
+  }, []);
+  useEffect(() => {
+    syncEvents();
+    const app = AppState.addEventListener("change", (st) => st === "active" && syncEvents());
+    const id = setInterval(syncEvents, 60_000);
+    return () => { app.remove(); clearInterval(id); };
+  }, [syncEvents]);
+
+  // Baby's phone: after a long listening session ends, send parents a summary of the night.
+  const sendNightSummary = useCallback(async () => {
+    const cur = mRef.current;
+    const to = cur.parents.map((p) => p.token);
+    if (!to.length) return;
+    const nights = await loadNights();
+    const n = nights.find((x) => x.key === nightKey(Date.now() - 60_000));
+    if (!n || n.listenedMin < 120) return;
+    const who = cur.babyName.trim() || "Baby";
+    const body = n.cries === 0
+      ? `${who}'s night: no crying heard`
+      : `${who}'s night: cried ${n.cries} time${n.cries > 1 ? "s" : ""}, ${fmtDur(n.cryMin)} in total`;
+    sendPush(to, body, packNight(n, who));
+  }, []);
+
   // Baby's phone: a parent scanned our code and asked to be connected. Save them and confirm.
   const mRef = useRef(m);
   mRef.current = m;
   useEffect(() => {
     const handle = (n: Notifications.Notification) => {
+      const night = unpackNight(n.request.content.data);
+      if (night) {
+        saveReceivedNight(night).then(() => setNightsVersion((v) => v + 1));
+        return;
+      }
       const req = pairRequest(n);
       if (!req || mRef.current.role !== "nursery") return;
       const cur = mRef.current;
@@ -84,6 +128,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       cryDetector.stop();
       setListening(false);
       setStatus({});
+      setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 800);
       return null;
     }
     const problem = await askMicAndNotifications();
@@ -92,9 +137,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     cryDetector.start();
     setListening(true);
     return tokens.length ? null : "Pair a parent phone to get alerts.";
-  }, [listening, m.sensitivity, m.alertAfter, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [listening, m.sensitivity, m.alertAfter, baby, tokens.join(","), syncEvents, sendNightSummary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion }}>{children}</Ctx.Provider>
   );
 }

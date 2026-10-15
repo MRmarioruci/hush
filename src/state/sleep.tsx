@@ -7,6 +7,7 @@ import { deviceVolume, type VolumeState } from "../../modules/hush-native/src";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
 import { capGain, fullVolumeDb, levelAtCrib, safePlan } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
+import { addEvent } from "../nights";
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -63,6 +64,14 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     if (wasPlaying) player.play();
     try { player.updateLockScreenMetadata({ title: `${sound.name} noise`, artist: "hush" }); } catch {}
   }, [soundId, sound, player]);
+
+  // Note when white noise plays, for the Nights timeline.
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    if (playing === wasPlaying.current) return;
+    wasPlaying.current = playing;
+    addEvent({ type: playing ? "noise_start" : "noise_stop", t: Date.now() });
+  }, [playing]);
 
   /* ---------- phone volume + safety ---------- */
   const [dev, setDev] = useState<VolumeState | null>(() => deviceVolume?.get() ?? null);

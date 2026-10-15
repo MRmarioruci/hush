@@ -10,7 +10,7 @@ const TABS: Record<string, { label: string; icon: string }> = {
   Home: { label: "Home", icon: ICONS.home },
   Sounds: { label: "Sounds", icon: ICONS.sounds },
   Monitor: { label: "Monitor", icon: ICONS.monitor },
-  Settings: { label: "Settings", icon: ICONS.settings },
+  Nights: { label: "Nights", icon: ICONS.nights },
 };
 
 /** Floating bar at the bottom. A small dot shows what's running, whichever tab you're on. */
@@ -25,6 +25,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         {state.routes.map((route, i) => {
           const focused = state.index === i;
           const t = TABS[route.name];
+          if (!t) return null; // Settings opens from the gear on Home
           const live =
             route.name === "Sounds" ? playing : route.name === "Monitor" ? listening : false;
           const liveColor = route.name === "Monitor" && status.crying ? colors.rose : colors.sage;

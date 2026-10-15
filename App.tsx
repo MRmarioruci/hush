@@ -18,6 +18,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { SleepScreen } from "./src/screens/SleepScreen";
 import { MonitorScreen } from "./src/screens/MonitorScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { NightsScreen } from "./src/screens/NightsScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -58,6 +59,7 @@ export default function App() {
                   <Tab.Screen name="Home" component={HomeScreen} />
                   <Tab.Screen name="Sounds" component={SleepScreen} />
                   <Tab.Screen name="Monitor" component={MonitorScreen} />
+                  <Tab.Screen name="Nights" component={NightsScreen} />
                   <Tab.Screen name="Settings" component={SettingsScreen} />
                 </Tab.Navigator>
               </NavigationContainer>
