@@ -87,3 +87,16 @@ jobs:
           body: |
             Download the APK below on your Android phone and open it to install.
             If Android asks, allow your browser to install unknown apps.
+
+      - name: Publish test build
+        if: github.ref != 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}-${{ github.ref_name }}
+          name: hush ${{ env.VERSION }} (${{ github.ref_name }} test build)
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: dist/*.apk
+          body: Test build from the ${{ github.ref_name }} branch. Not the stable release.
