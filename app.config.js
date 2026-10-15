@@ -3,7 +3,7 @@ module.exports = ({ config }) => ({
   ...config,
   name: "hush",
   slug: "hush",
-  version: "1.0.0",
+  version: "1.0.1",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
@@ -42,6 +42,18 @@ module.exports = ({ config }) => ({
         microphonePermission: false,
         recordAudioAndroid: false,
         enableBackgroundPlayback: true,
+      },
+    ],
+    [
+      // Smaller APK: strip unused code and build only for 64-bit ARM phones.
+      // Resource shrinking stays off so the bundled sounds are never dropped
+      // (every Android phone from the last several years).
+      "expo-build-properties",
+      {
+        android: {
+          enableMinifyInReleaseBuilds: true,
+          buildArchs: ["arm64-v8a"],
+        },
       },
     ],
     [
