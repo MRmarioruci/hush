@@ -100,19 +100,44 @@ export async function recordAlert(n: Notifications.Notification) {
   return next;
 }
 
-/* ---------- pairing codes ---------- */
+/* ---------- pairing ----------
+   The baby's phone shows a QR code with its own push address. The parent's phone scans it and
+   sends a "pair-request" push carrying the parent's address. The baby's phone saves that parent
+   and replies with "paired". */
 
-export type PairCode = { app: "hush"; v: 1; token: string; name: string };
+export type PairCode = { app: "hush"; v: 2; token: string; baby: string };
 
-export const makePairCode = (token: string, name: string) =>
-  JSON.stringify({ app: "hush", v: 1, token, name } satisfies PairCode);
+export const makePairCode = (token: string, baby: string) =>
+  JSON.stringify({ app: "hush", v: 2, token, baby } satisfies PairCode);
 
 export function readPairCode(raw: string): PairCode | null {
   try {
     const c = JSON.parse(raw);
-    if (c?.app === "hush" && typeof c.token === "string" && c.token.startsWith("ExponentPushToken[")) return c;
+    if (c?.app === "hush" && c.v === 2 && typeof c.token === "string" && c.token.startsWith("ExponentPushToken[")) return c;
   } catch {}
   return null;
+}
+
+/** Send a push through Expo's push service. Returns true when Expo accepted it. */
+export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush"): Promise<boolean> {
+  if (!to.length) return false;
+  try {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: "default", priority: "high", channelId: "cry-alerts" }))),
+    });
+    const json = await res.json().catch(() => null);
+    return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");
+  } catch {
+    return false;
+  }
+}
+
+export type PairRequest = { token: string; name: string };
+export function pairRequest(n: Notifications.Notification): PairRequest | null {
+  const d = n.request.content.data as { type?: string; token?: string; name?: string } | undefined;
+  return d?.type === "pair-request" && typeof d.token === "string" ? { token: d.token, name: d.name || "Parent" } : null;
 }
 
 /* ---------- permissions on the baby phone ---------- */

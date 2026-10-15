@@ -1,9 +1,12 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
+import * as Notifications from "expo-notifications";
 import {
   MONITOR_DEFAULTS,
+  pairRequest,
+  sendPush,
   THRESHOLDS,
   askMicAndNotifications,
   loadMonitor,
@@ -54,6 +57,26 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const b = cryDetector.onCry((e) => setLastCry(e.at));
     return () => { a.remove(); b.remove(); };
   }, []);
+
+  // Baby's phone: a parent scanned our code and asked to be connected. Save them and confirm.
+  const mRef = useRef(m);
+  mRef.current = m;
+  useEffect(() => {
+    const handle = (n: Notifications.Notification) => {
+      const req = pairRequest(n);
+      if (!req || mRef.current.role !== "nursery") return;
+      const cur = mRef.current;
+      if (!cur.parents.some((p) => p.token === req.token)) {
+        update({ parents: [...cur.parents, { token: req.token, name: req.name, addedAt: Date.now() }] });
+      }
+      const who = cur.babyName.trim() || "Baby";
+      sendPush([req.token], `Connected to ${who}'s phone`, { type: "paired", baby: who });
+      Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+    };
+    Notifications.getPresentedNotificationsAsync().then((list) => list.forEach(handle)).catch(() => {});
+    const sub = Notifications.addNotificationReceivedListener(handle);
+    return () => sub.remove();
+  }, [m.role, update]);
 
   const toggleListening = useCallback(async (): Promise<string | null> => {
     if (!cryDetector) return "Listening for crying works on Android phones.";

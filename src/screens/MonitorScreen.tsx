@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
@@ -101,10 +101,20 @@ function RoleBar({ role, baby, onChange }: { role: Role; baby: string; onChange:
 function NurseryPhone() {
   const { m, update, listening, status, lastCry, toggleListening, baby } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const tokens = m.parents.map((p) => p.token);
   const crying = !!status.crying;
   const paired = m.parents.length > 0;
+
+  // Close the code once a new parent connects.
+  const count = useRef(m.parents.length);
+  useEffect(() => {
+    if (m.parents.length > count.current) {
+      setShowCode(false);
+      setMsg(`${m.parents[m.parents.length - 1].name} connected`);
+    }
+    count.current = m.parents.length;
+  }, [m.parents]);
 
   const test = async () => {
     if (!cryDetector || !tokens.length) return;
@@ -113,27 +123,10 @@ function NurseryPhone() {
     setMsg(r.ok ? "Test sent" : "Couldn't send. Check the internet connection.");
   };
 
-  const onScanned = (raw: string) => {
-    setScanning(false);
-    const code = readPairCode(raw);
-    if (!code) return setMsg("That's not a hush code");
-    if (m.parents.some((p) => p.token === code.token)) return setMsg(`${code.name} is already connected`);
-    update({ parents: [...m.parents, { token: code.token, name: code.name || "Parent", addedAt: Date.now() }] });
-    cryDetector?.sendAlert([code.token], `Connected to ${baby}'s phone`, "paired");
-    setMsg(`${code.name || "Parent"} connected`);
-  };
-
   return (
     <>
-      {!paired ? (
-        <Card style={{ gap: 14 }}>
-          <Text style={styles.stepTitle}>Connect a parent's phone</Text>
-          <Step n={1} text={'On your phone, open Monitor and pick "Get the alerts"'} />
-          <Step n={2} text="Scan the code it shows" />
-          <Pressable onPress={() => setScanning(true)} style={styles.primary}>
-            <Text style={styles.primaryText}>Scan code</Text>
-          </Pressable>
-        </Card>
+      {!paired || showCode ? (
+        <PairCodeCard baby={baby} onCancel={paired ? () => setShowCode(false) : undefined} />
       ) : (
         <View style={styles.orbWrap}>
           <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={async () => setMsg(await toggleListening())} baby={baby} />
@@ -143,7 +136,7 @@ function NurseryPhone() {
         </View>
       )}
 
-      {paired && listening && <Hearing />}
+      {paired && listening && !showCode && <Hearing />}
 
       {paired && (
         <Card style={{ gap: 4 }}>
@@ -159,10 +152,12 @@ function NurseryPhone() {
               </Pressable>
             </View>
           ))}
-          <Pressable onPress={() => setScanning(true)} style={styles.person}>
-            <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
-            <Text style={[styles.personName, { color: colors.peach }]}>Add another phone</Text>
-          </Pressable>
+          {!showCode && (
+            <Pressable onPress={() => setShowCode(true)} style={styles.person}>
+              <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
+              <Text style={[styles.personName, { color: colors.peach }]}>Add another phone</Text>
+            </Pressable>
+          )}
         </Card>
       )}
 
@@ -193,8 +188,36 @@ function NurseryPhone() {
       )}
 
       {msg && <Text style={styles.msg}>{msg}</Text>}
-      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
     </>
+  );
+}
+
+/** The baby's phone shows this; the parent's phone scans it. */
+function PairCodeCard({ baby, onCancel }: { baby: string; onCancel?: () => void }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { getMyToken().then(setToken, (e) => setErr(e.message)); }, []);
+  return (
+    <Card style={{ alignItems: "center", gap: 14 }}>
+      <Text style={styles.stepTitle}>Scan this with your phone</Text>
+      <View style={styles.qr}>
+        {token ? (
+          <QRCode value={makePairCode(token, baby)} size={188} backgroundColor={colors.cream} color={colors.bg} />
+        ) : (
+          <Text style={styles.qrWait}>{err ?? "Getting ready…"}</Text>
+        )}
+      </View>
+      <View style={{ gap: 10, alignSelf: "stretch" }}>
+        <Step n={1} text="Open hush on your phone" />
+        <Step n={2} text={'Monitor → "Get the alerts" → Scan'} />
+      </View>
+      <Text style={styles.roleSub}>Keep this screen open until it connects.</Text>
+      {onCancel && (
+        <Pressable onPress={onCancel} hitSlop={10}>
+          <Text style={styles.change}>Cancel</Text>
+        </Pressable>
+      )}
+    </Card>
   );
 }
 
@@ -318,7 +341,7 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
           <Text style={styles.scanText}>Allow the camera to scan</Text>
         )}
         <View style={styles.scanFrame} pointerEvents="none" />
-        <Text style={styles.scanHint}>Scan the code on the parent's phone</Text>
+        <Text style={styles.scanHint}>Scan the code on the baby's phone</Text>
         <Pressable onPress={onClose} style={styles.scanClose}>
           <Text style={styles.scanCloseText}>Cancel</Text>
         </Pressable>
@@ -331,16 +354,20 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
 
 function ParentPhone() {
   const { m, update } = useMonitor();
-  const [token, setToken] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
-  const [showCode, setShowCode] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [state, setState] = useState<"idle" | "connecting" | "failed">("idle");
+  const [err, setErr] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    getMyToken().then(setToken, (e) => setErr(e.message));
     const handle = async (n: Notifications.Notification) => {
       const who = pairedBaby(n);
-      if (who) update({ pairedWith: who });
+      if (who) {
+        update({ pairedWith: who });
+        setState("idle");
+        if (timer.current) clearTimeout(timer.current);
+      }
       const next = await recordAlert(n);
       if (next) setAlerts(next);
     };
@@ -350,14 +377,32 @@ function ParentPhone() {
       setAlerts(await loadAlerts());
     })();
     const sub = Notifications.addNotificationReceivedListener(handle);
-    return () => sub.remove();
+    return () => { sub.remove(); if (timer.current) clearTimeout(timer.current); };
   }, [update]);
 
-  const connected = !!m.pairedWith;
+  const onScanned = async (raw: string) => {
+    setScanning(false);
+    setErr(null);
+    const code = readPairCode(raw);
+    if (!code) return setErr("That's not a hush code. Scan the code on the baby's phone.");
+    let mine: string;
+    try {
+      mine = await getMyToken();
+    } catch (e) {
+      return setErr((e as Error).message);
+    }
+    setState("connecting");
+    const ok = await sendPush([code.token], `${m.myName.trim() || "A parent"} connected`, { type: "pair-request", token: mine, name: m.myName.trim() || "Parent" });
+    if (!ok) { setState("failed"); return; }
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setState((s) => (s === "connecting" ? "failed" : s)), 20000);
+  };
+
+  const connected = !!m.pairedWith && state === "idle";
 
   return (
     <>
-      {connected && !showCode ? (
+      {connected ? (
         <Card style={styles.connected}>
           <View style={styles.checkCircle}><Icon d={ICONS.check} size={22} color={colors.bg} width={2.4} /></View>
           <View style={{ flex: 1 }}>
@@ -366,31 +411,37 @@ function ParentPhone() {
           </View>
         </Card>
       ) : (
-        <Card style={{ alignItems: "center", gap: 14 }}>
-          <Text style={styles.stepTitle}>Show this to the phone that stays with the baby</Text>
-          <View style={styles.qr}>
-            {token ? (
-              <QRCode value={makePairCode(token, m.myName.trim() || "Parent")} size={188} backgroundColor={colors.cream} color={colors.bg} />
-            ) : (
-              <Text style={styles.qrWait}>{err ?? "Getting ready…"}</Text>
-            )}
-          </View>
-          <Text style={styles.roleSub}>On that phone: Monitor → Scan code</Text>
+        <Card style={{ gap: 14 }}>
+          <Text style={styles.stepTitle}>
+            {state === "connecting" ? "Connecting…" : state === "failed" ? "Couldn't connect" : "Connect to the baby's phone"}
+          </Text>
+          {state === "failed" ? (
+            <Text style={[styles.roleSub, { textAlign: "center" }]}>Make sure hush is open on the baby's phone with its code showing, then scan again.</Text>
+          ) : (
+            <>
+              <Step n={1} text={'On the baby\'s phone, open Monitor and pick "Stay in the baby\'s room"'} />
+              <Step n={2} text="Scan the code it shows" />
+            </>
+          )}
           <TextInput
             value={m.myName}
             onChangeText={(myName) => update({ myName })}
-            placeholder="Your name"
+            placeholder="Your name (shown on the baby's phone)"
             placeholderTextColor={colors.muted}
             style={styles.input}
             maxLength={30}
           />
+          <Pressable onPress={() => setScanning(true)} style={[styles.primary, state === "connecting" && { opacity: 0.5 }]} disabled={state === "connecting"}>
+            <Text style={styles.primaryText}>Scan code</Text>
+          </Pressable>
         </Card>
       )}
       {connected && (
-        <Pressable onPress={() => setShowCode((v) => !v)} style={{ alignSelf: "center" }} hitSlop={10}>
-          <Text style={styles.change}>{showCode ? "Done" : "Connect another baby phone"}</Text>
+        <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
+          <Text style={styles.change}>Connect another baby's phone</Text>
         </Pressable>
       )}
+      {err && <Text style={styles.msg}>{err}</Text>}
 
       <Card style={{ gap: 4 }}>
         <Label>Alerts</Label>
@@ -406,6 +457,7 @@ function ParentPhone() {
           ))
         )}
       </Card>
+      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
     </>
   );
 }
