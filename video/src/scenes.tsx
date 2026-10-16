@@ -2,31 +2,39 @@ import React from "react";
 import { interpolate, useCurrentFrame } from "remotion";
 import { BODY, C, DISPLAY, Moon, Phone, Scene, Sfx, Sky, Words, clamp, ease, float, prog, springIn } from "./theme";
 
-/* 1 · The problem: travelling, and no baby monitor packed. */
+/* 1 · The problem: no white noise machine, no baby monitor. */
+const Speaker: React.FC = () => (
+  <svg width={190} height={190} viewBox="0 0 190 190">
+    <rect x={25} y={25} width={140} height={140} rx={46} fill={C.peach} />
+    {[0, 1, 2].flatMap((r) => [0, 1, 2].map((c) => <circle key={`${r}${c}`} cx={65 + c * 30} cy={65 + r * 30} r={7} fill="rgba(27,23,39,.25)" />))}
+  </svg>
+);
+const MonitorDevice: React.FC = () => (
+  <svg width={190} height={190} viewBox="0 0 190 190">
+    <line x1={120} y1={18} x2={120} y2={48} stroke={C.muted} strokeWidth={10} strokeLinecap="round" />
+    <rect x={45} y={45} width={100} height={130} rx={30} fill={C.sage} />
+    <rect x={62} y={64} width={66} height={50} rx={12} fill="rgba(27,23,39,.22)" />
+    <circle cx={95} cy={142} r={13} fill="rgba(27,23,39,.25)" />
+  </svg>
+);
+
 export const HookScene: React.FC = () => {
   const f = useCurrentFrame();
-  const bag = springIn(f, 4, 34);
-  const l1 = springIn(f, 14, 40);
-  const l2 = springIn(f, 52, 78);
+  const a = springIn(f, 6, 34);
+  const b = springIn(f, 40, 68);
+  const c = prog(f, 80, 100);
   return (
     <Scene>
       <Sky glowY="40%" />
-      <Sfx at={4} name="whoosh" volume={0.35} />
-      <Sfx at={16} name="pop" volume={0.45} />
-      <Sfx at={54} name="pop" volume={0.45} />
-      <svg width={260} height={230} viewBox="0 0 260 230" style={{ position: "absolute", left: 830, top: 150 + float(f, 0, 6), opacity: bag, scale: `${0.7 + 0.3 * bag}` }}>
-        <rect x={95} y={10} width={70} height={44} rx={16} fill="none" stroke={C.muted} strokeWidth={12} />
-        <rect x={20} y={46} width={220} height={160} rx={32} fill={C.peach} />
-        <line x1={90} y1={60} x2={90} y2={192} stroke="rgba(27,23,39,.18)" strokeWidth={10} strokeLinecap="round" />
-        <line x1={170} y1={60} x2={170} y2={192} stroke="rgba(27,23,39,.18)" strokeWidth={10} strokeLinecap="round" />
-      </svg>
-      <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center" }}>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 96, color: C.cream, opacity: l1, translate: `0px ${(1 - l1) * 30}px` }}>
-          Travelling with a baby?
-        </div>
-        <div style={{ position: "relative", display: "inline-block", marginTop: 26, fontFamily: BODY, fontWeight: 700, fontSize: 56, color: C.muted, opacity: l2, translate: `0px ${(1 - l2) * 24}px` }}>
-          Left the baby monitor at home?
-        </div>
+      <Sfx at={6} name="pop" volume={0.45} />
+      <Sfx at={40} name="pop" volume={0.45} />
+      <Sfx at={80} name="tick" volume={0.45} />
+      <div style={{ position: "absolute", left: 640, top: 150 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), scale: `${0.6 + 0.4 * a}`, rotate: `${-6 + float(f, 1, 1)}deg` }}><Speaker /></div>
+      <div style={{ position: "absolute", left: 1090, top: 150 + float(f, 2, 6), opacity: Math.min(1, b * 1.4), scale: `${0.6 + 0.4 * b}`, rotate: `${6 + float(f, 3, 1)}deg` }}><MonitorDevice /></div>
+      <div style={{ position: "absolute", width: "100%", top: 440, textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 92, lineHeight: 1.2, color: C.cream, opacity: Math.min(1, a * 1.4), translate: `0px ${(1 - a) * 30}px` }}>No white noise machine?</div>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 92, lineHeight: 1.2, color: C.cream, opacity: Math.min(1, b * 1.4), translate: `0px ${(1 - b) * 30}px` }}>No baby monitor?</div>
+        <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 52, color: C.peach, marginTop: 30, opacity: c, translate: `0px ${(1 - c) * 20}px` }}>No problem.</div>
       </div>
     </Scene>
   );
@@ -238,13 +246,14 @@ export const OutroScene: React.FC = () => {
         })}
       </div>
       <div style={{ opacity: Math.min(1, end * 1.3) }}>
-        <Moon size={230} style={{ left: 845, top: 180 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
-        <div style={{ position: "absolute", width: "100%", top: 490, textAlign: "center", scale: `${0.94 + 0.06 * end}` }}>
+        <Moon size={210} style={{ left: 855, top: 170 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
+        <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center", scale: `${0.94 + 0.06 * end}` }}>
           <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 170, color: C.cream, letterSpacing: -4, lineHeight: 1 }}>hush</div>
           <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor, wherever you sleep</div>
           <div style={{ display: "inline-block", marginTop: 50, fontFamily: BODY, fontWeight: 700, fontSize: 40, color: C.bg, background: C.peach, borderRadius: 99, padding: "18px 46px" }}>
             Get it on Google Play
           </div>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 36, color: C.muted, marginTop: 26, opacity: prog(f, 118, 140) }}>Try the baby monitor free for 3 days</div>
         </div>
       </div>
     </Scene>
