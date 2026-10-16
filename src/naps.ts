@@ -48,7 +48,8 @@ function recentWakeGaps(sleeps: Sleep[], now: number): number[] {
     const woke = list[i - 1].to, slept = list[i].from;
     const h = new Date(woke).getHours();
     const gap = (slept - woke) / MIN;
-    if (h >= 6 && h < 20 && gap >= 15 && gap <= 8 * 60) gaps.push(gap);
+    // The stretch before bedtime runs long and isn't a nap gap.
+    if (list[i].kind !== "night" && h >= 6 && h < 20 && gap >= 15 && gap <= 8 * 60) gaps.push(gap);
   }
   return gaps.reverse().slice(0, 6);
 }
