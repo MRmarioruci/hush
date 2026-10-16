@@ -13,8 +13,7 @@ import {
   askMicAndNotifications,
   loadMonitor,
   saveMonitor,
-  type MonitorSettings,
-} from "../monitor";
+  type MonitorSettings, setupAlertChannel } from "../monitor";
 import { babyLabel, t, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -63,6 +62,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // Native alerts and the "listening" notification use the app's language.
   const lang = useLang();
   useEffect(() => {
+    setupAlertChannel().catch(() => {}); // channel names follow the language; also creates new channels after updates
     cryDetector?.setTexts({
       crying: t("push.crying", { name: baby }),
       still: t("push.still", { name: baby }),

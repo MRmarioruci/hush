@@ -88,8 +88,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     return () => { sub.remove(); app.remove(); };
   }, []);
 
-  const plan = dev ? safePlan(s.dist, dev.max) : null;
-  const appGain = plan ? plan.appGain : capGain(s.dist) * (s.vol / 100);
+  const safe = dev ? safePlan(s.dist, dev.max) : null;
+  // Past the limit only when the parent turned that on; then nothing is capped.
+  const plan = safe && s.allowLoud ? { ceiling: dev!.max, appGain: 1 } : safe;
+  const appGain = plan ? plan.appGain : (s.allowLoud ? 1 : capGain(s.dist)) * (s.vol / 100);
   const baseLevel = dev
     ? levelAtCrib(s.dist, dev.step, dev.max, plan!.appGain)
     : s.vol > 0 ? fullVolumeDb(s.dist) + 20 * Math.log10(appGain) : null;
@@ -97,8 +99,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   // While playing, the phone's media volume can't go past the safe step (enforced natively).
   useEffect(() => {
     if (!deviceVolume || !plan) return;
-    setDev(deviceVolume.setCeiling(playing ? plan.ceiling : -1));
-  }, [playing, plan?.ceiling]); // eslint-disable-line react-hooks/exhaustive-deps
+    setDev(deviceVolume.setCeiling(playing && !s.allowLoud ? plan.ceiling : -1));
+  }, [playing, plan?.ceiling, s.allowLoud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setStep = useCallback((step: number) => {
     if (deviceVolume) setDev(deviceVolume.setStep(step));
@@ -202,7 +204,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   return (
     <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, timerLeft, setTimer, dev, setStep, ceiling: plan?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
+      value={{ s, set, soundId, sound, playing, toggle, timerLeft, setTimer, dev, setStep, ceiling: safe?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
     >
       {children}
     </Ctx.Provider>

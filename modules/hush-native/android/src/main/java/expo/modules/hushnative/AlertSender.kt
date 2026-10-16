@@ -25,7 +25,8 @@ object AlertSender {
             put("body", body)
             put("sound", "default")
             put("priority", "high")
-            put("channelId", "cry-alerts")
+            // Crying (and a stopped monitor) ring like an alarm; the rest are normal notifications.
+            put("channelId", if (data["type"] in setOf("cry", "stopped", "test")) "baby-alarm" else "cry-alerts")
             put("data", JSONObject(data))
           })
         }

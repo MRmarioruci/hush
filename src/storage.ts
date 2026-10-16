@@ -12,9 +12,11 @@ export type Settings = {
   smartCry: boolean;
   /** First-time setup finished. */
   onboarded: boolean;
+  /** The parent chose to go past the safe level at the crib (after a warning). */
+  allowLoud: boolean;
 };
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false };
 
 export async function loadSettings(): Promise<Settings> {
   try {

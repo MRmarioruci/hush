@@ -51,14 +51,33 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/** Crying alerts use an alarm-style channel so they ring and vibrate even with the phone on silent. */
+export const ALARM_CHANNEL = "baby-alarm";
+export const INFO_CHANNEL = "cry-alerts";
+
 export async function setupAlertChannel() {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("cry-alerts", {
-    name: t("home.cryAlerts"),
-    description: t("role.parentSub"),
+  await Notifications.setNotificationChannelAsync(ALARM_CHANNEL, {
+    name: t("notif.alarmName"),
+    description: t("notif.alarmDesc"),
     importance: Notifications.AndroidImportance.MAX,
     sound: "default",
-    vibrationPattern: [0, 400, 200, 400],
+    enableVibrate: true,
+    vibrationPattern: [0, 700, 300, 700, 300, 700],
+    bypassDnd: true,
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.ALARM,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+    },
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+  await Notifications.setNotificationChannelAsync(INFO_CHANNEL, {
+    name: t("notif.infoName"),
+    description: t("notif.infoDesc"),
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: "default",
+    enableVibrate: true,
+    vibrationPattern: [0, 300, 200, 300],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 }
@@ -120,13 +139,13 @@ export function readPairCode(raw: string): PairCode | null {
 }
 
 /** Send a push through Expo's push service. Returns true when Expo accepted it. */
-export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush"): Promise<boolean> {
+export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush", channelId = INFO_CHANNEL): Promise<boolean> {
   if (!to.length) return false;
   try {
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: "default", priority: "high", channelId: "cry-alerts" }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: "default", priority: "high", channelId }))),
     });
     const json = await res.json().catch(() => null);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");

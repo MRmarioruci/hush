@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PermissionsAndroid, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Modal, PermissionsAndroid, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SMART } from "../smart";
 import { useMonitor } from "../state/monitor";
 import { askMicAndNotifications } from "../monitor";
@@ -17,14 +17,16 @@ export function SleepScreen() {
   const z = useSleep();
   const { s } = z;
   const t = useT();
+  const [asking, setAsking] = useState(false);
+  const loud = z.level != null && z.level > LIMIT_DB + 0.5;
 
   const tag =
     s.dist < 1 ? { t: t("sounds.tagClose"), c: colors.rose }
     : s.dist < 2 ? { t: t("sounds.tagSoft"), c: colors.moon }
     : { t: t("sounds.tagLovely"), c: colors.sage };
   const volLabel = z.dev
-    ? z.dev.step === 0 ? t("sounds.volOff") : z.dev.step >= z.ceiling! ? t("sounds.maxSafe") : `${Math.round((z.dev.step / z.ceiling!) * 100)}%`
-    : s.vol === 100 ? t("sounds.maxSafe") : `${s.vol}%`;
+    ? z.dev.step === 0 ? t("sounds.volOff") : z.dev.step > z.ceiling! ? t("sounds.overSafe") : z.dev.step === z.ceiling! ? t("sounds.maxSafe") : `${Math.round((z.dev.step / z.ceiling!) * 100)}%`
+    : s.vol === 100 && !s.allowLoud ? t("sounds.maxSafe") : `${s.vol}%`;
   const pos = (x: number) => Math.max(0, Math.min(100, ((x - 20) / 60) * 100));
 
   return (
@@ -88,7 +90,7 @@ export function SleepScreen() {
         <View style={styles.levels}>
           <View style={styles.lvl}>
             <Text style={styles.lvlLabel}>{z.dev ? t("sounds.atCribNow") : t("sounds.atCribMost")}</Text>
-            <Text style={[styles.lvlNum, { color: colors.sage }]}>
+            <Text style={[styles.lvlNum, { color: loud ? colors.rose : colors.sage }]}>
               {z.level == null ? "–" : Math.round(Math.max(20, z.level))}
               <Text style={styles.lvlUnit}> dB</Text>
             </Text>
@@ -102,27 +104,64 @@ export function SleepScreen() {
           </View>
         </View>
         <View style={styles.gauge}>
-          <View style={[styles.gaugeFill, { width: `${z.level == null ? 0 : pos(z.level)}%` }]} />
+          <View style={[styles.gaugeFill, { width: `${z.level == null ? 0 : pos(z.level)}%` }, loud && { backgroundColor: colors.rose }]} />
           <View style={[styles.gaugeMark, { left: `${pos(LIMIT_DB)}%` }]} />
         </View>
         <View>
           <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? t("sounds.highest") : z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}</Label>
           {z.dev ? (
-            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} limit={z.ceiling!} onChange={z.setStep} />
+            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} limit={s.allowLoud ? z.dev.max : z.ceiling!} onChange={z.setStep} />
           ) : (
             <Slider label={t("sounds.volume")} value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
           )}
         </View>
+        {loud && (
+          <View style={styles.warn}>
+            <Text style={styles.warnText}>{t("sounds.loudWarn", { db: LIMIT_DB })}</Text>
+          </View>
+        )}
         <Text style={styles.hint}>
-          {t(z.dev ? "sounds.hintDev" : "sounds.hintCap", { db: LIMIT_DB })}
-          {s.dist < 2 ? " " + t("sounds.moveFurther", { dist: fmtDist(2, s.unit) }) : ""}
+          {s.allowLoud ? t("sounds.hintLoud", { db: LIMIT_DB }) : t(z.dev ? "sounds.hintDev" : "sounds.hintCap", { db: LIMIT_DB })}
+          {s.dist < 2 && !s.allowLoud ? " " + t("sounds.moveFurther", { dist: fmtDist(2, s.unit) }) : ""}
         </Text>
+        <View style={styles.loudRow}>
+          <Text style={styles.loudLabel}>{t("sounds.allowLoud", { db: LIMIT_DB })}</Text>
+          <Switch
+            value={s.allowLoud}
+            onValueChange={(v) => (v ? setAsking(true) : z.set({ allowLoud: false }))}
+            trackColor={{ false: colors.card2, true: colors.rose }}
+            thumbColor={colors.cream}
+          />
+        </View>
       </Card>
+
+      <Modal visible={asking} transparent animationType="fade" onRequestClose={() => setAsking(false)}>
+        <View style={styles.dialogBack}>
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>{t("sounds.loudTitle", { db: LIMIT_DB })}</Text>
+            <Text style={styles.dialogText}>{t("sounds.loudBody", { db: LIMIT_DB })}</Text>
+            <Pressable onPress={() => setAsking(false)} style={styles.dialogSafe}><Text style={styles.dialogSafeText}>{t("sounds.keepSafe")}</Text></Pressable>
+            <Pressable onPress={() => { z.set({ allowLoud: true }); setAsking(false); }} style={styles.dialogLoud}><Text style={styles.dialogLoudText}>{t("sounds.allowAnyway")}</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  warn: { backgroundColor: "rgba(242,165,151,0.14)", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
+  warnText: { fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.rose },
+  loudRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingTop: 4 },
+  loudLabel: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
+  dialogBack: { flex: 1, backgroundColor: "rgba(10,8,18,0.7)", justifyContent: "center", padding: 24 },
+  dialog: { backgroundColor: colors.card, borderRadius: 24, padding: 22, gap: 12 },
+  dialogTitle: { fontFamily: fonts.display, fontSize: 21, color: colors.cream },
+  dialogText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.muted },
+  dialogSafe: { backgroundColor: colors.peach, borderRadius: 99, paddingVertical: 14, alignItems: "center", marginTop: 6 },
+  dialogSafeText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.bg },
+  dialogLoud: { borderRadius: 99, paddingVertical: 12, alignItems: "center" },
+  dialogLoudText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.rose },
   modeRow: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 3 },
   modeItem: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 99 },
   modeOn: { backgroundColor: colors.peach },
