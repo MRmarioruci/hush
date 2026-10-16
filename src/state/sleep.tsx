@@ -1,7 +1,7 @@
 // Everything about the white noise: what's playing, the sleep timer, and the safe volume.
 // Lives above the screens so it keeps running whatever tab is open.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
 import { deviceVolume, type VolumeState } from "../../modules/hush-native/src";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
@@ -13,7 +13,7 @@ import { smartTarget, type SmartPhase } from "../smart";
 import { useMonitor } from "./monitor";
 import { t } from "../i18n";
 import * as Notifications from "expo-notifications";
-import { sendData } from "../monitor";
+import { addPushListener, sendData } from "../monitor";
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -59,7 +59,6 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const playing = status.playing;
 
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: "doNotMix" }).catch(() => {});
     player.loop = true;
     return () => player.remove();
   }, [player]);
@@ -146,6 +145,14 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     return Math.pow(10, (smartDb.current - LIMIT_DB) / 20);
   }, [isSmart, mon.micOn]);
 
+  // iPhone: while the mic listens (monitor or smart volume), the shared audio session has to
+  // allow recording and mixing, or starting/stopping the white noise would cut the mic off.
+  const micOn = mon.micOn;
+  useEffect(() => {
+    const rec = Platform.OS === "ios" && micOn;
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: rec ? "mixWithOthers" : "doNotMix", allowsRecording: rec }).catch(() => {});
+  }, [micOn]);
+
   /* ---------- sleep timer ---------- */
   const stopAt = useRef(0);
   const [, force] = useState(0);
@@ -208,7 +215,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   remote.current = { toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents };
   const roomFor = useCallback(() => ({ type: "room", playing: player.playing, sound: remote.current.soundId, listening: remote.current.listening, at: Date.now() }), [player]);
   useEffect(() => {
-    const sub = Notifications.addNotificationReceivedListener((n) => {
+    const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
       const r = remote.current;
       if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;

@@ -26,9 +26,14 @@ type CryNative = {
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
+  addListener(event: "onData", cb: (d: Record<string, unknown>) => void): Subscription;
+  // iOS only
+  micPermission?(): "granted" | "denied" | "undetermined";
+  requestMic?(): Promise<boolean>;
 };
 
-// Android only. On other platforms these are null and the app falls back gracefully.
+// HushVolume is Android only (iOS doesn't let apps set the volume; see src/safety.ts).
+// HushCry exists on Android and iOS. On web both are null and the app falls back gracefully.
 const volume = requireOptionalNativeModule<VolumeNative>("HushVolume");
 const cry = requireOptionalNativeModule<CryNative>("HushCry");
 
@@ -56,5 +61,9 @@ export const cryDetector = cry
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),
       onStatus: (cb: (s: CryStatus) => void) => cry.addListener("onStatus", cb),
       onCry: (cb: (e: { at: number; first: boolean }) => void) => cry.addListener("onCry", cb),
+      /** iOS: silent push messages (expo-notifications only reports visible ones there). */
+      onData: (cb: (d: Record<string, unknown>) => void) => { try { return cry.addListener("onData", cb); } catch { return { remove() {} }; } },
+      micPermission: () => cry.micPermission?.() ?? "undetermined",
+      requestMic: () => cry.requestMic?.() ?? Promise.resolve(false),
     }
   : null;

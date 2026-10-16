@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
@@ -255,7 +255,7 @@ function KeepAwake() {
   return (
     <View style={styles.keep}>
       <Icon d='<path d="M13 3 6 14h5l-1 7 7-11h-5z"/>' size={18} color={exempt ? colors.moon : colors.rose} />
-      <Text style={styles.keepText}>{exempt ? t("nursery.plugIn") : t("nursery.battery")}</Text>
+      <Text style={styles.keepText}>{Platform.OS === "ios" ? t("nursery.iosKeep") : exempt ? t("nursery.plugIn") : t("nursery.battery")}</Text>
       {!exempt && (
         <Pressable onPress={() => cryDetector?.requestBatteryExempt()} hitSlop={8} style={styles.keepBtn}>
           <Text style={styles.keepBtnText}>{t("nursery.batteryFix")}</Text>
@@ -501,7 +501,7 @@ function ParentPhone() {
       for (const n of shown) await handle(n);
       setAlerts(await loadAlerts());
     })();
-    const sub = Notifications.addNotificationReceivedListener(handle);
+    const sub = addPushListener(handle);
     return () => { sub.remove(); if (timer.current) clearTimeout(timer.current); };
   }, [update]);
 

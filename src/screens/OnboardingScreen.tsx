@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Notifications from "expo-notifications";
 import { SvgXml } from "react-native-svg";
@@ -12,6 +12,7 @@ import { useT, babyLabel } from "../i18n";
 import { Slider } from "../components/Slider";
 import { ICONS, Icon, Pill } from "../components/ui";
 import { fmtAge, pickBirthday } from "../components/Naps";
+import { hasMic, requestMic } from "../monitor";
 import { ageMonths } from "../naps";
 import { dateLocale } from "../i18n";
 import type { Features } from "../storage";
@@ -212,9 +213,7 @@ function Permissions({ job }: { job: Job | null }) {
   const [battery, setBattery] = useState(() => cryDetector?.isBatteryExempt() ?? true);
 
   const refresh = useCallback(async () => {
-    if (Platform.OS === "android") {
-      setMic(await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false));
-    }
+    if (Platform.OS !== "web") setMic(await hasMic());
     setNotif((await Notifications.getPermissionsAsync().catch(() => ({ granted: false }))).granted);
     setBattery(cryDetector?.isBatteryExempt() ?? true);
   }, []);
@@ -229,13 +228,13 @@ function Permissions({ job }: { job: Job | null }) {
       <Text style={styles.title}>{t("ob.permTitle")}</Text>
       <Text style={styles.sub}>{t("ob.permSub")}</Text>
       <View style={styles.permList}>
-        {nursery && Platform.OS === "android" && (
+        {nursery && Platform.OS !== "web" && (
           <PermRow
             title={t("ob.mic")}
             sub={t("ob.micSub")}
             ok={mic}
             onAllow={async () => {
-              await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => null);
+              await requestMic();
               refresh();
             }}
           />
@@ -256,7 +255,7 @@ function Permissions({ job }: { job: Job | null }) {
       {nursery && (
         <View style={styles.tip}>
           <Icon d='<path d="M13 3 6 14h5l-1 7 7-11h-5z"/>' size={18} color={colors.moon} />
-          <Text style={styles.tipText}>{t("ob.tip")}</Text>
+          <Text style={styles.tipText}>{t(Platform.OS === "ios" ? "ob.tipIos" : "ob.tip")}</Text>
         </View>
       )}
     </View>

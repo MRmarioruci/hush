@@ -3,7 +3,7 @@ import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, Text, TextI
 import { useFocusEffect } from "@react-navigation/native";
 import { cryDetector } from "../../modules/hush-native/src";
 import { useT } from "../i18n";
-import { IS_PLAY_BUILD, TRIAL_DAYS, useUnlock } from "../state/unlock";
+import { IS_STORE_BUILD, TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
 import Constants from "expo-constants";
 import { useNavigation } from "@react-navigation/native";
@@ -148,7 +148,7 @@ export function SettingsScreen() {
       </Group>
 
       <Group title={t("settings.about")}>
-        {IS_PLAY_BUILD && s.features.monitor && (
+        {IS_STORE_BUILD && s.features.monitor && (
           <Row label={t("unlock.row")} onPress={unlock.showPaywall}>
             <Text style={[styles.value, unlock.status === "expired" && { color: colors.peach }]}>
               {unlock.status === "unlocked" ? t("unlock.rowOn")

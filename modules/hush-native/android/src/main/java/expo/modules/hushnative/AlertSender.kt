@@ -32,6 +32,8 @@ object AlertSender {
             put("sound", if (alarm) "alert.wav" else "default")
             put("priority", "high")
             put("channelId", if (alarm) "baby-alarm-2" else "cry-alerts")
+            // iPhones: crying breaks through Focus (needs the time-sensitive entitlement).
+            put("interruptionLevel", if (alarm) "time-sensitive" else "active")
             put("data", JSONObject(data))
           })
         }

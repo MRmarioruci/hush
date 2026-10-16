@@ -1,8 +1,8 @@
 // Baby monitor unlock: a 4-day free trial on the baby's phone, then a one-time
-// Google Play purchase. White noise, Nights and parents' phones are always free.
+// purchase in Google Play or the App Store. Everything else is always free.
 //
 // The trial starts the first time this phone starts listening as the baby's
-// phone. Copies not installed from Google Play (the GitHub APK) are always unlocked.
+// phone. Copies not installed from a store (the GitHub APK, simulators) are always unlocked.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -16,8 +16,9 @@ export const TRIAL_DAYS = 4;
 const KEY = "hush:unlock";
 const DAY = 86_400_000;
 
-/** Only copies installed from Google Play sell anything. */
-export const IS_PLAY_BUILD = Platform.OS === "android" && cryDetector?.installer() === "com.android.vending";
+/** Only copies installed from Google Play or the App Store (incl. TestFlight) sell anything. */
+const INSTALLER = cryDetector?.installer() ?? "";
+export const IS_STORE_BUILD = Platform.OS === "android" ? INSTALLER === "com.android.vending" : Platform.OS === "ios" && (INSTALLER === "appstore" || INSTALLER === "testflight");
 
 type Saved = { trialStartedAt: number | null; unlocked: boolean };
 type Status = "unlocked" | "notStarted" | "trial" | "expired";
@@ -44,13 +45,13 @@ export const useUnlock = () => {
 // Loaded lazily so web and non-Play builds never touch the billing module.
 type Iap = typeof import("expo-iap");
 const loadIap = (): Iap | null => {
-  if (!IS_PLAY_BUILD) return null;
+  if (!IS_STORE_BUILD) return null;
   try { return require("expo-iap") as Iap; } catch { return null; }
 };
 
 export function UnlockProvider({ children }: { children: ReactNode }) {
   const t = useT();
-  const [saved, setSaved] = useState<Saved>({ trialStartedAt: null, unlocked: !IS_PLAY_BUILD });
+  const [saved, setSaved] = useState<Saved>({ trialStartedAt: null, unlocked: !IS_STORE_BUILD });
   const [price, setPrice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -108,7 +109,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
         }));
         const owned = await lib.getAvailablePurchases();
         for (const p of owned ?? []) await accept(p);
-        // Promo codes redeemed in the Play Store arrive as purchases; check again whenever hush comes back.
+        // Codes redeemed in the store arrive as purchases; check again whenever hush comes back.
         subs.push(AppState.addEventListener("change", async (st) => {
           if (st !== "active") return;
           try { for (const p of (await lib.getAvailablePurchases()) ?? []) await accept(p); } catch {}
@@ -144,7 +145,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
     setError(null);
     setBusy(true);
     try {
-      await lib.requestPurchase({ request: { google: { skus: [PRODUCT_ID] } }, type: "in-app" });
+      await lib.requestPurchase({ request: { google: { skus: [PRODUCT_ID] }, apple: { sku: PRODUCT_ID } }, type: "in-app" });
     } catch {
       setBusy(false);
       setError(t("unlock.error"));
@@ -165,6 +166,14 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
     }
     setBusy(false);
   }, [save, t]);
+
+  // Play: type the code here (opens Play's redeem page). App Store: Apple's own code sheet (offer codes).
+  const redeem = useCallback(async () => {
+    if (Platform.OS !== "ios") { setCoding((c) => !c); return; }
+    const lib = iap.current;
+    if (!lib) return;
+    try { await lib.openRedeemOfferCode(); } catch { setError(t("unlock.error")); }
+  }, [t]);
 
   return (
     <Ctx.Provider value={{ status, daysLeft, price, pending, beforeListen, showPaywall: () => { setError(null); setOpen(true); }, restore }}>
@@ -215,7 +224,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
                 </View>
               ) : null}
               <View style={styles.links}>
-                <Pressable onPress={() => setCoding((c) => !c)} hitSlop={10}><Text style={styles.link}>{t("unlock.haveCode")}</Text></Pressable>
+                <Pressable onPress={redeem} hitSlop={10}><Text style={styles.link}>{t("unlock.haveCode")}</Text></Pressable>
                 <Pressable onPress={restore} disabled={busy} hitSlop={10}><Text style={styles.link}>{t("unlock.restore")}</Text></Pressable>
               </View>
               {coding && <Text style={styles.small}>{t("unlock.codeHint")}</Text>}

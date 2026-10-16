@@ -1,11 +1,11 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, PermissionsAndroid } from "react-native";
+import { AppState } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
-import { MONITOR_DEFAULTS, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
+import { MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -171,7 +171,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
     };
     Notifications.getPresentedNotificationsAsync().then((list) => list.forEach(handle)).catch(() => {});
-    const sub = Notifications.addNotificationReceivedListener(handle);
+    const sub = addPushListener(handle);
     return () => sub.remove();
   }, [m.role, update]);
 
@@ -184,7 +184,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (wantMic && !cryDetector.isListening()) {
         if (!listening) {
           // Started by white noise: only if the mic is already allowed (never prompt mid-play).
-          const ok = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false);
+          const ok = await hasMic();
           if (!ok || cancelled) return;
         }
         cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim(), mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
@@ -247,7 +247,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // Another phone asked for our days.
   useEffect(() => {
     const replied = new Map<string, number>();
-    const sub = Notifications.addNotificationReceivedListener((n) => {
+    const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; from?: string } | undefined;
       if (d?.type !== "sync-request" || !d.from || !peersOf(mRef.current).includes(d.from)) return;
       if (Date.now() - (replied.get(d.from) ?? 0) < 60_000) return;

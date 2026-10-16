@@ -38,21 +38,7 @@ jobs:
         run: npm ci
 
       - name: Download cry-detection model (YAMNet, Apache 2.0)
-        run: |
-          DEST=modules/hush-native/android/src/main/assets/yamnet.tflite
-          mkdir -p "$(dirname "$DEST")"
-          get() { curl -fsSL --retry 3 -o "$DEST" "$1" && [ "$(stat -c%s "$DEST")" -gt 1000000 ]; }
-          get "https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/audio_classification/android/lite-model_yamnet_classification_tflite_1.tflite" \
-            || get "https://tfhub.dev/google/lite-model/yamnet/classification/tflite/1?lite-format=tflite" \
-            || { curl -fsSL --retry 3 -o /tmp/yamnet.tgz "https://www.kaggle.com/api/v1/models/google/yamnet/tfLite/classification-tflite/1/download" \
-                 && tar -xzf /tmp/yamnet.tgz -C /tmp && cp "$(ls /tmp/*.tflite | head -1)" "$DEST"; } \
-            || { echo "::error::Could not download the YAMNet model"; exit 1; }
-          echo "model size $(stat -c%s "$DEST")"
-          # The detector reads classes by index; make sure they still mean what it expects.
-          curl -fsSL --retry 3 -o /tmp/classes.csv https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv
-          check() { LINE=$(grep "^$1," /tmp/classes.csv); echo "class $1: $LINE"; echo "$LINE" | grep -q "$2" || { echo "::error::YAMNet class $1 is not '$2': $LINE"; exit 1; }; }
-          check 0 "Speech"; check 1 "Child speech"; check 4 "Babbling"; check 13 "Laughter"; check 14 "Baby laughter"
-          check 19 "Crying, sobbing"; check 20 "Baby cry, infant cry"; check 21 "Whimper"; check 22 "Wail, moan"; check 11 "Screaming"
+        run: scripts/get-model.sh modules/hush-native/android/src/main/assets/yamnet.tflite
 
       # Play upload key, from repo secrets. Without it the APK is debug-signed (fine
       # for sideloading) and no Play bundle is built.

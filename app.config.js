@@ -23,8 +23,19 @@ module.exports = ({ config }) => ({
   backgroundColor: "#1b1727",
   scheme: "hush",
   ios: {
-    supportsTablet: true,
+    // iPhone only: an iPad isn't a baby monitor, and it saves the iPad screenshots in App Store Connect.
+    supportsTablet: false,
     bundleIdentifier: "com.mrmarioruci.hush",
+    buildNumber: String(VERSION_CODE),
+    infoPlist: {
+      // White noise and listening keep going with the screen locked; silent pushes carry sync and remote control.
+      UIBackgroundModes: ["audio", "remote-notification"],
+      ITSAppUsesNonExemptEncryption: false,
+    },
+    entitlements: {
+      // Crying alerts break through Focus. (Critical alerts need Apple's approval first: see store/APP_STORE.md.)
+      "com.apple.developer.usernotifications.time-sensitive": true,
+    },
   },
   android: {
     adaptiveIcon: {
@@ -55,14 +66,15 @@ module.exports = ({ config }) => ({
   },
   plugins: [
     "./plugins/withReleaseSigning",
-    // Google Play Billing for the one-time baby monitor unlock (src/state/unlock.tsx).
+    // Google Play Billing / StoreKit for the one-time baby monitor unlock (src/state/unlock.tsx).
     "expo-iap",
     "expo-font",
     "expo-status-bar",
     [
       "expo-audio",
       {
-        microphonePermission: false,
+        // iOS text for the mic prompt (Android declares the mic in modules/hush-native).
+        microphonePermission: "hush listens for your baby crying on this phone, and can turn the white noise up when your baby cries. Sound is checked on the phone and never recorded or sent anywhere.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: true,
       },
@@ -84,8 +96,11 @@ module.exports = ({ config }) => ({
       {
         icon: "./assets/notification-icon.png",
         color: "#f6c7b0",
-        // Crying-alert chime (res/raw/alert.wav).
+        // Crying-alert chime (Android res/raw, iOS app bundle).
         sounds: ["./assets/alert.wav"],
+        // iOS: silent pushes (sync, remote control) reach the app; release builds use production APNs.
+        enableBackgroundRemoteNotifications: true,
+        mode: process.env.APNS_MODE || "production",
       },
     ],
     [

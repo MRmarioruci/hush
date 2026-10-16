@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { PermissionsAndroid, Platform } from "react-native";
+import { cryDetector } from "../modules/hush-native/src";
 import { getLang, t, type Lang } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
@@ -56,6 +57,41 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+/**
+ * Every push this phone receives, visible or silent. On iOS, silent messages (remote control,
+ * sync, pairing) don't reach expo-notifications' listener, so hush's native module passes them on.
+ */
+export function addPushListener(cb: (n: Notifications.Notification) => void): { remove: () => void } {
+  const a = Notifications.addNotificationReceivedListener(cb);
+  const b = Platform.OS === "ios" && cryDetector
+    ? cryDetector.onData((data) => cb({
+        date: Date.now(),
+        request: { identifier: `data-${Date.now()}-${Math.random()}`, content: { title: null, subtitle: null, body: null, data, sound: null }, trigger: null },
+      } as unknown as Notifications.Notification))
+    : null;
+  return { remove: () => { a.remove(); b?.remove(); } };
+}
+
+/* ---------- microphone permission (both platforms) ---------- */
+
+export async function hasMic(): Promise<boolean> {
+  if (Platform.OS === "android") return PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false);
+  if (Platform.OS === "ios") return cryDetector?.micPermission() === "granted";
+  return false;
+}
+export async function requestMic(): Promise<boolean> {
+  if (Platform.OS === "android") {
+    const r = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
+      title: t("perm.micTitle"),
+      message: t("perm.micMsg"),
+      buttonPositive: t("perm.allow"),
+    }).catch(() => null);
+    return r === PermissionsAndroid.RESULTS.GRANTED;
+  }
+  if (Platform.OS === "ios") return (await cryDetector?.requestMic().catch(() => false)) ?? false;
+  return false;
+}
 
 /** Crying alerts use an alarm-style channel so they ring and vibrate even with the phone on silent. */
 export const ALARM_CHANNEL = "baby-alarm-2";
@@ -153,7 +189,7 @@ export async function sendData(to: string[], data: Record<string, unknown>): Pro
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, data, priority: "high" }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, data, priority: "high", _contentAvailable: true }))),
     });
     return res.ok;
   } catch {
@@ -170,7 +206,7 @@ export async function sendDataMany(messages: { to: string; data: Record<string, 
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, priority: "high" }))),
+        body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, priority: "high", _contentAvailable: true }))),
       });
       ok = ok && res.ok;
     }
@@ -189,7 +225,7 @@ export async function sendPush(to: string[], body: string, data: Record<string, 
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active" }))),
     });
     const json = await res.json().catch(() => null);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");
@@ -207,13 +243,8 @@ export function pairRequest(n: Notifications.Notification): PairRequest | null {
 /* ---------- permissions on the baby phone ---------- */
 
 export async function askMicAndNotifications(): Promise<string | null> {
-  if (Platform.OS !== "android") return t("perm.androidOnly");
-  const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
-    title: t("perm.micTitle"),
-    message: t("perm.micMsg"),
-    buttonPositive: t("perm.allow"),
-  });
-  if (mic !== PermissionsAndroid.RESULTS.GRANTED) return t("perm.micNeeded");
+  if (Platform.OS === "web" || !cryDetector) return t("perm.androidOnly");
+  if (!(await requestMic())) return t("perm.micNeeded");
   // Needed on Android 13+ to show the "listening" notification that keeps it running.
   await Notifications.requestPermissionsAsync().catch(() => {});
   return null;

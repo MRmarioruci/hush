@@ -452,6 +452,8 @@ export const pt: Record<Key, string> = {
   "nap.undo": "Desfazer",
   "settings.soundSleep": "O som inicia um sono",
   "settings.soundSleepSub": "Ao ligar o ruído branco, o bebê é marcado como dormindo",
+  "nursery.iosKeep": "Mantenha este celular na tomada. Deixe o hush aberto ou em segundo plano; se você fechá-lo deslizando, ele para de ouvir.",
+  "ob.tipIos": "Dica: mantenha este iPhone na tomada e não feche o hush enquanto ele estiver ouvindo.",
   "settings.title": "Ajustes",
   "settings.babyName": "Nome do bebê",
   "settings.prefs": "Preferências",

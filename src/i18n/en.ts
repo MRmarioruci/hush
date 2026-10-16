@@ -452,6 +452,8 @@ export const en = {
   "nap.undo": "Undo",
   "settings.soundSleep": "Sound starts a sleep",
   "settings.soundSleepSub": "Starting white noise marks the baby as asleep",
+  "nursery.iosKeep": "Keep this phone plugged in. Leave hush open or in the background; swiping it away stops listening.",
+  "ob.tipIos": "Tip: keep this iPhone plugged in, and don't swipe hush away while it's listening.",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

@@ -452,6 +452,8 @@ export const zh: Record<Key, string> = {
   "nap.undo": "撤销",
   "settings.soundSleep": "播放声音即开始睡眠",
   "settings.soundSleepSub": "开始播放白噪音时，记录宝宝已入睡",
+  "nursery.iosKeep": "请让这部手机保持充电。让 hush 保持打开或在后台运行；上滑关闭会停止监听。",
+  "ob.tipIos": "提示：让这部 iPhone 保持充电，监听时不要上滑关闭 hush。",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

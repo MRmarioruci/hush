@@ -452,6 +452,8 @@ export const de: Record<Key, string> = {
   "nap.undo": "Rückgängig",
   "settings.soundSleep": "Klang startet Schlaf",
   "settings.soundSleepSub": "Wenn du das Rauschen startest, gilt das Baby als eingeschlafen",
+  "nursery.iosKeep": "Lass dieses Handy am Ladekabel. Lass hush offen oder im Hintergrund; wenn du es wegwischst, hört es auf zuzuhören.",
+  "ob.tipIos": "Tipp: Lass dieses iPhone am Ladekabel und wisch hush nicht weg, während es zuhört.",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

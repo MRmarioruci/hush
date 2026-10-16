@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Modal, PermissionsAndroid, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { SMART } from "../smart";
 import { useMonitor } from "../state/monitor";
-import { askMicAndNotifications } from "../monitor";
+import { askMicAndNotifications, hasMic } from "../monitor";
 import Svg, { Circle, Path } from "react-native-svg";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
@@ -203,8 +203,8 @@ function SmartCard() {
   const [micMsg, setMicMsg] = useState<string | null>(null);
   const [micOk, setMicOk] = useState(true);
   useEffect(() => {
-    if (Platform.OS !== "android") return;
-    PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).then(setMicOk).catch(() => setMicOk(false));
+    if (Platform.OS === "web") return;
+    hasMic().then(setMicOk).catch(() => setMicOk(false));
   }, [z.s.smartCry]);
 
   const phaseText = (() => {

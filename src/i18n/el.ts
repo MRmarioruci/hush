@@ -452,6 +452,8 @@ export const el: Record<Key, string> = {
   "nap.undo": "Αναίρεση",
   "settings.soundSleep": "Ο ήχος ξεκινά ύπνο",
   "settings.soundSleepSub": "Όταν ξεκινάς λευκό θόρυβο, το μωρό καταγράφεται ότι κοιμάται",
+  "nursery.iosKeep": "Κράτα το κινητό στην πρίζα. Άφησε το hush ανοιχτό ή στο παρασκήνιο· αν το κλείσεις με σύρσιμο, σταματά η ακρόαση.",
+  "ob.tipIos": "Συμβουλή: κράτα αυτό το iPhone στην πρίζα και μην κλείνεις το hush όσο ακούει.",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",
