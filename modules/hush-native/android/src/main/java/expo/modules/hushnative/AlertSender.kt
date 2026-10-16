@@ -13,12 +13,16 @@ import java.net.URL
 object AlertSender {
   private const val URL_PUSH = "https://exp.host/--/api/v2/push/send"
 
-  fun send(tokens: List<String>, body: String, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) {
-    if (tokens.isEmpty()) { onDone?.invoke(false, "No parent phones are paired yet"); return }
+  fun send(tokens: List<String>, body: String, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) =
+    sendEach(tokens.map { it to body }, data, onDone)
+
+  /** One message per phone, each with its own text (every parent gets their own language). */
+  fun sendEach(messagesFor: List<Pair<String, String>>, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) {
+    if (messagesFor.isEmpty()) { onDone?.invoke(false, "No parent phones are paired yet"); return }
     Thread {
       try {
         val messages = JSONArray()
-        for (token in tokens) {
+        for ((token, body) in messagesFor) {
           messages.put(JSONObject().apply {
             put("to", token)
             put("title", "hush")

@@ -19,6 +19,7 @@ type CryNative = {
   isListening(): boolean;
   takeEvents(): string;
   setTexts(texts: Record<string, string>): void;
+  setTargets(list: Record<string, string>[]): void;
   isBatteryExempt(): boolean;
   requestBatteryExempt(): boolean;
   installer(): string;
@@ -48,6 +49,7 @@ export const cryDetector = cry
       isListening: () => cry.isListening(),
       takeEvents: () => cry.takeEvents(),
       setTexts: (texts: Record<string, string>) => cry.setTexts(texts),
+      setTargets: (list: Record<string, string>[]) => { try { cry.setTargets(list); } catch {} },
       isBatteryExempt: () => cry.isBatteryExempt(),
       requestBatteryExempt: () => cry.requestBatteryExempt(),
       installer: () => { try { return cry.installer(); } catch { return ""; } },

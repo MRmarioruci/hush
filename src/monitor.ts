@@ -3,9 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { PermissionsAndroid, Platform } from "react-native";
-import { t } from "./i18n";
+import { getLang, t, type Lang } from "./i18n";
 
-export type Parent = { token: string; name: string; addedAt: number };
+export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
+/** What the parent sees about the baby's room, reported by the baby's phone. */
+export type Room = { playing: boolean; sound: string; listening: boolean; at: number };
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";
 export type MonitorSettings = {
@@ -19,6 +21,10 @@ export type MonitorSettings = {
   role: Role | null;
   /** Parent phone only: name of the baby whose nursery phone paired with us. */
   pairedWith: string | null;
+  /** Parent phone only: the baby's phone's push address, for remote control. */
+  pairedToken?: string | null;
+  /** Parent phone only: last reported state of the baby's room. */
+  room?: Room | null;
 };
 export type AlertRecord = { id: string; body: string; at: number };
 
@@ -140,6 +146,23 @@ export function readPairCode(raw: string): PairCode | null {
   return null;
 }
 
+/** A silent message between hush phones (no notification is shown). */
+export async function sendData(to: string[], data: Record<string, unknown>): Promise<boolean> {
+  if (!to.length) return false;
+  try {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(to.map((t) => ({ to: t, data, priority: "high" }))),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export const myLang = () => getLang();
+
 /** Send a push through Expo's push service. Returns true when Expo accepted it. */
 export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush", channelId = INFO_CHANNEL): Promise<boolean> {
   if (!to.length) return false;
@@ -156,10 +179,10 @@ export async function sendPush(to: string[], body: string, data: Record<string, 
   }
 }
 
-export type PairRequest = { token: string; name: string };
+export type PairRequest = { token: string; name: string; lang?: Lang };
 export function pairRequest(n: Notifications.Notification): PairRequest | null {
-  const d = n.request.content.data as { type?: string; token?: string; name?: string } | undefined;
-  return d?.type === "pair-request" && typeof d.token === "string" ? { token: d.token, name: d.name || "Parent" } : null;
+  const d = n.request.content.data as { type?: string; token?: string; name?: string; lang?: Lang } | undefined;
+  return d?.type === "pair-request" && typeof d.token === "string" ? { token: d.token, name: d.name || "", lang: d.lang } : null;
 }
 
 /* ---------- permissions on the baby phone ---------- */

@@ -12,6 +12,8 @@ import { LIMIT_DB } from "../safety";
 import { smartTarget, type SmartPhase } from "../smart";
 import { useMonitor } from "./monitor";
 import { t } from "../i18n";
+import * as Notifications from "expo-notifications";
+import { sendData } from "../monitor";
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -196,6 +198,31 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     player.play();
     try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
   }, [player, s.mode, s.dist]);
+
+  /* ---------- remote control from a paired parent's phone ---------- */
+  const remote = useRef({ toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents });
+  remote.current = { toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents };
+  const roomFor = useCallback(() => ({ type: "room", playing: player.playing, sound: remote.current.soundId, listening: remote.current.listening, at: Date.now() }), [player]);
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener((n) => {
+      const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
+      const r = remote.current;
+      if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
+      if (d.cmd === "play" && !player.playing) r.toggle();
+      else if (d.cmd === "stop" && player.playing) player.pause();
+      else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });
+      // Answer after the change has taken effect.
+      setTimeout(() => sendData([d.from!], roomFor()), 900);
+      Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [player, roomFor]);
+  // Tell the parents when the room changes here (someone pressed play, a timer ended…).
+  useEffect(() => {
+    if (mon.m.role !== "nursery" || !mon.m.parents.length) return;
+    const id = setTimeout(() => sendData(mon.m.parents.map((p) => p.token), roomFor()), 1500);
+    return () => clearTimeout(id);
+  }, [playing, soundId, mon.listening]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What's actually reaching the crib, including smart mode's quieting.
   const level = baseLevel != null && isSmart && playing && smartView ? baseLevel + (smartView.db - LIMIT_DB) : baseLevel;

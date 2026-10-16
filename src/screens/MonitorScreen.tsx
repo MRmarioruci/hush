@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
-import { fmtTime, heardLabel, t, useT, babyLabel } from "../i18n";
+import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
+import { SOUNDS } from "../sounds";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
 const X = '<path d="M6 6l12 12M18 6 6 18"/>';
 const SEND = '<path d="M4 12 20 4l-6 16-3-7z"/>';
@@ -136,8 +137,14 @@ function NurseryPhone() {
   const test = async () => {
     if (!cryDetector || !tokens.length) return;
     setMsg(t("nursery.sending"));
-    const r = await cryDetector.sendAlert(tokens, t("nursery.testBody", { name: baby }), "test");
-    setMsg(r.ok ? t("nursery.testSent") : t("nursery.testFail"));
+    // In each parent's own language.
+    let ok = true;
+    for (const L of [...new Set(m.parents.map((p) => p.lang ?? getLang()))]) {
+      const to = m.parents.filter((p) => (p.lang ?? getLang()) === L).map((p) => p.token);
+      const r = await cryDetector.sendAlert(to, tIn(L, "nursery.testBody", { name: babyLabelIn(L, m.babyName) }), "test");
+      ok = ok && r.ok;
+    }
+    setMsg(ok ? t("nursery.testSent") : t("nursery.testFail"));
   };
 
   return (
@@ -384,6 +391,84 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
   );
 }
 
+/* ---------------- remote control of the baby's phone ---------------- */
+
+let myTokenCache: string | null = null;
+const myToken = async () => (myTokenCache ??= await getMyToken());
+
+/** The baby's room as last reported, with play/stop and the sounds. */
+function RoomCard({ onRescan }: { onRescan: () => void }) {
+  const { m } = useMonitor();
+  const room = m.room;
+  const [sentAt, setSentAt] = useState(0);
+  const [lastCmd, setLastCmd] = useState("");
+  const [, tick] = useState(0);
+  const chips = useRef<ScrollView>(null);
+  // A plain refresh keeps showing the last known state; a command shows that we're waiting.
+  const waiting = lastCmd !== "status" && sentAt > 0 && (!room || room.at < sentAt) && Date.now() - sentAt < 15000;
+  const noReply = sentAt > 0 && (!room || room.at < sentAt) && Date.now() - sentAt >= 15000;
+
+  const send = async (cmd: string, sound?: string) => {
+    if (!m.pairedToken) return;
+    setSentAt(Date.now());
+    setLastCmd(cmd);
+    setTimeout(() => tick((x) => x + 1), 15500);
+    try { await sendData([m.pairedToken], { type: "cmd", cmd, sound, from: await myToken() }); } catch {}
+  };
+  // Ask for the current state when this opens.
+  useEffect(() => { if (m.pairedToken) send("status"); }, [m.pairedToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!m.pairedToken) {
+    return (
+      <Card style={{ gap: 10 }}>
+        <Label>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Label>
+        <Text style={styles.roleSub}>{t("remote.rescan")}</Text>
+        <Pressable onPress={onRescan} style={styles.primary}><Text style={styles.primaryText}>{t("parent.scan")}</Text></Pressable>
+      </Card>
+    );
+  }
+  const playing = !!room?.playing;
+  return (
+    <Card style={{ gap: 14 }}>
+      <Label right={room ? <Text style={styles.time}>{t("remote.updated", { time: fmtTime(room.at) })}</Text> : undefined}>
+        {t("hero.room", { name: babyLabel(m.pairedWith) })}
+      </Label>
+      <View style={styles.roomRow}>
+        <Pressable onPress={() => send(playing ? "stop" : "play")} style={[styles.roomBtn, playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={playing ? t("remote.stop") : t("remote.play")}>
+          <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={26} color={playing ? colors.bg : colors.cream} width={2} />
+        </Pressable>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.roleTitle}>
+            {waiting ? t("remote.waiting") : !room ? t("remote.unknown") : playing ? t("remote.playing", { sound: t(`sound.${room.sound}`) }) : t("remote.off")}
+          </Text>
+          {room && !waiting && (
+            <Text style={[styles.roleSub, { color: room.listening ? colors.sage : colors.muted }]}>
+              {room.listening ? t("remote.listening") : t("remote.notListening")}
+            </Text>
+          )}
+          {noReply && <Text style={[styles.roleSub, { color: colors.rose }]}>{t("remote.noReply")}</Text>}
+        </View>
+      </View>
+      <ScrollView
+        ref={chips}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8 }}
+        onLayout={() => chips.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 1) * 90, animated: false })}
+      >
+        {SOUNDS.map((x) => {
+          const on = room?.sound === x.id;
+          return (
+            <Pressable key={x.id} onPress={() => send("sound", x.id)} style={[styles.soundChip, on && { backgroundColor: colors.peach }]}>
+              <Text style={[styles.soundChipText, on && { color: colors.bg }]}>{t(`sound.${x.id}`)}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </Card>
+  );
+}
+
 /* ---------------- this phone gets the alerts ---------------- */
 
 function ParentPhone() {
@@ -396,9 +481,15 @@ function ParentPhone() {
 
   useEffect(() => {
     const handle = async (n: Notifications.Notification) => {
+      const data = n.request.content.data as { type?: string; nursery?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number } | undefined;
+      if (data?.type === "room") {
+        update({ room: { playing: !!data.playing, sound: data.sound ?? "womb", listening: !!data.listening, at: data.at ?? Date.now() } });
+        Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+        return;
+      }
       const who = pairedBaby(n);
-      if (who) {
-        update({ pairedWith: who });
+      if (who != null) {
+        update({ pairedWith: who, ...(data?.nursery ? { pairedToken: data.nursery } : {}) });
         setState("idle");
         if (timer.current) clearTimeout(timer.current);
       }
@@ -426,7 +517,8 @@ function ParentPhone() {
       return setErr((e as Error).message);
     }
     setState("connecting");
-    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim() });
+    update({ pairedToken: code.token, room: null });
+    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim(), lang: getLang() });
     if (!ok) { setState("failed"); return; }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setState((s) => (s === "connecting" ? "failed" : s)), 20000);
@@ -470,6 +562,7 @@ function ParentPhone() {
           </Pressable>
         </Card>
       )}
+      {connected && <RoomCard onRescan={() => setScanning(true)} />}
       {connected && (
         <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
           <Text style={styles.change}>{t("parent.another")}</Text>
@@ -498,6 +591,10 @@ function ParentPhone() {
 
 const ORB = 184;
 const styles = StyleSheet.create({
+  roomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  soundChip: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9 },
+  soundChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
   trial: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14 },
   trialDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.sage },
   trialText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: colors.muted },

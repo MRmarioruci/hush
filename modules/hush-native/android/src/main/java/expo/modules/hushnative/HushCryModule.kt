@@ -42,6 +42,11 @@ class HushCryModule : Module() {
       true
     }
 
+    // Alert texts for each paired parent, in their own language.
+    Function("setTargets") { list: List<Map<String, String>> ->
+      CryEngine.targets = list
+    }
+
     Function("setTexts") { texts: Map<String, String> ->
       texts["crying"]?.let { CryEngine.txtCrying = it }
       texts["still"]?.let { CryEngine.txtStill = it }

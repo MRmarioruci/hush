@@ -5,16 +5,8 @@ import { AppState, PermissionsAndroid } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, fmtDur, lastSleep, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
-import {
-  MONITOR_DEFAULTS,
-  pairRequest,
-  sendPush,
-  THRESHOLDS,
-  askMicAndNotifications,
-  loadMonitor,
-  saveMonitor,
-  type MonitorSettings, setupAlertChannel } from "../monitor";
-import { babyLabel, t, useLang } from "../i18n";
+import { MONITOR_DEFAULTS, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken } from "../monitor";
+import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
 type Monitor = {
@@ -73,6 +65,21 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     });
   }, [lang, baby]);
 
+  // Each parent gets alerts in their own phone's language.
+  useEffect(() => {
+    cryDetector?.setTargets(m.parents.map((p) => {
+      const L = p.lang ?? getLang();
+      const name = babyLabelIn(L, m.babyName);
+      return {
+        token: p.token,
+        crying: tIn(L, "push.crying", { name }),
+        still: tIn(L, "push.still", { name }),
+        lowBattery: tIn(L, "push.lowBattery", { name, pct: "{pct}" }),
+        stopped: tIn(L, "push.stopped", { name }),
+      };
+    }));
+  }, [m.parents, m.babyName, lang]);
+
   useEffect(() => {
     cryDetector?.configure(THRESHOLDS[m.sensitivity], m.babyName.trim(), tokens, m.alertAfter);
   }, [m.sensitivity, m.alertAfter, m.babyName, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,12 +124,17 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (!last) return;
     const { sleep, days } = last;
     if (Date.now() - sleep.to > 5 * 60_000 || sleep.to - sleep.from < 30 * 60_000) return;
-    const label = babyLabel(cur.babyName);
     const kind = sleep.kind === "night" ? "night" : "nap";
-    const body = sleep.cries === 0
-      ? t(`push.${kind}0`, { name: label })
-      : t(`push.${kind}`, { name: label, count: sleep.cries, dur: fmtDur(sleep.cryMin) });
-    sendPush(to, body, packNights(days, cur.babyName.trim()));
+    const data = packNights(days, cur.babyName.trim());
+    // One message per language, so every parent reads it in their own.
+    const langs = [...new Set(cur.parents.map((p) => p.lang ?? getLang()))];
+    for (const L of langs) {
+      const label = babyLabelIn(L, cur.babyName);
+      const body = sleep.cries === 0
+        ? tIn(L, `push.${kind}0`, { name: label })
+        : tIn(L, `push.${kind}`, { name: label, count: sleep.cries, dur: fmtDur(sleep.cryMin) });
+      sendPush(cur.parents.filter((p) => (p.lang ?? getLang()) === L).map((p) => p.token), body, data);
+    }
   }, []);
 
   // Baby's phone: a parent scanned our code and asked to be connected. Save them and confirm.
@@ -146,9 +158,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           while (cur.parents.some((p) => p.name === t("parent.n", { n: k }))) k++;
           name = t("parent.n", { n: k });
         }
-        update({ parents: [...cur.parents, { token: req.token, name, addedAt: Date.now() }] });
+        update({ parents: [...cur.parents, { token: req.token, name, addedAt: Date.now(), lang: req.lang }] });
+      } else if (req.lang) {
+        update({ parents: cur.parents.map((p) => (p.token === req.token ? { ...p, lang: req.lang } : p)) });
       }
-      sendPush([req.token], t("push.paired", { name: babyLabel(cur.babyName) }), { type: "paired", baby: cur.babyName.trim() });
+      const L = req.lang ?? getLang();
+      getMyToken().catch(() => "").then((nursery) =>
+        sendPush([req.token], tIn(L, "push.paired", { name: babyLabelIn(L, cur.babyName) }), { type: "paired", baby: cur.babyName.trim(), nursery }));
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
     };
     Notifications.getPresentedNotificationsAsync().then((list) => list.forEach(handle)).catch(() => {});

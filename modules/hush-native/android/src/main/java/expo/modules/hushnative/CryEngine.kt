@@ -79,9 +79,22 @@ object CryEngine {
 
   /** Tell the parents that listening ended without anyone asking it to. */
   fun reportUnexpectedStop() {
-    if (!stopRequested) AlertSender.send(tokens, fill(txtStopped), mapOf("type" to "stopped", "baby" to babyName))
+    if (!stopRequested) alert("stopped", txtStopped, mapOf("type" to "stopped", "baby" to babyName))
   }
   @Volatile var tokens: List<String> = emptyList()
+
+  /**
+   * Per-parent alert texts, already in each parent's language:
+   * token, crying, still, lowBattery ({pct} left in), stopped.
+   */
+  @Volatile var targets: List<Map<String, String>> = emptyList()
+
+  /** Send one kind of alert, in each parent's language when known. */
+  private fun alert(kind: String, fallback: String, data: Map<String, Any>, pct: Int = 0) {
+    val list = targets.filter { !it["token"].isNullOrEmpty() }
+    if (list.isEmpty()) { AlertSender.send(tokens, fill(fallback, pct), data); return }
+    AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct) }, data)
+  }
 
   /** Receives "status" and "cry" events; set by the JS-facing module. */
   @Volatile var listener: ((String, Map<String, Any>) -> Unit)? = null
@@ -231,7 +244,7 @@ object CryEngine {
           val (pct, plugged) = battery(context)
           if (!plugged && pct in 1..15 && !lowBatterySent) {
             lowBatterySent = true
-            AlertSender.send(tokens, fill(txtLowBattery, pct), mapOf("type" to "battery", "baby" to babyName, "pct" to pct))
+            alert("lowBattery", txtLowBattery, mapOf("type" to "battery", "baby" to babyName, "pct" to pct), pct)
           } else if (plugged || pct > 25) lowBatterySent = false
         }
 
@@ -253,8 +266,8 @@ object CryEngine {
             lastAlert = t
             listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
             EventLog.add("alert", mapOf("first" to first))
-            val body = fill(if (first) txtCrying else txtStill)
-            AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
+            if (first) alert("crying", txtCrying, mapOf("type" to "cry", "baby" to babyName, "at" to t))
+            else alert("still", txtStill, mapOf("type" to "cry", "baby" to babyName, "at" to t))
           }
         }
       }

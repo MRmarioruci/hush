@@ -64,9 +64,16 @@ const THE_BABY_FIX: Partial<Record<Lang, [RegExp, string][]>> = {
   de: [[/\bvon das Baby/g, "vom Baby"], [/\bHilft das Baby/g, "Hilft dem Baby"]],
 };
 /** The baby's name, or "the baby" in the current language when none is set. */
-export const babyLabel = (name?: string | null) => (name ?? "").trim() || THE_BABY[current];
+export const babyLabel = (name?: string | null) => babyLabelIn(current, name);
+export const babyLabelIn = (lang: Lang, name?: string | null) => (name ?? "").trim() || THE_BABY[lang];
 
 export function t(key: Key | string, vars: Vars = {}): string {
+  return tIn(current, key, vars);
+}
+
+/** Like t(), in a given language (for messages sent to a phone set to another language). */
+export function tIn(lang: Lang, key: Key | string, vars: Vars = {}): string {
+  const current = lang in DICTS ? lang : "en";
   const dict = DICTS[current];
   let k = key;
   if (typeof vars.count === "number" && `${key}_other` in en) {
