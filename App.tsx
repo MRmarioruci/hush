@@ -14,6 +14,7 @@ import { SleepProvider, useSleep } from "./src/state/sleep";
 import { LangProvider, applyLang, getLang, loadLangChoice, type Lang } from "./src/i18n";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { MonitorProvider } from "./src/state/monitor";
+import { UnlockProvider } from "./src/state/unlock";
 import { Sky } from "./src/components/Sky";
 import { TabBar } from "./src/components/TabBar";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -55,12 +56,14 @@ export default function App() {
         <StatusBar style="light" />
         {ready && (
           <LangProvider lang={lang} choice={choice ?? "auto"} setChoice={pickLang}>
-            <MonitorProvider>
-              <SleepProvider initial={settings} still={still}>
-                <Sky still={still} />
-                <Shell />
-              </SleepProvider>
-            </MonitorProvider>
+            <UnlockProvider>
+              <MonitorProvider>
+                <SleepProvider initial={settings} still={still}>
+                  <Sky still={still} />
+                  <Shell />
+                </SleepProvider>
+              </MonitorProvider>
+            </UnlockProvider>
           </LangProvider>
         )}
       </View>

@@ -9,6 +9,7 @@ import { ALERT_AFTER, THRESHOLDS, getMyToken, loadAlerts, makePairCode, pairedBa
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
+import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { fmtTime, heardLabel, t, useT } from "../i18n";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
@@ -98,6 +99,22 @@ function RoleBar({ role, baby, onChange }: { role: Role; baby: string; onChange:
 
 /* ---------------- this phone stays with the baby ---------------- */
 
+/** Trial / unlock status on the baby's phone. Hidden once unlocked. */
+function TrialNote() {
+  const u = useUnlock();
+  if (u.status === "unlocked") return null;
+  const text = u.status === "notStarted" ? t("unlock.noteStart", { count: TRIAL_DAYS })
+    : u.status === "trial" ? t("unlock.noteLeft", { count: u.daysLeft })
+    : t("unlock.noteEnded");
+  return (
+    <Pressable onPress={u.showPaywall} style={({ pressed }) => [styles.trial, pressed && { opacity: 0.7 }]} accessibilityRole="button">
+      <View style={[styles.trialDot, u.status === "expired" && { backgroundColor: colors.rose }]} />
+      <Text style={styles.trialText}>{text}</Text>
+      <Text style={styles.trialLink}>{t("unlock.unlock")}</Text>
+    </Pressable>
+  );
+}
+
 function NurseryPhone() {
   const { m, update, listening, status, lastCry, toggleListening, baby } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
@@ -136,6 +153,7 @@ function NurseryPhone() {
         </View>
       )}
 
+      {paired && !showCode && <TrialNote />}
       {paired && listening && !showCode && <Hearing />}
       {paired && !showCode && <KeepAwake />}
 
@@ -480,6 +498,10 @@ function ParentPhone() {
 
 const ORB = 184;
 const styles = StyleSheet.create({
+  trial: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14 },
+  trialDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.sage },
+  trialText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: colors.muted },
+  trialLink: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
   foot: { fontFamily: fonts.body, fontSize: 12, color: colors.muted, textAlign: "center", opacity: 0.7 },
   msg: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, textAlign: "center" },
 

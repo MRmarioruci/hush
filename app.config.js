@@ -55,6 +55,8 @@ module.exports = ({ config }) => ({
   },
   plugins: [
     "./plugins/withReleaseSigning",
+    // Google Play Billing for the one-time baby monitor unlock (src/state/unlock.tsx).
+    "expo-iap",
     "expo-font",
     "expo-status-bar",
     [

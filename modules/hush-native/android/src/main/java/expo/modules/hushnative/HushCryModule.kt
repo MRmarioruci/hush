@@ -51,6 +51,15 @@ class HushCryModule : Module() {
       texts["listenText"]?.let { CryEngine.txtListenText = it }
     }
 
+    // Which app store installed hush ("com.android.vending" = Google Play), or "" if sideloaded.
+    Function("installer") {
+      val ctx = appContext.reactContext ?: return@Function ""
+      try {
+        if (Build.VERSION.SDK_INT >= 30) ctx.packageManager.getInstallSourceInfo(ctx.packageName).installingPackageName ?: ""
+        else @Suppress("DEPRECATION") (ctx.packageManager.getInstallerPackageName(ctx.packageName) ?: "")
+      } catch (e: Exception) { "" }
+    }
+
     // Battery optimisation: some phones close background apps overnight unless exempted.
     Function("isBatteryExempt") {
       val ctx = appContext.reactContext ?: return@Function true

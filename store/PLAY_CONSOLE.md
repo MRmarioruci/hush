@@ -139,6 +139,27 @@ Play asks for this because hush uses two foreground service types.
 
 ---
 
+## Baby monitor unlock (one-time product)
+
+hush is free to download. White noise, Nights and parents' phones are always free; the baby's
+phone gets the monitor free for 3 days from the first time it starts listening, then needs a
+one-time unlock. Copies installed outside Google Play (the GitHub APK) are always unlocked.
+
+1. **Monetize → Payments profile:** set up your merchant account (bank and tax details). Needed before you can sell anything.
+2. **Monetize → Products → One-time products → Create:**
+   - Product ID: **`hush_unlock`** (must match exactly; it can't be changed later)
+   - Name: *Baby monitor unlock* · Description: *Keep the baby monitor on this phone. One-time purchase, no subscription.*
+   - Price: **€2.99**. Let Play set local prices for other countries.
+   - Activate it.
+3. **Setup → License testing:** add your testers' Gmail addresses so they can test-buy without being charged.
+4. Free trial note: Play only runs trials for subscriptions, so the 3 days are counted by the app itself.
+   The listing and the in-app screen both say "free for 3 days, then a one-time purchase".
+
+**Data safety:** purchases go through Google Play Billing. hush only stores "unlocked: yes/no" on the
+phone and sends nothing about purchases anywhere, so no extra data type needs to be declared for it.
+If the form asks about **Financial info → Purchase history**, answer that it's collected by Google Play,
+not by the app.
+
 ## Testing and release
 
 1. **Testing → Closed testing → Create track** (or use the default "Alpha").

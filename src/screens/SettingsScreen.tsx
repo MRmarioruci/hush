@@ -3,6 +3,7 @@ import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, Vi
 import { useFocusEffect } from "@react-navigation/native";
 import { cryDetector } from "../../modules/hush-native/src";
 import { useT } from "../i18n";
+import { IS_PLAY_BUILD, TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
 import Constants from "expo-constants";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +21,7 @@ export function SettingsScreen() {
   const nav = useNavigation<{ navigate: (n: string) => void }>();
   const { s, set } = useSleep();
   const { m, update } = useMonitor();
+  const unlock = useUnlock();
   const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
   const t = useT();
   const langLabel = useLangLabel();
@@ -86,6 +88,16 @@ export function SettingsScreen() {
       </Group>
 
       <Group title={t("settings.about")}>
+        {IS_PLAY_BUILD && (
+          <Row label={t("unlock.row")} onPress={unlock.showPaywall}>
+            <Text style={[styles.value, unlock.status === "expired" && { color: colors.peach }]}>
+              {unlock.status === "unlocked" ? t("unlock.rowOn")
+                : unlock.status === "trial" ? t("unlock.rowLeft", { count: unlock.daysLeft })
+                : unlock.status === "notStarted" ? t("unlock.rowFree", { count: TRIAL_DAYS })
+                : t("unlock.unlock")}
+            </Text>
+          </Row>
+        )}
         <Row label={t("settings.version")}><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
         <Row label={t("settings.privacy")} onPress={() => Linking.openURL(PRIVACY)} />
         <Row label={t("settings.setup")} onPress={() => set({ onboarded: false })} />

@@ -16,6 +16,7 @@ import {
   type MonitorSettings,
 } from "../monitor";
 import { t, useLang } from "../i18n";
+import { useUnlock } from "./unlock";
 
 type Monitor = {
   m: MonitorSettings;
@@ -39,6 +40,7 @@ export const useMonitor = () => useContext(Ctx)!;
 
 export function MonitorProvider({ children }: { children: ReactNode }) {
   const [m, setM] = useState<MonitorSettings>(MONITOR_DEFAULTS);
+  const unlock = useUnlock();
   useEffect(() => { loadMonitor().then(setM); }, []);
   const update = useCallback((patch: Partial<MonitorSettings>) => {
     setM((prev) => {
@@ -180,9 +182,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     }
     const problem = await askMicAndNotifications();
     if (problem) return problem;
+    if (!(await unlock.beforeListen())) return null; // trial over: the unlock sheet is showing
     setListening(true);
     return mRef.current.parents.length ? null : t("perm.pairToGet");
-  }, [listening, syncEvents, sendNightSummary]);
+  }, [listening, syncEvents, sendNightSummary, unlock]);
 
   return (
     <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn }}>{children}</Ctx.Provider>
