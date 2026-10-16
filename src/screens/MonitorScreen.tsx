@@ -9,8 +9,9 @@ import { ALERT_AFTER, CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loa
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
+import { useSleep } from "../state/sleep";
 import { stopLine } from "../stops";
-import { ListenCard } from "../components/Listen";
+import { EAR, ListenCard } from "../components/Listen";
 import { SvgXml } from "react-native-svg";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
@@ -121,6 +122,7 @@ function TrialNote() {
 
 function NurseryPhone() {
   const { m, update, listening, lastStop, status, lastCry, toggleListening, baby } = useMonitor();
+  const sleep = useSleep();
   const [msg, setMsg] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
   const tokens = m.parents.map((p) => p.token);
@@ -160,6 +162,20 @@ function NurseryPhone() {
           <Text style={styles.orbMeta}>
             {listening ? (lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")) : stopLine(lastStop, t, fmtTime) ?? t("nursery.keepNear")}
           </Text>
+          <View style={[styles.facts, { justifyContent: "center" }]}>
+            <View style={styles.fact}>
+              <Icon d={ICONS.bell} size={15} color={colors.peach} width={2} />
+              <Text style={styles.factText} numberOfLines={1}>{t("nursery.alertsTo", { names: m.parents.map((p) => p.name).join(", ") })}</Text>
+            </View>
+            <View style={styles.fact}>
+              <Icon d={NOISE} size={15} color={sleep.playing ? colors.peach : colors.muted} width={2} />
+              <Text style={styles.factText}>{sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff")}</Text>
+            </View>
+            <View style={styles.fact}>
+              <Icon d={EAR} size={15} color={m.allowListen ? colors.sage : colors.muted} width={2} />
+              <Text style={styles.factText}>{m.allowListen ? t("listen.chipOn") : t("listen.chipOff")}</Text>
+            </View>
+          </View>
         </View>
       )}
 
@@ -167,10 +183,23 @@ function NurseryPhone() {
       {paired && listening && !showCode && <Hearing />}
       {paired && !showCode && <KeepAwake />}
 
+      {paired && !showCode && (
+        <Card style={[styles.listenCard, m.allowListen && styles.listenCardOn]}>
+          <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
+            <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
+            <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
+          </View>
+          <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
+        </Card>
+      )}
+
       {paired && (
         <Card style={{ gap: 4 }}>
           <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>{t("nursery.test")}</Text></Pressable>}>
-            {t("nursery.sendsTo")}
+            {t("nursery.parents", { count: m.parents.length })}
           </Label>
           {m.parents.map((p) => (
             <View key={p.token} style={styles.person}>
@@ -192,6 +221,7 @@ function NurseryPhone() {
 
       {paired && (
         <Card style={{ gap: 16 }}>
+          <Text style={styles.cardTitle}>{t("nursery.alertSettings")}</Text>
           <View style={{ gap: 10 }}>
             <Label>{t("nursery.alertAfter")}</Label>
             <Segmented
@@ -210,13 +240,6 @@ function NurseryPhone() {
               value={m.sensitivity}
               onChange={(sensitivity) => update({ sensitivity })}
             />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
-              <Text style={styles.roleSub}>{t("listen.allowSub", { s: CLIP_SECONDS })}</Text>
-            </View>
-            <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
           </View>
         </Card>
       )}
@@ -654,6 +677,10 @@ function ParentPhone() {
 const ORB = 184;
 const REFRESH = '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>';
 const styles = StyleSheet.create({
+  cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
+  listenCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 1.5, borderColor: "transparent" },
+  listenCardOn: { borderColor: "rgba(169,214,189,0.45)" },
+  listenIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   hero: { flexDirection: "row", alignItems: "center", gap: 14 },
   facts: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   fact: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 7 },
@@ -667,7 +694,7 @@ const styles = StyleSheet.create({
   soundGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   soundTile: { flexBasis: "22%", flexGrow: 1, alignItems: "center", gap: 5, backgroundColor: colors.card2, borderRadius: 16, paddingVertical: 11 },
   soundTileText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
-  listenTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  listenTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream },
   roomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   soundChip: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9 },
