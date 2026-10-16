@@ -1,5 +1,7 @@
-// Night stats. Raw events for the last 14 nights; anything older is rolled up into one small
-// summary per night and the raw events are deleted, so storage stays tiny over the years.
+// Sleep stats, one calendar day (00:00–23:59) at a time. Each listening session is a "sleep",
+// labelled night or nap by when it happened. Raw events are kept for the last 14 days;
+// anything older is rolled up into one small summary per day and the raw events are deleted,
+// so storage stays tiny over the years.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { dateLocale, t } from "./i18n";
 
@@ -8,11 +10,14 @@ export type HushEvent =
   | { type: "alert"; t: number; first?: boolean }
   | { type: "cry"; t: number; start: number; end: number; peak: number; alerted?: boolean };
 
-/** One night, summarised. Also what the baby's phone sends to parents each morning. */
+/** One listening session. Times are the whole session, even when it crosses midnight. */
+export type Sleep = { from: number; to: number; kind: "night" | "nap"; cries: number; cryMin: number };
+
+/** One day, summarised. Also what the baby's phone sends to parents after a sleep. */
 export type Night = {
-  key: string; // evening date, YYYY-MM-DD
-  from: number; // first listening start
-  to: number; // last listening stop
+  key: string; // calendar date, YYYY-MM-DD
+  from: number; // first listening moment this day
+  to: number; // last listening moment this day
   listenedMin: number;
   cries: number;
   cryMin: number;
@@ -20,6 +25,7 @@ export type Night = {
   firstWake: number | null; // first crying start
   alerts: number;
   hours: number[]; // 24 slots, crying minutes by clock hour
+  sleeps?: Sleep[];
   spells: [number, number][]; // [start, end] epoch ms; kept only while raw data is kept
   listening: [number, number][];
   noise: [number, number][];
@@ -28,14 +34,15 @@ export type Night = {
 
 const EVENTS = "hush:events";
 const NIGHTS = "hush:nights";
-export const RAW_NIGHTS = 14;
-const KEEP_NIGHTS = 3 * 365;
+export const RAW_DAYS = 14;
+const KEEP_DAYS = 3 * 365;
+const HOUR = 3600_000;
 
-/** Nights run noon to noon, named after the evening they start on. */
-export function nightKey(t: number) {
-  const d = new Date(t - 12 * 3600_000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Days run midnight to midnight, named after their date. */
+export const dayKey = (t: number) => ymd(new Date(t));
+const dayStart = (key: string) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
+const nextDay = (key: string) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d + 1).getTime(); };
 
 async function read<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -67,26 +74,58 @@ function spans(evs: HushEvent[], on: string, off: string, until: number): [numbe
   return out;
 }
 
+/** How much of [a, b] falls between 7 pm and 7 am. */
+function nightOverlap(a: number, b: number) {
+  let total = 0;
+  const d = new Date(a); d.setHours(0, 0, 0, 0);
+  for (let day = d.getTime() - 24 * HOUR; day < b; day += 24 * HOUR) {
+    const s = day + 19 * HOUR, e = day + 31 * HOUR; // 19:00 → 07:00 next day
+    total += Math.max(0, Math.min(b, e) - Math.max(a, s));
+  }
+  return total;
+}
+
+type Cry = Extract<HushEvent, { type: "cry" }>;
+
+/** Every listening session in the events, labelled night (2 h+ between 7 pm and 7 am) or nap. */
+function sleepsOf(evs: HushEvent[], now: number): Sleep[] {
+  const cries = evs.filter((e): e is Cry => e.type === "cry");
+  return spans(evs, "listen_start", "listen_stop", now).map(([a, b]) => {
+    const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
+    return {
+      from: a,
+      to: b,
+      kind: nightOverlap(a, b) >= 2 * HOUR ? "night" : "nap",
+      cries: mine.length,
+      cryMin: Math.round(mine.reduce((n, c) => n + Math.max(1000, c.end - c.start), 0) / 6000) / 10,
+    };
+  });
+}
+
+const clip = (list: [number, number][], a: number, b: number) =>
+  list.map(([s, e]) => [Math.max(s, a), Math.min(e, b)] as [number, number]).filter(([s, e]) => e > s);
+
+/** One day from the raw events (which may start before and end after it). */
 export function summarise(key: string, evs: HushEvent[], now = Date.now()): Night | null {
-  const listening = spans(evs, "listen_start", "listen_stop", now);
+  const a = dayStart(key), b = nextDay(key);
+  const listening = clip(spans(evs, "listen_start", "listen_stop", now), a, b);
   if (!listening.length) return null;
-  const noise = spans(evs, "noise_start", "noise_stop", now);
-  const cries = evs.filter((e): e is Extract<HushEvent, { type: "cry" }> => e.type === "cry");
+  const noise = clip(spans(evs, "noise_start", "noise_stop", now), a, b);
+  const cries = evs.filter((e): e is Cry => e.type === "cry" && e.start >= a && e.start < b);
   const spells = cries.map((c) => [c.start, Math.max(c.end, c.start + 1000)] as [number, number]);
-  const from = listening[0][0];
-  const to = listening[listening.length - 1][1];
+  const sleeps = sleepsOf(evs, now).filter((s) => s.to > a && s.from < b);
   const min = (ms: number) => Math.round(ms / 60000);
 
   // Longest stretch of listening with no crying.
   let quiet = 0;
-  for (const [a, b] of listening) {
-    let cursor = a;
+  for (const [s0, e0] of listening) {
+    let cursor = s0;
     for (const [s, e] of spells) {
-      if (e < a || s > b) continue;
+      if (e < s0 || s > e0) continue;
       quiet = Math.max(quiet, s - cursor);
       cursor = Math.max(cursor, e);
     }
-    quiet = Math.max(quiet, b - cursor);
+    quiet = Math.max(quiet, e0 - cursor);
   }
 
   const hours = new Array(24).fill(0);
@@ -96,54 +135,63 @@ export function summarise(key: string, evs: HushEvent[], now = Date.now()): Nigh
 
   return {
     key,
-    from,
-    to,
-    listenedMin: min(listening.reduce((n, [a, b]) => n + (b - a), 0)),
+    from: listening[0][0],
+    to: listening[listening.length - 1][1],
+    listenedMin: min(listening.reduce((n, [s, e]) => n + (e - s), 0)),
     cries: spells.length,
-    cryMin: Math.round(spells.reduce((n, [a, b]) => n + (b - a), 0) / 6000) / 10,
+    cryMin: Math.round(spells.reduce((n, [s, e]) => n + (e - s), 0) / 6000) / 10,
     longestQuietMin: min(quiet),
     firstWake: spells.length ? spells[0][0] : null,
-    alerts: evs.filter((e) => e.type === "alert").length,
+    alerts: evs.filter((e) => e.type === "alert" && e.t >= a && e.t < b).length,
     hours: hours.map((h) => Math.round(h * 10) / 10),
+    sleeps,
     spells,
     listening,
     noise,
   };
 }
 
+/** Days touched by any listening in the events. */
+function daysOf(evs: HushEvent[], now: number) {
+  const keys = new Set<string>();
+  for (const [a, b] of spans(evs, "listen_start", "listen_stop", now)) {
+    for (let k = dayKey(a); dayStart(k) < b; k = dayKey(nextDay(k))) keys.add(k);
+  }
+  return [...keys];
+}
+
 /**
- * All nights, newest first: recent ones computed from raw events, older ones from summaries.
- * Also rolls up raw events older than RAW_NIGHTS and saves nights received from the baby's phone.
+ * All days, newest first: recent ones computed from raw events, older ones from summaries.
+ * Also rolls up raw events older than RAW_DAYS.
  */
-export async function loadNights(): Promise<Night[]> {
-  const events = await read<HushEvent[]>(EVENTS, []);
+export async function loadNights(now = Date.now()): Promise<Night[]> {
+  let events = await read<HushEvent[]>(EVENTS, []);
   let stored = await read<Night[]>(NIGHTS, []);
 
-  const byKey = new Map<string, HushEvent[]>();
-  for (const e of events) {
-    const k = nightKey(e.type === "cry" ? e.start : e.t);
-    (byKey.get(k) ?? byKey.set(k, []).get(k)!).push(e);
-  }
-  const keys = [...byKey.keys()].sort().reverse();
-  const recent = new Set(keys.slice(0, RAW_NIGHTS));
-
-  // Roll up old nights: keep the summary, drop timelines and raw events.
-  const old = keys.filter((k) => !recent.has(k));
-  if (old.length) {
-    const rolled = old
-      .map((k) => summarise(k, byKey.get(k)!))
+  // Roll up days that ended more than RAW_DAYS ago.
+  const cutoff = dayStart(dayKey(now - RAW_DAYS * 24 * HOUR));
+  if (events.some((e) => e.t < cutoff)) {
+    const oldDays = daysOf(events, now).filter((k) => nextDay(k) <= cutoff);
+    const rolled = oldDays
+      .map((k) => summarise(k, events, now))
       .filter((n): n is Night => !!n)
       .map((n) => ({ ...n, spells: [], listening: [], noise: [] }));
     stored = mergeNights(stored, rolled);
-    await write(NIGHTS, stored.slice(0, KEEP_NIGHTS));
-    await write(EVENTS, events.filter((e) => recent.has(nightKey(e.type === "cry" ? e.start : e.t))));
+    await write(NIGHTS, stored.slice(0, KEEP_DAYS));
+    // Keep what's newer; sessions still open at the cutoff restart there.
+    const kept: HushEvent[] = events.filter((e) => e.t >= cutoff && !(e.type === "cry" && e.start < cutoff));
+    const before = events.filter((e) => e.t < cutoff);
+    if (spans(before, "listen_start", "listen_stop", Infinity).some(([, b]) => b === Infinity)) kept.unshift({ type: "listen_start", t: cutoff });
+    if (spans(before, "noise_start", "noise_stop", Infinity).some(([, b]) => b === Infinity)) kept.unshift({ type: "noise_start", t: cutoff });
+    events = kept.sort((x, y) => x.t - y.t);
+    await write(EVENTS, events);
   }
 
-  const live = [...recent].map((k) => summarise(k, byKey.get(k)!)).filter((n): n is Night => !!n);
+  const live = daysOf(events, now).map((k) => summarise(k, events, now)).filter((n): n is Night => !!n);
   return mergeNights(stored, live);
 }
 
-/** Merge by night, preferring the entry with more detail. Newest first. */
+/** Merge by day, preferring the entry with more detail. Newest first. */
 export function mergeNights(a: Night[], b: Night[]): Night[] {
   const m = new Map<string, Night>();
   for (const n of [...a, ...b]) {
@@ -153,40 +201,56 @@ export function mergeNights(a: Night[], b: Night[]): Night[] {
   return [...m.values()].sort((x, y) => (x.key < y.key ? 1 : -1));
 }
 
-/** Parent's phone: keep a night summary that arrived from the baby's phone. */
-export async function saveReceivedNight(n: Night) {
+/** Parent's phone: keep day summaries that arrived from the baby's phone. */
+export async function saveReceivedNights(list: Night[]) {
   const stored = await read<Night[]>(NIGHTS, []);
-  await write(NIGHTS, mergeNights(stored, [n]).slice(0, KEEP_NIGHTS));
+  await write(NIGHTS, mergeNights(stored, list).slice(0, KEEP_DAYS));
 }
 
-/** Compact a night for sending in a push (limit ~4 KB): timelines as minutes from `from`. */
-export function packNight(n: Night, baby: string) {
-  const m = (t: number) => Math.round((t - n.from) / 60000);
+/** The sleep that just ended, and the days it touched (for the summary push). */
+export async function lastSleep(now = Date.now()): Promise<{ sleep: Sleep; days: Night[] } | null> {
+  const events = await read<HushEvent[]>(EVENTS, []);
+  const all = sleepsOf(events, now);
+  const sleep = all[all.length - 1];
+  if (!sleep) return null;
+  const days = [dayKey(sleep.from), dayKey(sleep.to)]
+    .filter((k, i, l) => l.indexOf(k) === i)
+    .map((k) => summarise(k, events, now))
+    .filter((n): n is Night => !!n);
+  return { sleep, days };
+}
+
+/** Compact days for one push (limit ~4 KB): timelines as minutes from each day's `from`. */
+export function packNights(list: Night[], baby: string) {
   return {
-    type: "night",
+    type: "days",
     baby,
-    n: {
-      ...n,
-      spells: undefined,
-      listening: undefined,
-      noise: undefined,
-      s: n.spells.slice(0, 60).map(([a, b]) => [m(a), m(b)]),
-      l: n.listening.slice(0, 10).map(([a, b]) => [m(a), m(b)]),
-      w: n.noise.slice(0, 10).map(([a, b]) => [m(a), m(b)]),
-    },
+    d: list.slice(0, 2).map((n) => {
+      const m = (t: number) => Math.round((t - n.from) / 60000);
+      return {
+        ...n,
+        spells: undefined,
+        listening: undefined,
+        noise: undefined,
+        s: n.spells.slice(0, 40).map(([a, b]) => [m(a), m(b)]),
+        l: n.listening.slice(0, 8).map(([a, b]) => [m(a), m(b)]),
+        w: n.noise.slice(0, 8).map(([a, b]) => [m(a), m(b)]),
+      };
+    }),
   };
 }
 
-export function unpackNight(data: unknown): Night | null {
-  const d = data as { type?: string; baby?: string; n?: Night & { s?: number[][]; l?: number[][]; w?: number[][] } } | undefined;
-  if (d?.type !== "night" || !d.n?.key) return null;
-  const { s = [], l = [], w = [], ...rest } = d.n;
-  const t = (x: number[]) => [rest.from + x[0] * 60000, rest.from + x[1] * 60000] as [number, number];
-  return { ...rest, baby: d.baby, spells: s.map(t), listening: l.map(t), noise: w.map(t) };
+export function unpackNights(data: unknown): Night[] | null {
+  const d = data as { type?: string; baby?: string; d?: (Night & { s?: number[][]; l?: number[][]; w?: number[][] })[] } | undefined;
+  if (d?.type !== "days" || !Array.isArray(d.d)) return null;
+  return d.d.filter((n) => n?.key).map(({ s = [], l = [], w = [], ...rest }) => {
+    const t = (x: number[]) => [rest.from + x[0] * 60000, rest.from + x[1] * 60000] as [number, number];
+    return { ...rest, baby: d.baby, spells: s.map(t), listening: l.map(t), noise: w.map(t) };
+  });
 }
 
 export const fmtDur = (min: number) => {
   const m = Math.round(min);
   return m < 60 ? t("dur.min", { m }) : t("dur.hm", { h: Math.floor(m / 60), mm: String(m % 60).padStart(2, "0") });
 };
-export const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
+export const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });

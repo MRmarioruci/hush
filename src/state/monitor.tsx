@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, PermissionsAndroid } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
-import { addEvents, fmtDur, loadNights, nightKey, packNight, saveReceivedNight, unpackNight, type HushEvent } from "../nights";
+import { addEvents, fmtDur, lastSleep, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import {
   MONITOR_DEFAULTS,
@@ -108,19 +108,21 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => { app.remove(); clearInterval(id); };
   }, [syncEvents]);
 
-  // Baby's phone: after a long listening session ends, send parents a summary of the night.
+  // Baby's phone: when a sleep ends (a night, or a nap of 30 min or more), send parents a summary.
   const sendNightSummary = useCallback(async () => {
     const cur = mRef.current;
     const to = cur.parents.map((p) => p.token);
     if (!to.length) return;
-    const nights = await loadNights();
-    const n = nights.find((x) => x.key === nightKey(Date.now() - 60_000));
-    if (!n || n.listenedMin < 120) return;
+    const last = await lastSleep();
+    if (!last) return;
+    const { sleep, days } = last;
+    if (Date.now() - sleep.to > 5 * 60_000 || sleep.to - sleep.from < 30 * 60_000) return;
     const label = babyLabel(cur.babyName);
-    const body = n.cries === 0
-      ? t("push.night0", { name: label })
-      : t("push.night", { name: label, count: n.cries, dur: fmtDur(n.cryMin) });
-    sendPush(to, body, packNight(n, cur.babyName.trim()));
+    const kind = sleep.kind === "night" ? "night" : "nap";
+    const body = sleep.cries === 0
+      ? t(`push.${kind}0`, { name: label })
+      : t(`push.${kind}`, { name: label, count: sleep.cries, dur: fmtDur(sleep.cryMin) });
+    sendPush(to, body, packNights(days, cur.babyName.trim()));
   }, []);
 
   // Baby's phone: a parent scanned our code and asked to be connected. Save them and confirm.
@@ -128,9 +130,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   mRef.current = m;
   useEffect(() => {
     const handle = (n: Notifications.Notification) => {
-      const night = unpackNight(n.request.content.data);
-      if (night) {
-        saveReceivedNight(night).then(() => setNightsVersion((v) => v + 1));
+      const days = unpackNights(n.request.content.data);
+      if (days) {
+        saveReceivedNights(days).then(() => setNightsVersion((v) => v + 1));
         return;
       }
       const req = pairRequest(n);
