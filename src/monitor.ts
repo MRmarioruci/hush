@@ -161,6 +161,25 @@ export async function sendData(to: string[], data: Record<string, unknown>): Pro
   }
 }
 
+/** Several silent messages in one request (Expo takes up to 100). */
+export async function sendDataMany(messages: { to: string; data: Record<string, unknown> }[]): Promise<boolean> {
+  if (!messages.length) return false;
+  try {
+    let ok = true;
+    for (let i = 0; i < messages.length; i += 90) {
+      const res = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, priority: "high" }))),
+      });
+      ok = ok && res.ok;
+    }
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export const myLang = () => getLang();
 
 /** Send a push through Expo's push service. Returns true when Expo accepted it. */

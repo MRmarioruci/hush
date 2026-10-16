@@ -343,6 +343,7 @@ export const es: Record<Key, string> = {
   "remote.noReply": "El móvil del bebé no respondió. ¿Está conectado?",
   "remote.play": "Reproducir",
   "remote.stop": "Parar",
+  "nights.synced": "Compartido con tus móviles conectados a las {time}.",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

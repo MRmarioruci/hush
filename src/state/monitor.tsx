@@ -3,9 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, PermissionsAndroid } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
-import { addEvents, fmtDur, lastSleep, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
+import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
-import { MONITOR_DEFAULTS, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken } from "../monitor";
+import { MONITOR_DEFAULTS, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -24,6 +24,9 @@ type Monitor = {
   /** Smart white noise asks for the mic here, so it can react to crying even when the monitor is off. */
   setSoundWantsMic: (want: boolean) => void;
   micOn: boolean;
+  /** Share this phone's sleep days with the connected phones and ask for theirs. Returns how many phones. */
+  syncSleep: (force?: boolean) => Promise<number>;
+  lastSync: number;
 };
 
 const Ctx = createContext<Monitor | null>(null);
@@ -125,7 +128,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const { sleep, days } = last;
     if (Date.now() - sleep.to > 5 * 60_000 || sleep.to - sleep.from < 30 * 60_000) return;
     const kind = sleep.kind === "night" ? "night" : "nap";
-    const data = packNights(days, cur.babyName.trim());
+    const data = packNights(days, cur.babyName.trim(), await deviceId());
     // One message per language, so every parent reads it in their own.
     const langs = [...new Set(cur.parents.map((p) => p.lang ?? getLang()))];
     for (const L of langs) {
@@ -211,7 +214,51 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return mRef.current.parents.length ? null : t("perm.pairToGet");
   }, [listening, syncEvents, sendNightSummary, unlock]);
 
+  /* ---------- sleep sync between connected phones (no account, through silent pushes) ---------- */
+  const [lastSync, setLastSync] = useState(0);
+  const peersOf = (cur: MonitorSettings) =>
+    cur.role === "nursery" ? cur.parents.map((p) => p.token) : cur.pairedToken ? [cur.pairedToken] : [];
+  /** Send this phone's last 30 days to some phones, two days per message. */
+  const sendOwnDays = useCallback(async (to: string[]) => {
+    const own = (await ownNights()).slice(0, 30);
+    if (!own.length || !to.length) return;
+    const device = await deviceId();
+    const name = mRef.current.babyName.trim();
+    const messages: { to: string; data: Record<string, unknown> }[] = [];
+    for (let i = 0; i < own.length; i += 2) {
+      const data = packNights(own.slice(i, i + 2), name, device);
+      for (const tok of to) messages.push({ to: tok, data });
+    }
+    await sendDataMany(messages);
+  }, []);
+  const syncSleep = useCallback(async (force = false) => {
+    const peers = peersOf(mRef.current);
+    if (!peers.length) return 0;
+    if (!force && Date.now() - lastSyncRef.current < 5 * 60_000) return peers.length; // at most every 5 min
+    lastSyncRef.current = Date.now();
+    setLastSync(Date.now());
+    let me = "";
+    try { me = await getMyToken(); } catch {}
+    await sendOwnDays(peers);
+    if (me) await sendDataMany(peers.map((tok) => ({ to: tok, data: { type: "sync-request", from: me } })));
+    return peers.length;
+  }, [sendOwnDays]);
+  const lastSyncRef = useRef(0);
+  // Another phone asked for our days.
+  useEffect(() => {
+    const replied = new Map<string, number>();
+    const sub = Notifications.addNotificationReceivedListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string } | undefined;
+      if (d?.type !== "sync-request" || !d.from || !peersOf(mRef.current).includes(d.from)) return;
+      if (Date.now() - (replied.get(d.from) ?? 0) < 60_000) return;
+      replied.set(d.from, Date.now());
+      sendOwnDays([d.from]);
+      Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [sendOwnDays]);
+
   return (
-    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
   );
 }

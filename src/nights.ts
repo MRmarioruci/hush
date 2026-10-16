@@ -26,6 +26,8 @@ export type Night = {
   alerts: number;
   hours: number[]; // 24 slots, crying minutes by clock hour
   sleeps?: Sleep[];
+  /** Which phone recorded it. Missing = this phone. */
+  device?: string;
   spells: [number, number][]; // [start, end] epoch ms; kept only while raw data is kept
   listening: [number, number][];
   noise: [number, number][];
@@ -33,6 +35,7 @@ export type Night = {
 };
 
 const EVENTS = "hush:events";
+const DEVICE = "hush:device";
 const NIGHTS = "hush:nights";
 export const RAW_DAYS = 14;
 const KEEP_DAYS = 3 * 365;
@@ -164,7 +167,27 @@ function daysOf(evs: HushEvent[], now: number) {
  * All days, newest first: recent ones computed from raw events, older ones from summaries.
  * Also rolls up raw events older than RAW_DAYS.
  */
+/** This phone's id, so days recorded here can be told apart from days received. */
+export async function deviceId(): Promise<string> {
+  const have = await AsyncStorage.getItem(DEVICE).catch(() => null);
+  if (have) return have;
+  const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  await AsyncStorage.setItem(DEVICE, id).catch(() => {});
+  return id;
+}
+
+/** All days, newest first, with days recorded on several phones combined into one. */
 export async function loadNights(now = Date.now()): Promise<Night[]> {
+  return combineByDay(await loadAllRecords(now));
+}
+
+/** Only the days this phone recorded (what a sync sends), newest first. */
+export async function ownNights(now = Date.now()): Promise<Night[]> {
+  return (await loadAllRecords(now)).filter((n) => !n.device);
+}
+
+/** One record per day per phone. */
+async function loadAllRecords(now = Date.now()): Promise<Night[]> {
   let events = await read<HushEvent[]>(EVENTS, []);
   let stored = await read<Night[]>(NIGHTS, []);
 
@@ -191,18 +214,58 @@ export async function loadNights(now = Date.now()): Promise<Night[]> {
   return mergeNights(stored, live);
 }
 
-/** Merge by day, preferring the entry with more detail. Newest first. */
+/** Merge by day and phone; a newer or more detailed copy of the same record wins. Newest first. */
 export function mergeNights(a: Night[], b: Night[]): Night[] {
   const m = new Map<string, Night>();
   for (const n of [...a, ...b]) {
-    const cur = m.get(n.key);
-    if (!cur || n.spells.length >= cur.spells.length) m.set(n.key, n);
+    const id = `${n.key}|${n.device ?? ""}`;
+    const cur = m.get(id);
+    if (!cur || n.to > cur.to || (n.to === cur.to && n.spells.length >= cur.spells.length)) m.set(id, n);
   }
   return [...m.values()].sort((x, y) => (x.key < y.key ? 1 : -1));
 }
 
-/** Parent's phone: keep day summaries that arrived from the baby's phone. */
-export async function saveReceivedNights(list: Night[]) {
+/** Several phones listened on the same day: add their records up into one day. */
+function combine(list: Night[]): Night {
+  if (list.length === 1) return list[0];
+  const byStart = <T extends [number, number]>(xs: T[]) => xs.sort((p, q) => p[0] - q[0]);
+  const firsts = list.map((n) => n.firstWake).filter((x): x is number => x != null);
+  return {
+    key: list[0].key,
+    from: Math.min(...list.map((n) => n.from)),
+    to: Math.max(...list.map((n) => n.to)),
+    listenedMin: list.reduce((a, n) => a + n.listenedMin, 0),
+    cries: list.reduce((a, n) => a + n.cries, 0),
+    cryMin: Math.round(list.reduce((a, n) => a + n.cryMin, 0) * 10) / 10,
+    longestQuietMin: Math.max(...list.map((n) => n.longestQuietMin)),
+    firstWake: firsts.length ? Math.min(...firsts) : null,
+    alerts: list.reduce((a, n) => a + n.alerts, 0),
+    hours: Array.from({ length: 24 }, (_, h) => Math.round(list.reduce((a, n) => a + (n.hours[h] ?? 0), 0) * 10) / 10),
+    sleeps: list.flatMap((n) => n.sleeps ?? []).sort((p, q) => p.from - q.from),
+    spells: byStart(list.flatMap((n) => n.spells)),
+    listening: byStart(list.flatMap((n) => n.listening)),
+    noise: byStart(list.flatMap((n) => n.noise)),
+    baby: list.find((n) => n.baby)?.baby,
+  };
+}
+
+function combineByDay(records: Night[]): Night[] {
+  const by = new Map<string, Night[]>();
+  for (const n of records) (by.get(n.key) ?? by.set(n.key, []).get(n.key)!).push(n);
+  return [...by.values()].map(combine).sort((x, y) => (x.key < y.key ? 1 : -1));
+}
+
+/** Keep days that arrived from another phone (never our own, echoed back). */
+let saving: Promise<void> = Promise.resolve();
+export function saveReceivedNights(list: Night[]): Promise<void> {
+  // Many sync messages can land at once; save them one after another so none is lost.
+  saving = saving.then(() => saveNow(list)).catch(() => {});
+  return saving;
+}
+async function saveNow(list: Night[]) {
+  const me = await deviceId();
+  list = list.filter((n) => n.device && n.device !== me);
+  if (!list.length) return;
   const stored = await read<Night[]>(NIGHTS, []);
   await write(NIGHTS, mergeNights(stored, list).slice(0, KEEP_DAYS));
 }
@@ -221,10 +284,11 @@ export async function lastSleep(now = Date.now()): Promise<{ sleep: Sleep; days:
 }
 
 /** Compact days for one push (limit ~4 KB): timelines as minutes from each day's `from`. */
-export function packNights(list: Night[], baby: string) {
+export function packNights(list: Night[], baby: string, device?: string) {
   return {
     type: "days",
     baby,
+    device,
     d: list.slice(0, 2).map((n) => {
       const m = (t: number) => Math.round((t - n.from) / 60000);
       return {
@@ -241,11 +305,13 @@ export function packNights(list: Night[], baby: string) {
 }
 
 export function unpackNights(data: unknown): Night[] | null {
-  const d = data as { type?: string; baby?: string; d?: (Night & { s?: number[][]; l?: number[][]; w?: number[][] })[] } | undefined;
+  const d = data as { type?: string; baby?: string; device?: string; d?: (Night & { s?: number[][]; l?: number[][]; w?: number[][] })[] } | undefined;
   if (d?.type !== "days" || !Array.isArray(d.d)) return null;
+  // Older versions didn't say which phone sent it; treat that as one unnamed phone.
+  const device = d.device || "paired";
   return d.d.filter((n) => n?.key).map(({ s = [], l = [], w = [], ...rest }) => {
     const t = (x: number[]) => [rest.from + x[0] * 60000, rest.from + x[1] * 60000] as [number, number];
-    return { ...rest, baby: d.baby, spells: s.map(t), listening: l.map(t), noise: w.map(t) };
+    return { ...rest, device, baby: d.baby, spells: s.map(t), listening: l.map(t), noise: w.map(t) };
   });
 }
 

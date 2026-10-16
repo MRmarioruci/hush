@@ -343,6 +343,7 @@ export const zh: Record<Key, string> = {
   "remote.noReply": "宝宝手机没有回应，是否联网？",
   "remote.play": "播放",
   "remote.stop": "停止",
+  "nights.synced": "已于 {time} 与已连接的手机同步。",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

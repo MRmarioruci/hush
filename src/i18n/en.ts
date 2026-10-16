@@ -343,6 +343,7 @@ export const en = {
   "remote.noReply": "The baby's phone didn't answer. Is it online?",
   "remote.play": "Play",
   "remote.stop": "Stop",
+  "nights.synced": "Shared with your connected phones at {time}.",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

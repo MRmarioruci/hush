@@ -47,7 +47,7 @@ function compare(now: Night[], before: Night[], kind: "Week" | "Month") {
 }
 
 export function NightsScreen() {
-  const { baby, nightsVersion } = useMonitor();
+  const { baby, nightsVersion, syncSleep, lastSync } = useMonitor();
   const [nights, setNights] = useState<Night[] | null>(null);
   const [mode, setMode] = useState<Mode>("day");
   const [key, setKey] = useState<string | null>(null);
@@ -58,6 +58,8 @@ export function NightsScreen() {
   const reload = useCallback(() => { loadNights().then(setNights); }, []);
   useEffect(reload, [nightsVersion, reload]);
   useFocusEffect(reload);
+  // Opening this page shares this phone's days with the connected phones and asks for theirs.
+  useFocusEffect(useCallback(() => { syncSleep(); }, [syncSleep]));
 
   const byKey = useMemo(() => new Map((nights ?? []).map((n) => [n.key, n])), [nights]);
 
@@ -80,7 +82,10 @@ export function NightsScreen() {
       {mode === "week" && <WeekView byKey={byKey} start={weekStart} setStart={setWeekStart} onOpen={openNight} baby={baby} />}
       {mode === "month" && <MonthView byKey={byKey} month={month} setMonth={setMonth} onOpen={openNight} baby={baby} />}
 
-      <Text style={styles.foot}>{t("nights.foot")}</Text>
+      <Text style={styles.foot}>
+        {t("nights.foot")}
+        {lastSync ? " " + t("nights.synced", { time: fmtClock(lastSync) }) : ""}
+      </Text>
     </Screen>
   );
 }

@@ -343,6 +343,7 @@ export const el: Record<Key, string> = {
   "remote.noReply": "Το κινητό του μωρού δεν απάντησε. Είναι συνδεδεμένο;",
   "remote.play": "Αναπαραγωγή",
   "remote.stop": "Διακοπή",
+  "nights.synced": "Μοιράστηκε με τα συνδεδεμένα κινητά στις {time}.",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",
