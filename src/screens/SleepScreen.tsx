@@ -7,27 +7,26 @@ import Svg, { Circle, Path } from "react-native-svg";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
-import { LIMIT_DB } from "../safety";
+import { LIMIT_DB, ROOM_M } from "../safety";
 import { Slider } from "../components/Slider";
 import { Card, Chip, Label, Pill, Screen } from "../components/ui";
-import { TIMERS, fmtDist, fmtLeft, useSleep } from "../state/sleep";
+import { TIMERS, fmtDist, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { fmtTime, useT } from "../i18n";
 
 export function SleepScreen() {
   const z = useSleep();
   const { s } = z;
   const t = useT();
-  const [asking, setAsking] = useState(false);
-  const loud = z.level != null && z.level > LIMIT_DB + 0.5;
 
-  const tag =
-    s.dist < 1 ? { t: t("sounds.tagClose"), c: colors.rose }
-    : s.dist < 2 ? { t: t("sounds.tagSoft"), c: colors.moon }
-    : { t: t("sounds.tagLovely"), c: colors.sage };
+  // Green when a nightstand-ish distance is enough, amber further, red past a bedroom's size.
+  const d = z.safeDist ?? 0;
+  const tooLoud = d > ROOM_M;
+  const tag = d <= 1.2 ? { t: t("sounds.tagNear"), c: colors.sage }
+    : d <= 2 ? { t: t("sounds.tagMid"), c: colors.moon }
+    : { t: t("sounds.tagFar"), c: colors.peach };
   const volLabel = z.dev
-    ? z.dev.step === 0 ? t("sounds.volOff") : z.dev.step > z.ceiling! ? t("sounds.overSafe") : z.dev.step === z.ceiling! ? t("sounds.maxSafe") : `${Math.round((z.dev.step / z.ceiling!) * 100)}%`
-    : s.vol === 100 && !s.allowLoud ? t("sounds.maxSafe") : `${s.vol}%`;
-  const pos = (x: number) => Math.max(0, Math.min(100, ((x - 20) / 60) * 100));
+    ? z.dev.step === 0 ? t("sounds.volOff") : `${Math.round((z.dev.step / z.dev.max) * 100)}%`
+    : s.vol === 0 ? t("sounds.volOff") : `${s.vol}%`;
 
   return (
     <Screen title={t("sounds.title")}>
@@ -71,6 +70,34 @@ export function SleepScreen() {
         </View>
       </Card>
 
+      <Card>
+        <View>
+          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? t("sounds.highest") : z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}</Label>
+          {z.dev ? (
+            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} onChange={z.setStep} />
+          ) : (
+            <Slider label={t("sounds.volume")} value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
+          )}
+        </View>
+        <View style={styles.place}>
+          <Text style={styles.placeLabel}>{t("sounds.placeAt")}</Text>
+          <Text style={[styles.placeNum, { color: tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
+          <Text style={styles.placeLabel}>{t("sounds.fromCrib")}</Text>
+        </View>
+        {tooLoud ? (
+          <View style={styles.warn}>
+            <Text style={styles.warnText}>{t("sounds.tooLoudRoom", { dist: fmtDist(ROOM_M, s.unit) })}</Text>
+          </View>
+        ) : (
+          <Pill label={tag.t} color={tag.c} />
+        )}
+        <Text style={styles.hint}>
+          {t("sounds.placeHint", { db: LIMIT_DB })}
+          {z.s.mode === "smart" ? " " + t("sounds.smartStart") : ""}
+          {Platform.OS === "ios" ? " " + t("sounds.iosVolume") : ""}
+        </Text>
+      </Card>
+
       <SmartCard />
 
       <Card>
@@ -81,75 +108,14 @@ export function SleepScreen() {
         <Text style={styles.hint}>{t("sounds.fades")}</Text>
       </Card>
 
-      <Card>
-        <View>
-          <Label right={<Text style={styles.val}>{fmtDist(s.dist, s.unit)}</Text>}>{t("sounds.phoneToCrib")}</Label>
-          <Slider label={t("sounds.phoneToCrib")} value={s.dist} min={0.3} max={4} step={0.1} onChange={(v) => z.set({ dist: v })} />
-        </View>
-        <Pill label={tag.t} color={tag.c} />
-        <View style={styles.levels}>
-          <View style={styles.lvl}>
-            <Text style={styles.lvlLabel}>{z.dev ? t("sounds.atCribNow") : t("sounds.atCribMost")}</Text>
-            <Text style={[styles.lvlNum, { color: loud ? colors.rose : colors.sage }]}>
-              {z.level == null ? "–" : Math.round(Math.max(20, z.level))}
-              <Text style={styles.lvlUnit}> dB</Text>
-            </Text>
-          </View>
-          <View style={styles.lvl}>
-            <Text style={styles.lvlLabel}>{t("sounds.safeLimit")}</Text>
-            <Text style={styles.lvlNum}>
-              {LIMIT_DB}
-              <Text style={styles.lvlUnit}> dB</Text>
-            </Text>
-          </View>
-        </View>
-        <View style={styles.gauge}>
-          <View style={[styles.gaugeFill, { width: `${z.level == null ? 0 : pos(z.level)}%` }, loud && { backgroundColor: colors.rose }]} />
-          <View style={[styles.gaugeMark, { left: `${pos(LIMIT_DB)}%` }]} />
-        </View>
-        <View>
-          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? t("sounds.highest") : z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}</Label>
-          {z.dev ? (
-            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} limit={s.allowLoud ? z.dev.max : z.ceiling!} onChange={z.setStep} />
-          ) : (
-            <Slider label={t("sounds.volume")} value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
-          )}
-        </View>
-        {loud && (
-          <View style={styles.warn}>
-            <Text style={styles.warnText}>{t("sounds.loudWarn", { db: LIMIT_DB })}</Text>
-          </View>
-        )}
-        <Text style={styles.hint}>
-          {s.allowLoud ? t("sounds.hintLoud", { db: LIMIT_DB }) : t(z.dev ? "sounds.hintDev" : "sounds.hintCap", { db: LIMIT_DB })}
-          {s.dist < 2 && !s.allowLoud ? " " + t("sounds.moveFurther", { dist: fmtDist(2, s.unit) }) : ""}
-        </Text>
-        <View style={styles.loudRow}>
-          <Text style={styles.loudLabel}>{t("sounds.allowLoud", { db: LIMIT_DB })}</Text>
-          <Switch
-            value={s.allowLoud}
-            onValueChange={(v) => (v ? setAsking(true) : z.set({ allowLoud: false }))}
-            trackColor={{ false: colors.card2, true: colors.rose }}
-            thumbColor={colors.cream}
-          />
-        </View>
-      </Card>
-
-      <Modal visible={asking} transparent animationType="fade" onRequestClose={() => setAsking(false)}>
-        <View style={styles.dialogBack}>
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>{t("sounds.loudTitle", { db: LIMIT_DB })}</Text>
-            <Text style={styles.dialogText}>{t("sounds.loudBody", { db: LIMIT_DB })}</Text>
-            <Pressable onPress={() => setAsking(false)} style={styles.dialogSafe}><Text style={styles.dialogSafeText}>{t("sounds.keepSafe")}</Text></Pressable>
-            <Pressable onPress={() => { z.set({ allowLoud: true }); setAsking(false); }} style={styles.dialogLoud}><Text style={styles.dialogLoudText}>{t("sounds.allowAnyway")}</Text></Pressable>
-          </View>
-        </View>
-      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  place: { alignItems: "center", gap: 2, backgroundColor: colors.card2, borderRadius: 20, paddingVertical: 16 },
+  placeLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.muted },
+  placeNum: { fontFamily: fonts.display, fontSize: 44, color: colors.cream, fontVariant: ["tabular-nums"] },
   warn: { backgroundColor: "rgba(242,165,151,0.14)", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
   warnText: { fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.rose },
   loudRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingTop: 4 },

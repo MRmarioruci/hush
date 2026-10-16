@@ -5,7 +5,7 @@ import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
 import { deviceVolume, type VolumeState } from "../../modules/hush-native/src";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
-import { capGain, fullVolumeDb, levelAtCrib, safePlan } from "../safety";
+import { outputDb, safeDistance, stepDb } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
 import { addEvent } from "../nights";
 import { LIMIT_DB } from "../safety";
@@ -30,7 +30,9 @@ type Sleep = {
   setTimer: (minutes: number) => void;
   dev: VolumeState | null;
   setStep: (step: number) => void;
-  ceiling: number | null;
+  /** Closest the phone should be to the crib at this volume (m). Null when silent. */
+  safeDist: number | null;
+  /** Level at the crib with the phone at safeDist (dB), including smart mode's quieting. */
   level: number | null;
   beat: number;
   still: boolean;
@@ -91,19 +93,17 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     return () => { sub.remove(); app.remove(); };
   }, []);
 
-  const safe = dev ? safePlan(s.dist, dev.max) : null;
-  // Past the limit only when the parent turned that on; then nothing is capped.
-  const plan = safe && s.allowLoud ? { ceiling: dev!.max, appGain: 1 } : safe;
-  const appGain = plan ? plan.appGain : (s.allowLoud ? 1 : capGain(s.dist)) * (s.vol / 100);
-  const baseLevel = dev
-    ? levelAtCrib(s.dist, dev.step, dev.max, plan!.appGain)
-    : s.vol > 0 ? fullVolumeDb(s.dist) + 20 * Math.log10(appGain) : null;
+  // The parent picks any volume; hush says how far from the crib the phone has to be for
+  // 50 dB there. Android: the phone's media volume. iPhone (volume can't be read): hush's own
+  // slider, assuming the phone's volume is all the way up, so the distance errs on the far side.
+  // hush's own slider follows the same loudness curve as Android's volume steps.
+  const appGain = dev ? 1 : s.vol <= 0 ? 0 : Math.pow(10, stepDb(s.vol, 100) / 20);
+  const outDb = dev ? outputDb(dev.step, dev.max) : outputDb(1, 1, appGain);
+  const safeDist = outDb == null ? null : safeDistance(outDb);
+  const baseLevel = outDb == null ? null : outDb - 20 * Math.log10(safeDist! / 0.3);
 
-  // While playing, the phone's media volume can't go past the safe step (enforced natively).
-  useEffect(() => {
-    if (!deviceVolume || !plan) return;
-    setDev(deviceVolume.setCeiling(playing && !s.allowLoud ? plan.ceiling : -1));
-  }, [playing, plan?.ceiling, s.allowLoud]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Older versions held the volume under a ceiling; make sure none is left behind.
+  useEffect(() => { deviceVolume?.setCeiling(-1); }, []);
 
   const setStep = useCallback((step: number) => {
     if (deviceVolume) setDev(deviceVolume.setStep(step));
@@ -199,16 +199,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const toggle = useCallback(() => {
     if (player.playing) return player.pause();
     setStarts((n) => n + 1);
-    // Smart starts at the full safe level, so the phone's volume goes to the line.
-    if (s.mode === "smart" && deviceVolume) {
-      const st = deviceVolume.get();
-      const c = safePlan(s.dist, st.max).ceiling;
-      if (st.step < c) setDev(deviceVolume.setStep(c));
-    }
     player.volume = gainRef.current;
     player.play();
     try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
-  }, [player, s.mode, s.dist]);
+  }, [player]);
 
   /* ---------- remote control from a paired parent's phone ---------- */
   const remote = useRef({ toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents });
@@ -243,7 +237,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   return (
     <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, starts, timerLeft, setTimer, dev, setStep, ceiling: safe?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
+      value={{ s, set, soundId, sound, playing, toggle, starts, timerLeft, setTimer, dev, setStep, safeDist, level, beat, still, smart: isSmart && playing ? smartView : null }}
     >
       {children}
     </Ctx.Provider>
@@ -252,3 +246,5 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
 export const fmtLeft = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
 export const fmtDist = (m: number, unit: "m" | "ft") => (unit === "m" ? `${m.toFixed(1)} m` : `${Math.round(m * 3.281)} ft`);
+/** A minimum distance, rounded up so it never reads closer than it is. */
+export const fmtMinDist = (m: number, unit: "m" | "ft") => (unit === "m" ? `${(Math.ceil(m * 10) / 10).toFixed(1)} m` : `${Math.ceil(m * 3.281)} ft`);

@@ -4,10 +4,10 @@ import { useNavigation } from "@react-navigation/native";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
-import { LIMIT_DB } from "../safety";
+import { ROOM_M } from "../safety";
 import { Moon } from "../components/Moon";
 import { Card, ICONS, Icon, Screen } from "../components/ui";
-import { TIMERS, fmtLeft, useSleep } from "../state/sleep";
+import { TIMERS, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 import { fmtTime, useT, babyLabel } from "../i18n";
 import { NapCard } from "../components/Naps";
@@ -94,11 +94,9 @@ export function HomeScreen() {
             <Text style={styles.quickText}>{timerText}</Text>
           </Pressable>
           <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
-            <View style={[styles.levelDot, { backgroundColor: sleep.level != null && sleep.level > LIMIT_DB + 0.5 ? colors.rose : colors.sage }]} />
-            <Text style={styles.quickText}>
-              {sleep.level == null
-                ? t("home.volumeOff")
-                : t(sleep.s.mode === "smart" ? "home.smartLevel" : "home.level", { db: Math.round(Math.max(20, sleep.level)) })}
+            <View style={[styles.levelDot, { backgroundColor: sleep.safeDist == null ? colors.muted : sleep.safeDist > ROOM_M ? colors.rose : sleep.safeDist > 2 ? colors.peach : colors.sage }]} />
+            <Text style={styles.quickText} numberOfLines={1}>
+              {sleep.safeDist == null ? t("home.volumeOff") : t("home.placeAt", { dist: fmtMinDist(sleep.safeDist, sleep.s.unit) })}
             </Text>
           </Pressable>
         </View>

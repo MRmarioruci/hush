@@ -41,7 +41,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const steps: string[] = ["welcome", "name", "features"];
   if (feats.naps) steps.push("birthday");
   if (feats.monitor) steps.push("job");
-  if (feats.sounds && !(feats.monitor && job === "parent")) steps.push("distance");
   if ((feats.monitor && job) || feats.naps) steps.push("perms");
   const id = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;

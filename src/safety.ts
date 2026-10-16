@@ -38,6 +38,19 @@ export function safePlan(meters: number, max: number) {
   return { ceiling, appGain: 1 };
 }
 
+/** How loud the phone is 30 cm away at this volume step and app gain, in dB. */
+export function outputDb(step: number, max: number, appGain = 1) {
+  if (step <= 0 || appGain <= 0) return null;
+  return PHONE_DB + stepDb(step, max) + 20 * Math.log10(appGain);
+}
+
+/** The closest the phone may be to the crib so it's no louder than LIMIT_DB there (m). */
+export function safeDistance(db30: number) {
+  return Math.max(0.3, 0.3 * Math.pow(10, (db30 - LIMIT_DB) / 20));
+}
+/** Beyond this the phone is simply too loud for a bedroom. */
+export const ROOM_M = 3;
+
 /** Estimated level at the crib for a given phone step. Null when silent. */
 export function levelAtCrib(meters: number, step: number, max: number, appGain: number) {
   if (step <= 0 || appGain <= 0) return null;
