@@ -105,12 +105,16 @@ export function NapsProvider({ children }: { children: ReactNode }) {
 
   /** A visible notification on each paired phone, in that phone's language. */
   const notify = useCallback(async (kind: "asleep" | "asleepSound" | "awake" | "soundOn", at: number, extra: { dur?: number; skip?: string } = {}) => {
-    if (!s.notifyOthers) return;
     const list = peers().filter((p) => p.token !== extra.skip);
     if (!list.length) return;
     let me = "";
     try { me = await getMyToken(); } catch {}
     const data = { type: "sleep", asleep: kind !== "awake" && kind !== "soundOn" ? true : kind === "awake" ? false : undefined, since: at, from: me };
+    // Notifications off: the other phones still update their state, silently.
+    if (!s.notifyOthers) {
+      if (kind !== "soundOn") sendData(list.map((p) => p.token), data).catch(() => {});
+      return;
+    }
     for (const p of list) {
       const L = p.lang;
       const body = tIn(L, `push.${kind}`, {
