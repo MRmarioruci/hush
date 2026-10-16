@@ -219,6 +219,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
       const r = remote.current;
       if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
+      if (!["play", "stop", "sound"].includes(d.cmd ?? "")) return; // "woke" is handled with nap times
       if (d.cmd === "play" && !player.playing) r.toggle();
       else if (d.cmd === "stop" && player.playing) player.pause();
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });

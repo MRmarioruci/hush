@@ -117,6 +117,15 @@ export function SettingsScreen() {
             <Switch value={s.napReminders} onValueChange={(napReminders) => set({ napReminders })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("settings.napReminders")} />
           </View>
         )}
+        {s.features.monitor && (
+          <View style={styles.row}>
+            <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
+              <Text style={styles.rowLabel}>{t("settings.notifyOthers")}</Text>
+              <Text style={styles.rowSub}>{t("settings.notifyOthersSub")}</Text>
+            </View>
+            <Switch value={s.notifyOthers} onValueChange={(notifyOthers) => set({ notifyOthers })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("settings.notifyOthers")} />
+          </View>
+        )}
         {s.features.naps && s.features.sounds && (
           <View style={styles.row}>
             <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
