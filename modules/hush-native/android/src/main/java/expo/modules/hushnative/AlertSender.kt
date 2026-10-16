@@ -19,13 +19,14 @@ object AlertSender {
       readTimeout = 30000
       doOutput = true
       setRequestProperty("Content-Type", contentType)
+      setRequestProperty("X-Goog-Upload-Protocol", "raw")
       setFixedLengthStreamingMode(bytes.size)
     }
     conn.outputStream.use { it.write(bytes) }
     val code = conn.responseCode
     val text = (if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
     conn.disconnect()
-    (code in 200..299) to text
+    (code in 200..299) to (if (code in 200..299) text else "HTTP $code $text")
   } catch (e: Exception) {
     false to (e.message ?: "Network error")
   }

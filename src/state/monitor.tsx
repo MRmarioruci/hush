@@ -317,9 +317,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       try {
         const res = await cryDetector.recordClip(CLIP_SECONDS, where.upload);
         if (res.ok) await reply("listen.ready", { url: where.download });
-        else await reply(res.detail === "notListening" ? "listen.notListening" : "listen.failed", { error: res.detail === "notListening" ? "notListening" : "upload" });
-      } catch {
-        await reply("listen.failed", { error: "upload" });
+        else await reply(res.detail === "notListening" ? "listen.notListening" : "listen.failed", { error: res.detail === "notListening" ? "notListening" : "upload", detail: String(res.detail ?? "").slice(0, 300) });
+      } catch (e) {
+        await reply("listen.failed", { error: "upload", detail: String((e as Error)?.message ?? e).slice(0, 300) });
       }
       busy.current = false;
     });
@@ -329,11 +329,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // Parent's phone: keep the latest clip (or the reason there's none).
   useEffect(() => {
     const take = (n: Notifications.Notification) => {
-      const d = n.request.content.data as { type?: string; url?: string; at?: number; error?: string } | undefined;
+      const d = n.request.content.data as { type?: string; url?: string; at?: number; error?: string; detail?: string } | undefined;
       if (d?.type !== "clip" || mRef.current.role !== "parent") return;
       const at = d.at ?? n.date ?? Date.now();
       if ((mRef.current.clip?.at ?? 0) >= at) return;
-      update({ clip: { url: d.url, at, error: d.error } });
+      update({ clip: { url: d.url, at, error: d.error, detail: d.detail } });
     };
     const sub = addPushListener(take);
     const catchUp = () => Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {});

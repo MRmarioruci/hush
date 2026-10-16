@@ -67,6 +67,9 @@ export function ListenButton({ compact }: { compact?: boolean }) {
       {status && (
         <Pressable onPress={() => clip?.url && !waiting && play(clip.url)} disabled={!clip?.url || waiting} style={{ flex: 1 }}>
           <Text style={[styles.status, clip?.error && clip.at >= asked && !waiting && { color: colors.rose }]} numberOfLines={2}>{status}</Text>
+          {clip?.detail && clip.error === "upload" && clip.at >= asked && !waiting && (
+            <Text style={[styles.status, { fontSize: 11 }]} numberOfLines={4} selectable>{clip.detail}</Text>
+          )}
         </Pressable>
       )}
     </View>
