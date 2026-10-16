@@ -261,7 +261,7 @@ export const en = {
 
   "unlock.title": "Try the baby monitor free",
   "unlock.endedTitle": "Your free trial has ended",
-  "unlock.body": "White noise is always free. The baby monitor is free for 3 days, then a one-time unlock keeps it on this phone for good.",
+  "unlock.body": "White noise is always free. The baby monitor is free for {days} days, then a one-time unlock keeps it on this phone for good.",
   "unlock.p1": "Cry alerts on every parent's phone",
   "unlock.p2": "Pay once. No subscription.",
   "unlock.p3": "Parents' phones never need to buy",

@@ -261,7 +261,7 @@ export const pt: Record<Key, string> = {
 
   "unlock.title": "Experimente a babá eletrônica grátis",
   "unlock.endedTitle": "Seu teste grátis terminou",
-  "unlock.body": "O ruído branco é sempre grátis. A babá eletrônica é grátis por 3 dias e depois uma compra única a libera para sempre neste celular.",
+  "unlock.body": "O ruído branco é sempre grátis. A babá eletrônica é grátis por {days} dias e depois uma compra única a libera para sempre neste celular.",
   "unlock.p1": "Alertas de choro no celular de cada responsável",
   "unlock.p2": "Pague uma vez. Sem assinatura.",
   "unlock.p3": "Os celulares dos pais não precisam comprar nada",

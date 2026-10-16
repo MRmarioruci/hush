@@ -261,7 +261,7 @@ export const fr: Record<Key, string> = {
 
   "unlock.title": "Essayez le babyphone gratuitement",
   "unlock.endedTitle": "Votre essai gratuit est terminé",
-  "unlock.body": "Le bruit blanc est toujours gratuit. Le babyphone est gratuit pendant 3 jours, puis un achat unique le débloque pour de bon sur ce téléphone.",
+  "unlock.body": "Le bruit blanc est toujours gratuit. Le babyphone est gratuit pendant {days} jours, puis un achat unique le débloque pour de bon sur ce téléphone.",
   "unlock.p1": "Alertes de pleurs sur le téléphone de chaque parent",
   "unlock.p2": "Un seul paiement. Sans abonnement.",
   "unlock.p3": "Les téléphones des parents n'ont rien à acheter",

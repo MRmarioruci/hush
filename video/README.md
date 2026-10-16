@@ -16,7 +16,7 @@ The pitch: no white noise machine or baby monitor needed. Your phones are all yo
 | 16–21 s | Smart volume | A curve eases from 50 to 44 dB, then rises at "Crying" |
 | 21–27 s | Monitor | **Any phone is a baby monitor.** Ripples, then "Leo is crying" lands on the parent's phone |
 | 27–31 s | Nights | **Watch the nights get calmer**, week and month views |
-| 31–35 s | Outro | "No subscription. No extra device. Just the phones you already have." End card: hush, "Get it on Google Play", "Try the baby monitor free for 3 days" |
+| 31–35 s | Outro | "No subscription. No extra device. Just the phones you already have." End card: hush, "Get it on Google Play", "Try the baby monitor free for 4 days" |
 
 Sound: a soft music-box lullaby over pink noise (`scripts/music.py`), and small synthesised effects
 for things appearing: pops, ticks, whooshes, a notification chime and a closing swell (`public/sfx-*.wav`).

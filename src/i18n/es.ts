@@ -261,7 +261,7 @@ export const es: Record<Key, string> = {
 
   "unlock.title": "Prueba gratis el vigilabebés",
   "unlock.endedTitle": "Tu prueba gratuita ha terminado",
-  "unlock.body": "El ruido blanco siempre es gratis. El vigilabebés es gratis 3 días y luego una compra única lo desbloquea para siempre en este móvil.",
+  "unlock.body": "El ruido blanco siempre es gratis. El vigilabebés es gratis {days} días y luego una compra única lo desbloquea para siempre en este móvil.",
   "unlock.p1": "Avisos de llanto en el móvil de cada padre o madre",
   "unlock.p2": "Pagas una vez. Sin suscripción.",
   "unlock.p3": "Los móviles de los padres no tienen que comprar nada",

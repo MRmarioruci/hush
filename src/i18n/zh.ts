@@ -261,7 +261,7 @@ export const zh: Record<Key, string> = {
 
   "unlock.title": "免费试用宝宝监听",
   "unlock.endedTitle": "免费试用已结束",
-  "unlock.body": "白噪音永久免费。宝宝监听可免费使用 3 天，之后一次性购买即可在这部手机上永久解锁。",
+  "unlock.body": "白噪音永久免费。宝宝监听可免费使用 {days} 天，之后一次性购买即可在这部手机上永久解锁。",
   "unlock.p1": "每位家长的手机都能收到哭声提醒",
   "unlock.p2": "一次付费，无需订阅",
   "unlock.p3": "家长的手机无需购买",

@@ -253,7 +253,7 @@ export const OutroScene: React.FC = () => {
           <div style={{ display: "inline-block", marginTop: 50, fontFamily: BODY, fontWeight: 700, fontSize: 40, color: C.bg, background: C.peach, borderRadius: 99, padding: "18px 46px" }}>
             Get it on Google Play
           </div>
-          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 36, color: C.muted, marginTop: 26, opacity: prog(f, 118, 140) }}>Try the baby monitor free for 3 days</div>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 36, color: C.muted, marginTop: 26, opacity: prog(f, 118, 140) }}>Try the baby monitor free for 4 days</div>
         </div>
       </div>
     </Scene>

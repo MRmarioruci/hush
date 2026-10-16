@@ -1,4 +1,4 @@
-// Baby monitor unlock: a 3-day free trial on the baby's phone, then a one-time
+// Baby monitor unlock: a 4-day free trial on the baby's phone, then a one-time
 // Google Play purchase. White noise, Nights and parents' phones are always free.
 //
 // The trial starts the first time this phone starts listening as the baby's
@@ -12,7 +12,7 @@ import { useT } from "../i18n";
 import { ICONS, Icon } from "../components/ui";
 
 export const PRODUCT_ID = "hush_unlock";
-export const TRIAL_DAYS = 3;
+export const TRIAL_DAYS = 4;
 const KEY = "hush:unlock";
 const DAY = 86_400_000;
 
@@ -175,7 +175,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
           <View style={styles.handle} />
           <View style={styles.badge}><Icon d={ICONS.monitor} size={30} color={colors.bg} width={2} /></View>
           <Text style={styles.title}>{status === "unlocked" ? t("unlock.thanks") : status === "expired" ? t("unlock.endedTitle") : t("unlock.title")}</Text>
-          <Text style={styles.body}>{t("unlock.body")}</Text>
+          <Text style={styles.body}>{t("unlock.body", { days: TRIAL_DAYS })}</Text>
           <View style={styles.points}>
             {(["unlock.p1", "unlock.p2", "unlock.p3"] as const).map((k) => (
               <View key={k} style={styles.point}>
