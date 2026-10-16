@@ -76,7 +76,8 @@ export type NapState =
 export function napState(sleeps: Sleep[], birthday: string | null, openFrom: number | null, now = Date.now()): NapState {
   if (openFrom != null) return { asleep: true, since: openFrom };
   const done = sleeps.filter((s) => s.to <= now + MIN).sort((a, b) => b.to - a.to);
-  const awakeSince = done.length ? done[0].to : null;
+  // A sleep that just ended can be stamped a few seconds ahead (another phone's clock).
+  const awakeSince = done.length ? Math.min(done[0].to, now) : null;
   const months = ageMonths(birthday, now);
   const band = months == null ? null : bandFor(months);
   const gaps = recentWakeGaps(sleeps, now);

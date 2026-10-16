@@ -61,8 +61,9 @@ export function NapCard({ big }: { big?: boolean }) {
   const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
   const [guide, setGuide] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(id); }, []);
+  const [, setTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => setTick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  const now = Date.now(); // read on every render, so a sleep that just ended never shows as in the future
   const name = babyLabel(mon.m.babyName);
   const months = ageMonths(s.birthday, now);
 
@@ -70,16 +71,16 @@ export function NapCard({ big }: { big?: boolean }) {
   let head: string, value: string, line: string | null = null, progress: number | null = null, sweet: [number, number] | null = null;
   if (state.asleep) {
     head = t("nap.isAsleep", { name });
-    value = fmtDur((now - state.since) / MIN);
+    value = fmtDur(Math.max(0, now - state.since) / MIN);
     line = t("nap.since", { time: fmtClock(state.since) });
   } else {
     head = t("nap.isAwake", { name });
-    value = state.awakeSince != null ? fmtDur((now - state.awakeSince) / MIN) : "–";
+    value = state.awakeSince != null ? fmtDur(Math.max(0, now - state.awakeSince) / MIN) : "–";
     if (state.target && state.sweet && state.awakeSince != null) {
       late = now > state.sweet[1];
       line = late ? t("nap.late", { name }) : t(state.bedtime ? "nap.bedAround" : "nap.around", { time: fmtClock(state.target) });
       const span = state.sweet[1] - state.awakeSince;
-      progress = Math.min(1, (now - state.awakeSince) / span);
+      progress = Math.max(0, Math.min(1, (now - state.awakeSince) / span));
       sweet = [(state.sweet[0] - state.awakeSince) / span, 1];
     } else if (!s.birthday) {
       line = t("nap.noBirthday", { name });
