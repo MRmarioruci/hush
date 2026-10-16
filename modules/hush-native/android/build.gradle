@@ -21,4 +21,7 @@ android {
 dependencies {
   // On-device sound classifier for the cry detector (runs YAMNet).
   implementation "org.tensorflow:tensorflow-lite:2.16.1"
+  // Push messages: hush extends expo-notifications' service to vibrate on crying alerts.
+  implementation project(':expo-notifications')
+  implementation 'com.google.firebase:firebase-messaging:25.0.1'
 }

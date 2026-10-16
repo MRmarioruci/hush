@@ -84,6 +84,8 @@ module.exports = ({ config }) => ({
       {
         icon: "./assets/notification-icon.png",
         color: "#f6c7b0",
+        // Crying-alert chime (res/raw/alert.wav).
+        sounds: ["./assets/alert.wav"],
       },
     ],
     [

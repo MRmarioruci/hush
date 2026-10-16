@@ -23,10 +23,11 @@ object AlertSender {
             put("to", token)
             put("title", "hush")
             put("body", body)
-            put("sound", "default")
-            put("priority", "high")
             // Crying (and a stopped monitor) ring like an alarm; the rest are normal notifications.
-            put("channelId", if (data["type"] in setOf("cry", "stopped", "test")) "baby-alarm" else "cry-alerts")
+            val alarm = data["type"] in setOf("cry", "stopped", "test")
+            put("sound", if (alarm) "alert.wav" else "default")
+            put("priority", "high")
+            put("channelId", if (alarm) "baby-alarm-2" else "cry-alerts")
             put("data", JSONObject(data))
           })
         }
