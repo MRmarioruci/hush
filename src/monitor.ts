@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { PermissionsAndroid, Platform } from "react-native";
+import { t } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number };
 export type Sensitivity = "low" | "medium" | "high";
@@ -53,8 +54,8 @@ Notifications.setNotificationHandler({
 export async function setupAlertChannel() {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync("cry-alerts", {
-    name: "Cry alerts",
-    description: "When the baby phone hears crying",
+    name: t("home.cryAlerts"),
+    description: t("role.parentSub"),
     importance: Notifications.AndroidImportance.MAX,
     sound: "default",
     vibrationPattern: [0, 400, 200, 400],
@@ -69,9 +70,9 @@ export function projectId(): string | undefined {
 /** This phone's address for receiving alerts. Throws a readable error when push isn't set up. */
 export async function getMyToken(): Promise<string> {
   const id = projectId();
-  if (!id) throw new Error("Alerts aren't set up in this build yet.");
+  if (!id) throw new Error(t("perm.notSetUp"));
   const perm = await Notifications.requestPermissionsAsync();
-  if (!perm.granted) throw new Error("Allow notifications for hush so this phone can receive alerts.");
+  if (!perm.granted) throw new Error(t("perm.notifs"));
   await setupAlertChannel();
   const { data } = await Notifications.getExpoPushTokenAsync({ projectId: id });
   return data;
@@ -92,10 +93,10 @@ export function pairedBaby(n: Notifications.Notification): string | null {
 
 export async function recordAlert(n: Notifications.Notification) {
   const data = n.request.content.data as { type?: string } | undefined;
-  if (data?.type !== "cry") return;
+  if (!["cry", "battery", "stopped"].includes(data?.type ?? "")) return;
   const list = await loadAlerts();
   if (list.some((a) => a.id === n.request.identifier)) return;
-  const next = [{ id: n.request.identifier, body: n.request.content.body ?? "Crying", at: n.date }, ...list].slice(0, 30);
+  const next = [{ id: n.request.identifier, body: n.request.content.body ?? t("nights.crying"), at: n.date }, ...list].slice(0, 30);
   await AsyncStorage.setItem(ALERTS_KEY, JSON.stringify(next)).catch(() => {});
   return next;
 }
@@ -143,13 +144,13 @@ export function pairRequest(n: Notifications.Notification): PairRequest | null {
 /* ---------- permissions on the baby phone ---------- */
 
 export async function askMicAndNotifications(): Promise<string | null> {
-  if (Platform.OS !== "android") return "Listening for crying works on Android phones.";
+  if (Platform.OS !== "android") return t("perm.androidOnly");
   const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
-    title: "Let hush listen for crying",
-    message: "Sound stays on this phone. Only the alert is sent.",
-    buttonPositive: "Allow",
+    title: t("perm.micTitle"),
+    message: t("perm.micMsg"),
+    buttonPositive: t("perm.allow"),
   });
-  if (mic !== PermissionsAndroid.RESULTS.GRANTED) return "Allow the microphone to listen for crying.";
+  if (mic !== PermissionsAndroid.RESULTS.GRANTED) return t("perm.micNeeded");
   // Needed on Android 13+ to show the "listening" notification that keeps it running.
   await Notifications.requestPermissionsAsync().catch(() => {});
   return null;

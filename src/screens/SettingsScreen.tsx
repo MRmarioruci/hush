@@ -1,5 +1,9 @@
-import { Children, type ReactNode } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Children, useCallback, useState, type ReactNode } from "react";
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { cryDetector } from "../../modules/hush-native/src";
+import { useT } from "../i18n";
+import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
 import Constants from "expo-constants";
 import { useNavigation } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
@@ -16,13 +20,24 @@ export function SettingsScreen() {
   const { s, set } = useSleep();
   const { m, update } = useMonitor();
   const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
+  const t = useT();
+  const langLabel = useLangLabel();
+  const [picking, setPicking] = useState(false);
+
+  // Battery exemption only matters on Android, and mostly for the phone in the baby's room.
+  const [exempt, setExempt] = useState(() => cryDetector?.isBatteryExempt() ?? true);
+  useFocusEffect(useCallback(() => {
+    setExempt(cryDetector?.isBatteryExempt() ?? true);
+    const sub = AppState.addEventListener("change", (st) => st === "active" && setExempt(cryDetector?.isBatteryExempt() ?? true));
+    return () => sub.remove();
+  }, []));
 
   return (
     <Screen
-      title="Settings"
+      title={t("settings.title")}
       right={
-        <Pressable onPress={() => nav.navigate("Home")} hitSlop={12} style={styles.close} accessibilityLabel="Back">
-          <Text style={styles.closeText}>Done</Text>
+        <Pressable onPress={() => nav.navigate("Home")} hitSlop={12} style={styles.close} accessibilityLabel={t("common.back")}>
+          <Text style={styles.closeText}>{t("common.done")}</Text>
         </Pressable>
       }
     >
@@ -33,7 +48,7 @@ export function SettingsScreen() {
         <TextInput
           value={m.babyName}
           onChangeText={(babyName) => update({ babyName })}
-          placeholder="Baby's name"
+          placeholder={t("settings.babyName")}
           placeholderTextColor={colors.muted}
           style={styles.babyInput}
           maxLength={24}
@@ -41,29 +56,42 @@ export function SettingsScreen() {
         />
       </View>
 
-      <Group title="Preferences">
-        <Row label="Distances">
+      <Group title={t("settings.prefs")}>
+        <Row label={t("settings.language")} onPress={() => setPicking(true)}>
+          <View style={styles.valueRow}>
+            <Text style={styles.value} numberOfLines={1}>{langLabel}</Text>
+            <Icon d={ICONS.chevron} size={18} />
+          </View>
+        </Row>
+        <Row label={t("settings.distances")}>
           <View style={styles.seg}>
             {(["m", "ft"] as const).map((u) => (
               <Pressable key={u} onPress={() => set({ unit: u })} style={[styles.segItem, s.unit === u && styles.segOn]}>
-                <Text style={[styles.segText, s.unit === u && { color: colors.bg }]}>{u === "m" ? "Meters" : "Feet"}</Text>
+                <Text style={[styles.segText, s.unit === u && { color: colors.bg }]}>{u === "m" ? t("settings.meters") : t("settings.feet")}</Text>
               </Pressable>
             ))}
           </View>
         </Row>
       </Group>
 
-      <Group title="Safety">
-        <Row label="Max at the crib"><Text style={styles.value}>{LIMIT_DB} dB</Text></Row>
-        <Row label="Why 50 dB" onPress={() => Linking.openURL(STUDY)} />
+      <Group title={t("settings.safety")}>
+        <Row label={t("settings.maxCrib")}><Text style={styles.value}>{LIMIT_DB} dB</Text></Row>
+        {Platform.OS === "android" && (
+          <Row label={t("settings.battery")} onPress={exempt ? undefined : () => cryDetector?.requestBatteryExempt()}>
+            <Text style={[styles.value, !exempt && { color: colors.peach }]}>{exempt ? t("settings.batteryOn") : t("settings.batteryOff")}</Text>
+          </Row>
+        )}
+        <Row label={t("settings.why")} onPress={() => Linking.openURL(STUDY)} />
       </Group>
 
-      <Group title="About">
-        <Row label="Version"><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
-        <Row label="Get the latest version" onPress={() => Linking.openURL(RELEASES)} />
+      <Group title={t("settings.about")}>
+        <Row label={t("settings.version")}><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
+        <Row label={t("settings.latest")} onPress={() => Linking.openURL(RELEASES)} />
+        <Row label={t("settings.setup")} onPress={() => set({ onboarded: false })} />
       </Group>
 
-      <Text style={styles.foot}>Sound stays on the baby's phone. Only alerts are sent.</Text>
+      <Text style={styles.foot}>{t("settings.foot")}</Text>
+      <LanguagePicker visible={picking} onClose={() => setPicking(false)} />
     </Screen>
   );
 }
@@ -108,7 +136,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 54, gap: 12 },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
   rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
-  value: { fontFamily: fonts.body, fontSize: 15, color: colors.muted },
+  value: { fontFamily: fonts.body, fontSize: 15, color: colors.muted, flexShrink: 1 },
+  valueRow: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1, maxWidth: "60%" },
 
   seg: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 3 },
   segItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 },

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
 import { colors } from "../theme";
+import { t } from "../i18n";
 
 const SIZE = 176;
 const RINGS = 6;
@@ -71,7 +72,7 @@ export function Moon({
       />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={playing ? "Pause" : "Play"}
+        accessibilityLabel={playing ? t("common.pause") : t("common.play")}
         onPress={onPress}
         onPressIn={() => Animated.spring(press, { toValue: 0.94, useNativeDriver: true, speed: 40 }).start()}
         onPressOut={() => Animated.spring(press, { toValue: 1, useNativeDriver: true, friction: 4 }).start()}

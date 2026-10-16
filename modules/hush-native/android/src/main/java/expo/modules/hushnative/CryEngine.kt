@@ -50,6 +50,24 @@ object CryEngine {
   /** Pauses shorter than this don't end a crying spell (babies stop for breath). */
   private const val GAP_MS = 6000L
   @Volatile var babyName = "Baby"
+
+  // Message templates in the app's language ({name}, {pct} are filled in here).
+  @Volatile var txtCrying = "{name} is crying"
+  @Volatile var txtStill = "{name} is still crying"
+  @Volatile var txtLowBattery = "{name}'s phone battery is at {pct}%. Plug it in to keep listening."
+  @Volatile var txtStopped = "{name}'s phone stopped listening"
+  @Volatile var txtListenTitle = "hush is listening"
+  @Volatile var txtListenText = "Paired phones get an alert if {name} cries"
+
+  /** Set when the user stops listening, so a stop by the system can be told apart. */
+  @Volatile var stopRequested = false
+
+  fun fill(template: String, pct: Int = 0) = template.replace("{name}", babyName).replace("{pct}", pct.toString())
+
+  /** Tell the parents that listening ended without anyone asking it to. */
+  fun reportUnexpectedStop() {
+    if (!stopRequested) AlertSender.send(tokens, fill(txtStopped), mapOf("type" to "stopped", "baby" to babyName))
+  }
   @Volatile var tokens: List<String> = emptyList()
 
   /** Receives "status" and "cry" events; set by the JS-facing module. */
@@ -64,6 +82,7 @@ object CryEngine {
   fun start(context: Context) {
     if (running) return
     running = true
+    stopRequested = false
     val app = context.applicationContext
     EventLog.init(app)
     wakeLock = (app.getSystemService(Context.POWER_SERVICE) as PowerManager)
@@ -129,6 +148,8 @@ object CryEngine {
       var alerted = false   // already alerted for this spell
       var lastAlert = 0L
       var peak = 0f
+      var lastBatteryCheck = 0L
+      var lowBatterySent = false
       EventLog.add("listen_start")
 
       // A spell is recorded once it's over (or when listening stops).
@@ -180,6 +201,16 @@ object CryEngine {
           mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble())
         )
 
+        // Once a minute: warn the parents if this phone is about to run out of battery.
+        if (System.currentTimeMillis() - lastBatteryCheck > 60_000) {
+          lastBatteryCheck = System.currentTimeMillis()
+          val (pct, plugged) = battery(context)
+          if (!plugged && pct in 1..15 && !lowBatterySent) {
+            lowBatterySent = true
+            AlertSender.send(tokens, fill(txtLowBattery, pct), mapOf("type" to "battery", "baby" to babyName, "pct" to pct))
+          } else if (plugged || pct > 25) lowBatterySent = false
+        }
+
         // A crying spell starts on the first detection and lasts until there's been no
         // crying for GAP_MS. Alert once it has lasted delayMs, then remind every REPEAT_MS.
         val t = System.currentTimeMillis()
@@ -198,7 +229,7 @@ object CryEngine {
             lastAlert = t
             listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
             EventLog.add("alert", mapOf("first" to first))
-            val body = if (first) "$babyName is crying" else "$babyName is still crying"
+            val body = fill(if (first) txtCrying else txtStill)
             AlertSender.send(tokens, body, mapOf("type" to "cry", "baby" to babyName, "at" to t))
           }
         }
@@ -207,6 +238,7 @@ object CryEngine {
     } catch (e: Exception) {
       Log.w(TAG, "Listening stopped", e)
       listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
+      reportUnexpectedStop()
     } finally {
       EventLog.add("listen_stop")
       try { rec?.stop() } catch (_: Exception) {}
@@ -214,6 +246,14 @@ object CryEngine {
       model?.close()
       running = false
     }
+  }
+
+  private fun battery(context: Context): Pair<Int, Boolean> {
+    val i = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)) ?: return 100 to true
+    val level = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+    val scale = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+    val plugged = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+    return (if (level < 0) 100 else level * 100 / maxOf(1, scale)) to plugged
   }
 
   private fun classify(model: Interpreter, window: FloatArray, inShape: IntArray, outShape: IntArray, classes: Int): FloatArray {

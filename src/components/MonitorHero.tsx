@@ -2,9 +2,11 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
+import { useT } from "../i18n";
 
 /** Two phones: the baby's phone by the crib hears crying, and an alert travels to the parent's phone. */
 export function MonitorHero({ baby, still }: { baby: string; still?: boolean }) {
+  const tr = useT();
   const t = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -40,7 +42,7 @@ export function MonitorHero({ baby, still }: { baby: string; still?: boolean }) 
           />
           <SvgXml width={74} height={74} xml={CRIB} />
         </View>
-        <Text style={styles.tag}>{baby}'s room</Text>
+        <Text style={styles.tag} numberOfLines={1}>{tr("hero.room", { name: baby })}</Text>
       </View>
 
       {/* the alert travelling across */}
@@ -61,12 +63,12 @@ export function MonitorHero({ baby, still }: { baby: string; still?: boolean }) 
             <View style={styles.noteIcon}><SvgXml width={12} height={12} xml={MOON} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.noteApp}>hush</Text>
-              <Text style={styles.noteText} numberOfLines={2}>{baby} is crying</Text>
+              <Text style={styles.noteText} numberOfLines={2}>{tr("hero.crying", { name: baby })}</Text>
             </View>
           </View>
           <Text style={styles.clock}>02:14</Text>
         </View>
-        <Text style={styles.tag}>You</Text>
+        <Text style={styles.tag}>{tr("hero.you")}</Text>
       </View>
     </View>
   );

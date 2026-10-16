@@ -1,7 +1,11 @@
 package expo.modules.hushnative
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -38,7 +42,40 @@ class HushCryModule : Module() {
       true
     }
 
+    Function("setTexts") { texts: Map<String, String> ->
+      texts["crying"]?.let { CryEngine.txtCrying = it }
+      texts["still"]?.let { CryEngine.txtStill = it }
+      texts["lowBattery"]?.let { CryEngine.txtLowBattery = it }
+      texts["stopped"]?.let { CryEngine.txtStopped = it }
+      texts["listenTitle"]?.let { CryEngine.txtListenTitle = it }
+      texts["listenText"]?.let { CryEngine.txtListenText = it }
+    }
+
+    // Battery optimisation: some phones close background apps overnight unless exempted.
+    Function("isBatteryExempt") {
+      val ctx = appContext.reactContext ?: return@Function true
+      if (Build.VERSION.SDK_INT < 23) return@Function true
+      (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+    }
+
+    Function("requestBatteryExempt") {
+      val ctx = appContext.reactContext ?: return@Function false
+      if (Build.VERSION.SDK_INT < 23) return@Function true
+      try {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ctx.startActivity(intent)
+        true
+      } catch (_: Exception) {
+        try {
+          ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+          true
+        } catch (_: Exception) { false }
+      }
+    }
+
     Function("stop") {
+      CryEngine.stopRequested = true
       val ctx = appContext.reactContext ?: return@Function false
       ctx.stopService(Intent(ctx, CryListenerService::class.java))
       CryEngine.stop()

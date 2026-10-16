@@ -1,6 +1,7 @@
 // Night stats. Raw events for the last 14 nights; anything older is rolled up into one small
 // summary per night and the raw events are deleted, so storage stays tiny over the years.
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { dateLocale, t } from "./i18n";
 
 export type HushEvent =
   | { type: "listen_start" | "listen_stop" | "noise_start" | "noise_stop"; t: number }
@@ -186,6 +187,6 @@ export function unpackNight(data: unknown): Night | null {
 
 export const fmtDur = (min: number) => {
   const m = Math.round(min);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  return m < 60 ? t("dur.min", { m }) : t("dur.hm", { h: Math.floor(m / 60), mm: String(m % 60).padStart(2, "0") });
 };
-export const fmtClock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+export const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });

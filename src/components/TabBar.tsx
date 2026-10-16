@@ -5,12 +5,13 @@ import { colors, fonts } from "../theme";
 import { ICONS, Icon } from "./ui";
 import { useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
+import { useT } from "../i18n";
 
 const TABS: Record<string, { label: string; icon: string }> = {
-  Home: { label: "Home", icon: ICONS.home },
-  Sounds: { label: "Sounds", icon: ICONS.sounds },
-  Monitor: { label: "Monitor", icon: ICONS.monitor },
-  Nights: { label: "Nights", icon: ICONS.nights },
+  Home: { label: "tab.home", icon: ICONS.home },
+  Sounds: { label: "tab.sounds", icon: ICONS.sounds },
+  Monitor: { label: "tab.monitor", icon: ICONS.monitor },
+  Nights: { label: "tab.nights", icon: ICONS.nights },
 };
 
 /** Floating bar at the bottom. A small dot shows what's running, whichever tab you're on. */
@@ -18,6 +19,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { playing } = useSleep();
   const { listening, status } = useMonitor();
+  const tr = useT();
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
@@ -34,7 +36,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               key={route.key}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
-              accessibilityLabel={t.label}
+              accessibilityLabel={tr(t.label)}
               onPress={() => {
                 const e = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!focused && !e.defaultPrevented) navigation.navigate(route.name);
@@ -46,7 +48,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
                 <Icon d={t.icon} size={23} color={focused ? colors.peach : colors.muted} width={focused ? 2.1 : 1.8} />
                 {live && <View style={[styles.dot, { backgroundColor: liveColor }]} />}
               </View>
-              <Text style={[styles.text, focused && styles.textOn]}>{t.label}</Text>
+              <Text style={[styles.text, focused && styles.textOn]} numberOfLines={1}>{tr(t.label)}</Text>
               <View style={[styles.mark, focused && styles.markOn]} />
             </Pressable>
           );

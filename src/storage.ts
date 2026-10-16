@@ -10,9 +10,11 @@ export type Settings = {
   mode: "smart" | "manual";
   /** Smart mode listens for crying on this phone to react to it. */
   smartCry: boolean;
+  /** First-time setup finished. */
+  onboarded: boolean;
 };
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false };
 
 export async function loadSettings(): Promise<Settings> {
   try {

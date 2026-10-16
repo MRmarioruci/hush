@@ -15,6 +15,7 @@ import {
   saveMonitor,
   type MonitorSettings,
 } from "../monitor";
+import { t, useLang } from "../i18n";
 
 type Monitor = {
   m: MonitorSettings;
@@ -47,7 +48,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const baby = m.babyName.trim() || "Baby";
+  const baby = m.babyName.trim() || t("baby.default");
   const tokens = m.parents.map((p) => p.token);
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
   const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
@@ -56,6 +57,19 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<CryStatus>({});
   const [lastCry, setLastCry] = useState<number | null>(null);
   const [cryHeardAt, setCryHeardAt] = useState<number | null>(null);
+
+  // Native alerts and the "listening" notification use the app's language.
+  const lang = useLang();
+  useEffect(() => {
+    cryDetector?.setTexts({
+      crying: t("push.crying", { name: "{name}" }),
+      still: t("push.still", { name: "{name}" }),
+      lowBattery: t("push.lowBattery", { name: "{name}", pct: "{pct}" }),
+      stopped: t("push.stopped", { name: "{name}" }),
+      listenTitle: t("push.listenTitle"),
+      listenText: t("push.listenText", { name: "{name}" }),
+    });
+  }, [lang]);
 
   useEffect(() => {
     cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
@@ -100,10 +114,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const nights = await loadNights();
     const n = nights.find((x) => x.key === nightKey(Date.now() - 60_000));
     if (!n || n.listenedMin < 120) return;
-    const who = cur.babyName.trim() || "Baby";
+    const who = cur.babyName.trim() || t("baby.default");
     const body = n.cries === 0
-      ? `${who}'s night: no crying heard`
-      : `${who}'s night: cried ${n.cries} time${n.cries > 1 ? "s" : ""}, ${fmtDur(n.cryMin)} in total`;
+      ? t("push.night0", { name: who })
+      : t("push.night", { name: who, count: n.cries, dur: fmtDur(n.cryMin) });
     sendPush(to, body, packNight(n, who));
   }, []);
 
@@ -123,8 +137,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (!cur.parents.some((p) => p.token === req.token)) {
         update({ parents: [...cur.parents, { token: req.token, name: req.name, addedAt: Date.now() }] });
       }
-      const who = cur.babyName.trim() || "Baby";
-      sendPush([req.token], `Connected to ${who}'s phone`, { type: "paired", baby: who });
+      const who = cur.babyName.trim() || t("baby.default");
+      sendPush([req.token], t("push.paired", { name: who }), { type: "paired", baby: who });
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
     };
     Notifications.getPresentedNotificationsAsync().then((list) => list.forEach(handle)).catch(() => {});
@@ -144,7 +158,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           const ok = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false);
           if (!ok || cancelled) return;
         }
-        cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim() || "Baby", mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
+        cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim() || t("baby.default"), mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
         cryDetector.start();
         setMicOn(true);
       } else if (!wantMic && cryDetector.isListening()) {
@@ -158,7 +172,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [wantMic, listening, syncEvents]);
 
   const toggleListening = useCallback(async (): Promise<string | null> => {
-    if (!cryDetector) return "Listening for crying works on Android phones.";
+    if (!cryDetector) return t("perm.androidOnly");
     if (listening) {
       setListening(false);
       setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 1200);
@@ -167,7 +181,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const problem = await askMicAndNotifications();
     if (problem) return problem;
     setListening(true);
-    return mRef.current.parents.length ? null : "Pair a parent phone to get alerts.";
+    return mRef.current.parents.length ? null : t("perm.pairToGet");
   }, [listening, syncEvents, sendNightSummary]);
 
   return (

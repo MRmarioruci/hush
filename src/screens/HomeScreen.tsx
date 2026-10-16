@@ -9,37 +9,40 @@ import { Moon } from "../components/Moon";
 import { Card, ICONS, Icon, Screen } from "../components/ui";
 import { TIMERS, fmtLeft, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
+import { fmtTime, useT } from "../i18n";
 
-const greeting = () => {
+const greetingKey = () => {
   const h = new Date().getHours();
-  return h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return h < 5 ? "greet.late" : h < 12 ? "greet.morning" : h < 18 ? "greet.afternoon" : "greet.evening";
 };
-const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 export function HomeScreen() {
   const nav = useNavigation<{ navigate: (n: string) => void }>();
   const sleep = useSleep();
   const mon = useMonitor();
   const [note, setNote] = useState<string | null>(null);
+  const t = useT();
 
   const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === sleep.s.timer));
   const nextTimer = () => sleep.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0]);
-  const timerText = sleep.timerLeft != null ? `Stops in ${fmtLeft(sleep.timerLeft)}` : sleep.s.timer ? `Stop after ${TIMERS[timerIdx][1]}` : "No timer";
+  const timerText = sleep.timerLeft != null
+    ? t("home.stopsIn", { time: fmtLeft(sleep.timerLeft) })
+    : sleep.s.timer ? t("home.stopAfter", { time: t(`timer.${TIMERS[timerIdx][0]}`) }) : t("home.noTimer");
 
   const crying = !!mon.status.crying;
   const monState = !mon.listening
-    ? { label: "Off", color: colors.card2, text: colors.muted }
+    ? { color: colors.card2 }
     : crying
-      ? { label: "Crying", color: colors.rose, text: colors.bg }
-      : { label: "Listening", color: colors.sage, text: colors.bg };
+      ? { color: colors.rose }
+      : { color: colors.sage };
   const parents = mon.m.parents.length;
 
   return (
     <Screen
-      eyebrow={greeting()}
+      eyebrow={t(greetingKey())}
       title="hush"
       right={
-        <Pressable onPress={() => nav.navigate("Settings")} hitSlop={12} style={styles.gear} accessibilityLabel="Settings">
+        <Pressable onPress={() => nav.navigate("Settings")} hitSlop={12} style={styles.gear} accessibilityLabel={t("home.settings")}>
           <Icon d={ICONS.gear} size={22} color={colors.cream} />
         </Pressable>
       }
@@ -56,15 +59,15 @@ export function HomeScreen() {
           onPress={sleep.toggle}
         />
         <View style={{ alignItems: "center", gap: 2, marginTop: -6 }}>
-          <Text style={styles.name}>{sleep.sound.name}</Text>
-          <Text style={styles.sub}>{sleep.playing ? "Playing" : "Tap the moon to play"}</Text>
+          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}</Text>
+          <Text style={styles.sub}>{sleep.playing ? t("home.playing") : t("home.tapMoon")}</Text>
         </View>
 
         <View style={styles.soundRow}>
           {SOUNDS.map((x) => {
             const on = x.id === sleep.soundId;
             return (
-              <Pressable key={x.id} onPress={() => sleep.set({ sound: x.id })} style={styles.soundItem} accessibilityLabel={x.name}>
+              <Pressable key={x.id} onPress={() => sleep.set({ sound: x.id })} style={styles.soundItem} accessibilityLabel={t(`sound.${x.id}`)}>
                 <View style={[styles.soundIcon, on && { backgroundColor: colors.peach }]}>
                   <SvgXml
                     width={22}
@@ -72,7 +75,7 @@ export function HomeScreen() {
                     xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`}
                   />
                 </View>
-                <Text style={[styles.soundName, on && { color: colors.cream }]}>{x.name}</Text>
+                <Text style={[styles.soundName, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
               </Pressable>
             );
           })}
@@ -86,7 +89,9 @@ export function HomeScreen() {
           <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
             <View style={[styles.levelDot, { backgroundColor: sleep.level != null && sleep.level > LIMIT_DB + 0.5 ? colors.rose : colors.sage }]} />
             <Text style={styles.quickText}>
-              {sleep.level == null ? "Volume off" : `${sleep.s.mode === "smart" ? "Smart · " : ""}≈${Math.round(Math.max(20, sleep.level))} dB`}
+              {sleep.level == null
+                ? t("home.volumeOff")
+                : t(sleep.s.mode === "smart" ? "home.smartLevel" : "home.level", { db: Math.round(Math.max(20, sleep.level)) })}
             </Text>
           </Pressable>
         </View>
@@ -105,16 +110,16 @@ export function HomeScreen() {
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.monTitle}>
-                {mon.m.role === "nursery" ? (mon.listening ? `Listening for ${mon.baby}` : "Baby monitor") : mon.m.role === "parent" ? "Cry alerts" : "Baby monitor"}
+                {mon.m.role === "nursery" ? (mon.listening ? t("home.listeningFor", { name: mon.baby }) : t("home.babyMonitor")) : mon.m.role === "parent" ? t("home.cryAlerts") : t("home.babyMonitor")}
               </Text>
               <Text style={styles.sub}>
                 {mon.m.role == null
-                  ? "Use a second phone to hear when the baby cries"
+                  ? t("home.useSecond")
                   : mon.m.role === "parent"
-                    ? mon.m.pairedWith ? `On · connected to ${mon.m.pairedWith}'s phone` : "Not connected yet"
-                    : !parents ? "Connect a parent's phone first"
-                    : mon.listening ? (crying ? `${mon.baby} is crying` : mon.lastCry ? `Last alert ${fmtTime(mon.lastCry)}` : "Quiet so far")
-                    : "Off"}
+                    ? mon.m.pairedWith ? t("home.onConnected", { name: mon.m.pairedWith }) : t("home.notConnected")
+                    : !parents ? t("home.connectFirst")
+                    : mon.listening ? (crying ? t("orb.crying", { name: mon.baby }) : mon.lastCry ? t("nursery.lastAlert", { time: fmtTime(mon.lastCry) }) : t("nursery.quiet"))
+                    : t("home.off")}
               </Text>
             </View>
             {mon.m.role === "nursery" && parents > 0 ? (
@@ -123,7 +128,7 @@ export function HomeScreen() {
                 onValueChange={async () => setNote(await mon.toggleListening())}
                 trackColor={{ false: colors.card2, true: colors.sage }}
                 thumbColor={colors.cream}
-                accessibilityLabel="Listen for crying"
+                accessibilityLabel={t("orb.a11y")}
               />
             ) : (
               <Icon d={ICONS.chevron} size={20} />

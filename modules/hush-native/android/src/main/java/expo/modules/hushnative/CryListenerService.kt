@@ -31,8 +31,8 @@ class CryListenerService : Service() {
     val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this)
     val notification = builder
       .setSmallIcon(applicationInfo.icon)
-      .setContentTitle("hush is listening")
-      .setContentText("Paired phones get an alert if ${CryEngine.babyName} cries")
+      .setContentTitle(CryEngine.txtListenTitle)
+      .setContentText(CryEngine.fill(CryEngine.txtListenText))
       .setOngoing(true)
       .setContentIntent(open)
       .build()
@@ -47,6 +47,8 @@ class CryListenerService : Service() {
   }
 
   override fun onDestroy() {
+    // The system ended the service (low memory, battery saver) rather than the user.
+    if (CryEngine.running) CryEngine.reportUnexpectedStop()
     CryEngine.stop()
     super.onDestroy()
   }

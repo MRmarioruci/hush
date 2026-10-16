@@ -18,6 +18,9 @@ type CryNative = {
   stop(): boolean;
   isListening(): boolean;
   takeEvents(): string;
+  setTexts(texts: Record<string, string>): void;
+  isBatteryExempt(): boolean;
+  requestBatteryExempt(): boolean;
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
@@ -43,6 +46,9 @@ export const cryDetector = cry
       stop: () => cry.stop(),
       isListening: () => cry.isListening(),
       takeEvents: () => cry.takeEvents(),
+      setTexts: (texts: Record<string, string>) => cry.setTexts(texts),
+      isBatteryExempt: () => cry.isBatteryExempt(),
+      requestBatteryExempt: () => cry.requestBatteryExempt(),
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),
       onStatus: (cb: (s: CryStatus) => void) => cry.addListener("onStatus", cb),
       onCry: (cb: (e: { at: number; first: boolean }) => void) => cry.addListener("onCry", cb),

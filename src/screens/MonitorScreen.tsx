@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
@@ -10,14 +10,14 @@ import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
-
-const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+import { fmtTime, heardLabel, t, useT } from "../i18n";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
 const X = '<path d="M6 6l12 12M18 6 6 18"/>';
 const SEND = '<path d="M4 12 20 4l-6 16-3-7z"/>';
 
 export function MonitorScreen() {
   const { m, update, listening, toggleListening, baby } = useMonitor();
+  useT();
 
   const setRole = async (role: Role | null) => {
     if (role !== "nursery" && listening) await toggleListening(); // this phone stops listening if it's no longer the nursery phone
@@ -25,7 +25,7 @@ export function MonitorScreen() {
   };
 
   return (
-    <Screen title="Monitor">
+    <Screen title={t("monitor.title")}>
       {m.role == null ? (
         <ChooseRole baby={baby} onPick={setRole} />
       ) : (
@@ -34,7 +34,7 @@ export function MonitorScreen() {
           {m.role === "nursery" ? <NurseryPhone /> : <ParentPhone />}
         </>
       )}
-      <Text style={styles.foot}>A helper, not a medical device.</Text>
+      <Text style={styles.foot}>{t("monitor.helper")}</Text>
     </Screen>
   );
 }
@@ -46,18 +46,18 @@ function ChooseRole({ baby, onPick }: { baby: string; onPick: (r: Role) => void 
     <>
       <MonitorHero baby={baby} />
       <View style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
-        <Text style={styles.lead}>Hear {baby} from anywhere</Text>
-        <Text style={styles.leadSub}>One phone stays in {baby}'s room and listens. Yours gets a notification when {baby} cries.</Text>
+        <Text style={styles.lead}>{t("role.lead", { name: baby })}</Text>
+        <Text style={styles.leadSub}>{t("role.leadSub", { name: baby })}</Text>
       </View>
-      <Text style={styles.ask}>What will this phone do?</Text>
+      <Text style={styles.ask}>{t("role.ask")}</Text>
       <RoleCard
         art={ICONS.crib}
         tone={colors.sage}
-        title={`Stay in ${baby}'s room`}
-        sub="Listens for crying"
+        title={t("role.nursery", { name: baby })}
+        sub={t("role.nurserySub")}
         onPress={() => onPick("nursery")}
       />
-      <RoleCard art={ICONS.bell} tone={colors.peach} title="Get the alerts" sub="Notifies you when the baby cries" onPress={() => onPick("parent")} />
+      <RoleCard art={ICONS.bell} tone={colors.peach} title={t("role.parent")} sub={t("role.parentSub")} onPress={() => onPick("parent")} />
     </>
   );
 }
@@ -86,11 +86,11 @@ function RoleBar({ role, baby, onChange }: { role: Role; baby: string; onChange:
         <Icon d={nursery ? ICONS.crib : ICONS.bell} size={18} color={colors.bg} width={2} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.roleBarKicker}>This phone</Text>
-        <Text style={styles.roleBarTitle}>{nursery ? `Stays in ${baby}'s room` : "Gets the alerts"}</Text>
+        <Text style={styles.roleBarKicker}>{t("role.thisPhone")}</Text>
+        <Text style={styles.roleBarTitle}>{nursery ? t("role.staysIn", { name: baby }) : t("role.gets")}</Text>
       </View>
       <Pressable onPress={onChange} hitSlop={10}>
-        <Text style={styles.change}>Change</Text>
+        <Text style={styles.change}>{t("common.change")}</Text>
       </Pressable>
     </View>
   );
@@ -111,16 +111,16 @@ function NurseryPhone() {
   useEffect(() => {
     if (m.parents.length > count.current) {
       setShowCode(false);
-      setMsg(`${m.parents[m.parents.length - 1].name} connected`);
+      setMsg(t("nursery.connected", { name: m.parents[m.parents.length - 1].name }));
     }
     count.current = m.parents.length;
   }, [m.parents]);
 
   const test = async () => {
     if (!cryDetector || !tokens.length) return;
-    setMsg("Sending…");
-    const r = await cryDetector.sendAlert(tokens, `Test alert from ${baby}'s phone`, "test");
-    setMsg(r.ok ? "Test sent" : "Couldn't send. Check the internet connection.");
+    setMsg(t("nursery.sending"));
+    const r = await cryDetector.sendAlert(tokens, t("nursery.testBody", { name: baby }), "test");
+    setMsg(r.ok ? t("nursery.testSent") : t("nursery.testFail"));
   };
 
   return (
@@ -131,23 +131,24 @@ function NurseryPhone() {
         <View style={styles.orbWrap}>
           <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={async () => setMsg(await toggleListening())} baby={baby} />
           <Text style={styles.orbMeta}>
-            {listening ? (lastCry ? `Last alert ${fmtTime(lastCry)}` : "Quiet so far") : "Keep it near the crib. Works with the screen locked."}
+            {listening ? (lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")) : t("nursery.keepNear")}
           </Text>
         </View>
       )}
 
       {paired && listening && !showCode && <Hearing />}
+      {paired && !showCode && <KeepAwake />}
 
       {paired && (
         <Card style={{ gap: 4 }}>
-          <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>Test</Text></Pressable>}>
-            Sends alerts to
+          <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>{t("nursery.test")}</Text></Pressable>}>
+            {t("nursery.sendsTo")}
           </Label>
           {m.parents.map((p) => (
             <View key={p.token} style={styles.person}>
               <View style={styles.avatar}><Text style={styles.avatarText}>{p.name.slice(0, 1).toUpperCase()}</Text></View>
               <Text style={styles.personName}>{p.name}</Text>
-              <Pressable onPress={() => update({ parents: m.parents.filter((x) => x.token !== p.token) })} hitSlop={12} accessibilityLabel={`Remove ${p.name}`}>
+              <Pressable onPress={() => update({ parents: m.parents.filter((x) => x.token !== p.token) })} hitSlop={12} accessibilityLabel={t("nursery.remove", { name: p.name })}>
                 <Icon d={X} size={18} />
               </Pressable>
             </View>
@@ -155,7 +156,7 @@ function NurseryPhone() {
           {!showCode && (
             <Pressable onPress={() => setShowCode(true)} style={styles.person}>
               <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
-              <Text style={[styles.personName, { color: colors.peach }]}>Add another phone</Text>
+              <Text style={[styles.personName, { color: colors.peach }]}>{t("nursery.addAnother")}</Text>
             </Pressable>
           )}
         </Card>
@@ -164,22 +165,20 @@ function NurseryPhone() {
       {paired && (
         <Card style={{ gap: 16 }}>
           <View style={{ gap: 10 }}>
-            <Label>Alert after</Label>
+            <Label>{t("nursery.alertAfter")}</Label>
             <Segmented
-              options={ALERT_AFTER.map(([v, l]) => ({ value: v, label: l }))}
+              options={ALERT_AFTER.map(([v]) => ({ value: v, label: t(`after.${v}`) }))}
               value={m.alertAfter}
               onChange={(alertAfter) => update({ alertAfter })}
             />
             <Text style={styles.roleSub}>
-              {m.alertAfter === 0
-                ? "As soon as it hears crying."
-                : `Only if ${baby} keeps crying for ${m.alertAfter === 60 ? "a minute" : "10 seconds"}. Short fusses are ignored.`}
+              {m.alertAfter === 0 ? t("nursery.afterNow") : t(m.alertAfter === 60 ? "nursery.after60" : "nursery.after10", { name: baby })}
             </Text>
           </View>
           <View style={{ gap: 10 }}>
-            <Label>Sensitivity</Label>
+            <Label>{t("nursery.sensitivity")}</Label>
             <Segmented
-              options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))}
+              options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: t(`sens.${v}`) }))}
               value={m.sensitivity}
               onChange={(sensitivity) => update({ sensitivity })}
             />
@@ -199,25 +198,45 @@ function PairCodeCard({ baby, onCancel }: { baby: string; onCancel?: () => void 
   useEffect(() => { getMyToken().then(setToken, (e) => setErr(e.message)); }, []);
   return (
     <Card style={{ alignItems: "center", gap: 14 }}>
-      <Text style={styles.stepTitle}>Scan this with your phone</Text>
+      <Text style={styles.stepTitle}>{t("pair.scanThis")}</Text>
       <View style={styles.qr}>
         {token ? (
           <QRCode value={makePairCode(token, baby)} size={188} backgroundColor={colors.cream} color={colors.bg} />
         ) : (
-          <Text style={styles.qrWait}>{err ?? "Getting ready…"}</Text>
+          <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>
         )}
       </View>
       <View style={{ gap: 10, alignSelf: "stretch" }}>
-        <Step n={1} text="Open hush on your phone" />
-        <Step n={2} text={'Monitor → "Get the alerts" → Scan'} />
+        <Step n={1} text={t("pair.step1")} />
+        <Step n={2} text={t("pair.step2")} />
       </View>
-      <Text style={styles.roleSub}>Keep this screen open until it connects.</Text>
+      <Text style={styles.roleSub}>{t("pair.keepOpen")}</Text>
       {onCancel && (
         <Pressable onPress={onCancel} hitSlop={10}>
-          <Text style={styles.change}>Cancel</Text>
+          <Text style={styles.change}>{t("common.cancel")}</Text>
         </Pressable>
       )}
     </Card>
+  );
+}
+
+/** Reminders that keep the baby's phone listening all night: battery exemption and charging. */
+function KeepAwake() {
+  const [exempt, setExempt] = useState(() => cryDetector?.isBatteryExempt() ?? true);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (st) => st === "active" && setExempt(cryDetector?.isBatteryExempt() ?? true));
+    return () => sub.remove();
+  }, []);
+  return (
+    <View style={styles.keep}>
+      <Icon d='<path d="M13 3 6 14h5l-1 7 7-11h-5z"/>' size={18} color={exempt ? colors.moon : colors.rose} />
+      <Text style={styles.keepText}>{exempt ? t("nursery.plugIn") : t("nursery.battery")}</Text>
+      {!exempt && (
+        <Pressable onPress={() => cryDetector?.requestBatteryExempt()} hitSlop={8} style={styles.keepBtn}>
+          <Text style={styles.keepBtnText}>{t("nursery.batteryFix")}</Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -227,26 +246,23 @@ function Hearing() {
   const threshold = THRESHOLDS[m.sensitivity];
   const score = status.score ?? 0;
   const pct = Math.min(100, (score / Math.max(threshold * 2, 0.01)) * 100); // the line sits halfway
-  const label = status.top != null && (status.topScore ?? 0) > 0.1 ? YAMNET_LABELS[status.top] : "Quiet";
+  const label = status.top != null && (status.topScore ?? 0) > 0.1 ? heardLabel(status.top, YAMNET_LABELS[status.top]) : t("hear.quiet");
   const hot = score >= threshold;
   return (
     <Card style={{ gap: 12 }}>
-      <Label right={<Text style={styles.hearingNow} numberOfLines={1}>{label}</Text>}>Hearing</Label>
+      <Label right={<Text style={styles.hearingNow} numberOfLines={1}>{label}</Text>}>{t("hear.title")}</Label>
       <View>
         <View style={styles.meter}>
           <View style={[styles.meterFill, { width: `${pct}%`, backgroundColor: hot ? colors.rose : colors.sage }]} />
           <View style={styles.meterLine} />
         </View>
         <View style={styles.meterLabels}>
-          <Text style={styles.meterText}>Calm</Text>
-          <Text style={styles.meterText}>Crying</Text>
+          <Text style={styles.meterText}>{t("hear.calm")}</Text>
+          <Text style={styles.meterText}>{t("hear.crying")}</Text>
         </View>
       </View>
       <Text style={styles.roleSub}>
-        {m.alertAfter === 0
-          ? "Alerts when it stays past the line for about 2 seconds."
-          : `Alerts when crying keeps going for ${m.alertAfter === 60 ? "a minute" : "10 seconds"}.`}{" "}
-        To test, play a video of a baby crying near this phone.
+        {t(m.alertAfter === 0 ? "hear.now" : m.alertAfter === 60 ? "hear.after60" : "hear.after10")} {t("hear.test")}
       </Text>
     </Card>
   );
@@ -305,14 +321,14 @@ function Orb({ listening, crying, score, onPress, baby }: { listening: boolean; 
         onPressOut={() => Animated.spring(press, { toValue: 1, useNativeDriver: true, friction: 4 }).start()}
         accessibilityRole="switch"
         accessibilityState={{ checked: listening }}
-        accessibilityLabel="Listen for crying"
+        accessibilityLabel={t("orb.a11y")}
       >
         <Animated.View style={[styles.orb, { backgroundColor: tone, transform: [{ scale: press }] }]}>
           <Icon d={ICONS.mic} size={30} color={listening ? colors.bg : colors.cream} width={1.9} />
           <Text style={[styles.orbTitle, listening && { color: colors.bg }]}>
-            {crying ? `${baby} is crying` : listening ? "Listening" : "Start listening"}
+            {crying ? t("orb.crying", { name: baby }) : listening ? t("orb.listening") : t("orb.start")}
           </Text>
-          {listening && <Text style={styles.orbSub}>Tap to stop</Text>}
+          {listening && <Text style={styles.orbSub}>{t("orb.tapStop")}</Text>}
         </Animated.View>
       </Pressable>
     </View>
@@ -338,12 +354,12 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
             }}
           />
         ) : (
-          <Text style={styles.scanText}>Allow the camera to scan</Text>
+          <Text style={styles.scanText}>{t("scan.allowCam")}</Text>
         )}
         <View style={styles.scanFrame} pointerEvents="none" />
-        <Text style={styles.scanHint}>Scan the code on the baby's phone</Text>
+        <Text style={styles.scanHint}>{t("scan.hint")}</Text>
         <Pressable onPress={onClose} style={styles.scanClose}>
-          <Text style={styles.scanCloseText}>Cancel</Text>
+          <Text style={styles.scanCloseText}>{t("common.cancel")}</Text>
         </Pressable>
       </View>
     </Modal>
@@ -384,7 +400,7 @@ function ParentPhone() {
     setScanning(false);
     setErr(null);
     const code = readPairCode(raw);
-    if (!code) return setErr("That's not a hush code. Scan the code on the baby's phone.");
+    if (!code) return setErr(t("parent.notCode"));
     let mine: string;
     try {
       mine = await getMyToken();
@@ -392,7 +408,7 @@ function ParentPhone() {
       return setErr((e as Error).message);
     }
     setState("connecting");
-    const ok = await sendPush([code.token], `${m.myName.trim() || "A parent"} connected`, { type: "pair-request", token: mine, name: m.myName.trim() || "Parent" });
+    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim() || t("parent.parent") });
     if (!ok) { setState("failed"); return; }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setState((s) => (s === "connecting" ? "failed" : s)), 20000);
@@ -406,47 +422,47 @@ function ParentPhone() {
         <Card style={styles.connected}>
           <View style={styles.checkCircle}><Icon d={ICONS.check} size={22} color={colors.bg} width={2.4} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.roleTitle}>Connected to {m.pairedWith}'s phone</Text>
-            <Text style={styles.roleSub}>You'll get a notification when {m.pairedWith} cries</Text>
+            <Text style={styles.roleTitle}>{t("parent.connectedTo", { name: m.pairedWith ?? "" })}</Text>
+            <Text style={styles.roleSub}>{t("parent.willNotify", { name: m.pairedWith ?? "" })}</Text>
           </View>
         </Card>
       ) : (
         <Card style={{ gap: 14 }}>
           <Text style={styles.stepTitle}>
-            {state === "connecting" ? "Connecting…" : state === "failed" ? "Couldn't connect" : "Connect to the baby's phone"}
+            {state === "connecting" ? t("parent.connecting") : state === "failed" ? t("parent.failed") : t("parent.connectTitle")}
           </Text>
           {state === "failed" ? (
-            <Text style={[styles.roleSub, { textAlign: "center" }]}>Make sure hush is open on the baby's phone with its code showing, then scan again.</Text>
+            <Text style={[styles.roleSub, { textAlign: "center" }]}>{t("parent.failedHint")}</Text>
           ) : (
             <>
-              <Step n={1} text={'On the baby\'s phone, open Monitor and pick "Stay in the baby\'s room"'} />
-              <Step n={2} text="Scan the code it shows" />
+              <Step n={1} text={t("parent.step1")} />
+              <Step n={2} text={t("parent.step2")} />
             </>
           )}
           <TextInput
             value={m.myName}
             onChangeText={(myName) => update({ myName })}
-            placeholder="Your name (shown on the baby's phone)"
+            placeholder={t("parent.yourName")}
             placeholderTextColor={colors.muted}
             style={styles.input}
             maxLength={30}
           />
           <Pressable onPress={() => setScanning(true)} style={[styles.primary, state === "connecting" && { opacity: 0.5 }]} disabled={state === "connecting"}>
-            <Text style={styles.primaryText}>Scan code</Text>
+            <Text style={styles.primaryText}>{t("parent.scan")}</Text>
           </Pressable>
         </Card>
       )}
       {connected && (
         <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
-          <Text style={styles.change}>Connect another baby's phone</Text>
+          <Text style={styles.change}>{t("parent.another")}</Text>
         </Pressable>
       )}
       {err && <Text style={styles.msg}>{err}</Text>}
 
       <Card style={{ gap: 4 }}>
-        <Label>Alerts</Label>
+        <Label>{t("parent.alerts")}</Label>
         {alerts.length === 0 ? (
-          <Text style={styles.empty}>None yet</Text>
+          <Text style={styles.empty}>{t("parent.none")}</Text>
         ) : (
           alerts.slice(0, 8).map((a) => (
             <View key={a.id} style={styles.alertRow}>
@@ -470,6 +486,10 @@ const styles = StyleSheet.create({
   lead: { fontFamily: fonts.displayBold, fontSize: 24, color: colors.cream, textAlign: "center" },
   leadSub: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: colors.muted, textAlign: "center", paddingHorizontal: 10 },
   ask: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, letterSpacing: 0.6, textTransform: "uppercase", marginLeft: 6, marginTop: 6 },
+  keep: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14 },
+  keepText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: colors.muted },
+  keepBtn: { backgroundColor: colors.peach, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 7 },
+  keepBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.bg },
   hearingNow: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, maxWidth: 200 },
   meter: { height: 10, borderRadius: 99, backgroundColor: colors.card2, overflow: "hidden" },
   meterFill: { height: 10, borderRadius: 99 },

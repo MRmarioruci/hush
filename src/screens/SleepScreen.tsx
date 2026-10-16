@@ -11,39 +11,41 @@ import { LIMIT_DB } from "../safety";
 import { Slider } from "../components/Slider";
 import { Card, Chip, Label, Pill, Screen } from "../components/ui";
 import { TIMERS, fmtDist, fmtLeft, useSleep } from "../state/sleep";
+import { fmtTime, useT } from "../i18n";
 
 export function SleepScreen() {
   const z = useSleep();
   const { s } = z;
+  const t = useT();
 
   const tag =
-    s.dist < 1 ? { t: "A little close", c: colors.rose }
-    : s.dist < 2 ? { t: "Okay, keep it soft", c: colors.moon }
-    : { t: "Lovely spot", c: colors.sage };
+    s.dist < 1 ? { t: t("sounds.tagClose"), c: colors.rose }
+    : s.dist < 2 ? { t: t("sounds.tagSoft"), c: colors.moon }
+    : { t: t("sounds.tagLovely"), c: colors.sage };
   const volLabel = z.dev
-    ? z.dev.step === 0 ? "Off" : z.dev.step >= z.ceiling! ? "Max safe" : `${Math.round((z.dev.step / z.ceiling!) * 100)}%`
-    : s.vol === 100 ? "Max safe" : `${s.vol}%`;
+    ? z.dev.step === 0 ? t("sounds.volOff") : z.dev.step >= z.ceiling! ? t("sounds.maxSafe") : `${Math.round((z.dev.step / z.ceiling!) * 100)}%`
+    : s.vol === 100 ? t("sounds.maxSafe") : `${s.vol}%`;
   const pos = (x: number) => Math.max(0, Math.min(100, ((x - 20) / 60) * 100));
 
   return (
-    <Screen title="Sounds">
+    <Screen title={t("sounds.title")}>
       {/* now playing */}
-      <Pressable onPress={z.toggle} style={({ pressed }) => [styles.now, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityLabel={z.playing ? "Pause" : "Play"}>
+      <Pressable onPress={z.toggle} style={({ pressed }) => [styles.now, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityLabel={z.playing ? t("common.pause") : t("common.play")}>
         <View style={styles.playBtn}>
           <Svg width={22} height={22} viewBox="0 0 24 24">
             <Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} />
           </Svg>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.nowName}>{z.sound.name}</Text>
+          <Text style={styles.nowName}>{t(`sound.${z.soundId}`)}</Text>
           <Text style={styles.nowSub}>
-            {z.playing ? (z.timerLeft != null ? `Playing · stops in ${fmtLeft(z.timerLeft)}` : "Playing") : z.sound.sub}
+            {z.playing ? (z.timerLeft != null ? t("sounds.playingStops", { time: fmtLeft(z.timerLeft) }) : t("home.playing")) : t(`sound.${z.soundId}.sub`)}
           </Text>
         </View>
       </Pressable>
 
       <Card>
-        <Label>Sound</Label>
+        <Label>{t("sounds.sound")}</Label>
         <View style={styles.grid}>
           {SOUNDS.map((x) => {
             const on = x.id === z.soundId;
@@ -60,7 +62,7 @@ export function SleepScreen() {
                   height={26}
                   xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`}
                 />
-                <Text style={[styles.tileText, on && { color: colors.bg }]}>{x.name}</Text>
+                <Text style={[styles.tileText, on && { color: colors.bg }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
               </Pressable>
             );
           })}
@@ -70,29 +72,29 @@ export function SleepScreen() {
       <SmartCard />
 
       <Card>
-        <Label>Stop after</Label>
+        <Label>{t("sounds.stopAfter")}</Label>
         <View style={styles.chips}>
-          {TIMERS.map(([m, l]) => <Chip key={m} grow label={l} on={s.timer === m} onPress={() => z.setTimer(m)} />)}
+          {TIMERS.map(([m]) => <Chip key={m} grow label={t(`timer.${m}`)} on={s.timer === m} onPress={() => z.setTimer(m)} />)}
         </View>
-        <Text style={styles.hint}>Fades out gently over the last minute.</Text>
+        <Text style={styles.hint}>{t("sounds.fades")}</Text>
       </Card>
 
       <Card>
         <View>
-          <Label right={<Text style={styles.val}>{fmtDist(s.dist, s.unit)}</Text>}>Phone to crib</Label>
-          <Slider label="Distance from phone to crib" value={s.dist} min={0.3} max={4} step={0.1} onChange={(v) => z.set({ dist: v })} />
+          <Label right={<Text style={styles.val}>{fmtDist(s.dist, s.unit)}</Text>}>{t("sounds.phoneToCrib")}</Label>
+          <Slider label={t("sounds.phoneToCrib")} value={s.dist} min={0.3} max={4} step={0.1} onChange={(v) => z.set({ dist: v })} />
         </View>
         <Pill label={tag.t} color={tag.c} />
         <View style={styles.levels}>
           <View style={styles.lvl}>
-            <Text style={styles.lvlLabel}>{z.dev ? "At the crib now" : "At the crib, at most"}</Text>
+            <Text style={styles.lvlLabel}>{z.dev ? t("sounds.atCribNow") : t("sounds.atCribMost")}</Text>
             <Text style={[styles.lvlNum, { color: colors.sage }]}>
               {z.level == null ? "–" : Math.round(Math.max(20, z.level))}
               <Text style={styles.lvlUnit}> dB</Text>
             </Text>
           </View>
           <View style={styles.lvl}>
-            <Text style={styles.lvlLabel}>Safe limit</Text>
+            <Text style={styles.lvlLabel}>{t("sounds.safeLimit")}</Text>
             <Text style={styles.lvlNum}>
               {LIMIT_DB}
               <Text style={styles.lvlUnit}> dB</Text>
@@ -104,18 +106,16 @@ export function SleepScreen() {
           <View style={[styles.gaugeMark, { left: `${pos(LIMIT_DB)}%` }]} />
         </View>
         <View>
-          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? "Highest level" : z.dev ? "Phone volume" : "Volume"}</Label>
+          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? t("sounds.highest") : z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}</Label>
           {z.dev ? (
-            <Slider label="Phone volume" value={z.dev.step} min={0} max={z.dev.max} limit={z.ceiling!} onChange={z.setStep} />
+            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} limit={z.ceiling!} onChange={z.setStep} />
           ) : (
-            <Slider label="Volume" value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
+            <Slider label={t("sounds.volume")} value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
           )}
         </View>
         <Text style={styles.hint}>
-          {z.dev
-            ? `While hush plays, your phone's volume can't go past the line, so it stays under ${LIMIT_DB} dB at the crib.`
-            : `Volume is capped so it can't pass ${LIMIT_DB} dB at the crib, even with your phone turned all the way up.`}
-          {s.dist < 2 ? ` Moving the phone to ${fmtDist(2, s.unit)} or more lets it play fuller.` : ""}
+          {t(z.dev ? "sounds.hintDev" : "sounds.hintCap", { db: LIMIT_DB })}
+          {s.dist < 2 ? " " + t("sounds.moveFurther", { dist: fmtDist(2, s.unit) }) : ""}
         </Text>
       </Card>
     </Screen>
@@ -160,6 +160,7 @@ function SmartCard() {
   const z = useSleep();
   const mon = useMonitor();
   const smart = z.s.mode === "smart";
+  const t = useT();
   const [micMsg, setMicMsg] = useState<string | null>(null);
   const [micOk, setMicOk] = useState(true);
   useEffect(() => {
@@ -169,13 +170,13 @@ function SmartCard() {
 
   const phaseText = (() => {
     const v = z.smart;
-    if (!v) return `Starts at ${SMART.startDb} dB, then eases to ${SMART.sleepDb} dB after ${SMART.holdMin} min`;
-    const at = v.nextChange ? ` until ${new Date(v.nextChange).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+    if (!v) return t("smart.idle", { start: SMART.startDb, sleep: SMART.sleepDb, min: SMART.holdMin });
+    const at = v.nextChange ? " " + t("smart.until", { time: fmtTime(v.nextChange) }) : "";
     switch (v.phase) {
-      case "settling": return `Helping ${mon.baby} fall asleep${at}`;
-      case "easing": return `Getting quieter${at}`;
-      case "sleeping": return `Quiet level for the night`;
-      case "calming": return `${mon.baby} cried. Louder for a while${at}`;
+      case "settling": return t("smart.settling", { name: mon.baby }) + at;
+      case "easing": return t("smart.easing") + at;
+      case "sleeping": return t("smart.sleeping");
+      case "calming": return t("smart.calming", { name: mon.baby }) + at;
     }
   })();
 
@@ -184,7 +185,7 @@ function SmartCard() {
       <View style={styles.modeRow}>
         {(["smart", "manual"] as const).map((m) => (
           <Pressable key={m} onPress={() => z.set({ mode: m })} style={[styles.modeItem, z.s.mode === m && styles.modeOn]}>
-            <Text style={[styles.modeText, z.s.mode === m && { color: colors.bg }]}>{m === "smart" ? "Smart" : "Manual"}</Text>
+            <Text style={[styles.modeText, z.s.mode === m && { color: colors.bg }]}>{m === "smart" ? t("smart.smart") : t("smart.manual")}</Text>
           </Pressable>
         ))}
       </View>
@@ -193,14 +194,14 @@ function SmartCard() {
           <Curve phase={z.smart?.phase ?? null} startedAt={null} />
           <View style={styles.smartRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.smartTitle}>{z.smart ? `${Math.round(z.smart.db)} dB at the crib` : "Smart volume"}</Text>
+              <Text style={styles.smartTitle}>{z.smart ? t("smart.atCrib", { db: Math.round(z.smart.db) }) : t("smart.title")}</Text>
               <Text style={styles.hint}>{phaseText}</Text>
             </View>
           </View>
           <View style={styles.smartRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Respond to crying</Text>
-              <Text style={styles.hint}>Turns back up when it hears {mon.baby} cry</Text>
+              <Text style={styles.rowLabel}>{t("smart.respond")}</Text>
+              <Text style={styles.hint}>{t("smart.respondSub", { name: mon.baby })}</Text>
             </View>
             <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
           </View>
@@ -213,13 +214,13 @@ function SmartCard() {
               }}
               style={styles.allow}
             >
-              <Text style={styles.allowText}>Allow microphone</Text>
+              <Text style={styles.allowText}>{t("smart.allowMic")}</Text>
             </Pressable>
           )}
           {micMsg && <Text style={styles.hint}>{micMsg}</Text>}
         </>
       ) : (
-        <Text style={styles.hint}>Stays at the level you set below.</Text>
+        <Text style={styles.hint}>{t("smart.manualHint")}</Text>
       )}
     </Card>
   );
@@ -227,6 +228,7 @@ function SmartCard() {
 
 /** The smart volume plan as a line: high while settling, easing down, a bump when crying. */
 function Curve({ phase }: { phase: string | null; startedAt: null }) {
+  const t = useT();
   const W = 300, H = 64;
   const y = (db: number) => 8 + ((SMART.startDb - db) / (SMART.startDb - SMART.sleepDb)) * (H - 22);
   const x = (min: number) => (min / 120) * W;
@@ -241,9 +243,9 @@ function Curve({ phase }: { phase: string | null; startedAt: null }) {
         {dot && <Circle cx={dot[0]} cy={dot[1]} r={5} fill={colors.cream} />}
       </Svg>
       <View style={styles.curveAxis}>
-        <Text style={styles.curveText}>Falling asleep</Text>
-        <Text style={styles.curveText}>Cry</Text>
-        <Text style={styles.curveText}>Rest of the night</Text>
+        <Text style={styles.curveText}>{t("smart.curveAsleep")}</Text>
+        <Text style={styles.curveText}>{t("smart.curveCry")}</Text>
+        <Text style={styles.curveText}>{t("smart.curveRest")}</Text>
       </View>
     </View>
   );
