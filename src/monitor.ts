@@ -9,7 +9,7 @@ import { getLang, t, type Lang } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
 /** What the parent sees about the baby's room, reported by the baby's phone. */
-export type Room = { playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number };
+export type Room = { playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number; battery?: number; charging?: boolean };
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";
 export type MonitorSettings = {
@@ -158,7 +158,8 @@ export async function setupAlertChannel() {
 
 /* ---------- "listen in" clips (Firebase Storage, simple REST upload) ---------- */
 
-const bucket = () => (Constants.expoConfig?.extra as { storageBucket?: string } | undefined)?.storageBucket;
+export const storageBucket = () => (Constants.expoConfig?.extra as { storageBucket?: string } | undefined)?.storageBucket;
+const bucket = storageBucket;
 export const CLIP_SECONDS = 10;
 /** Where a new clip goes: an unguessable name, deleted by the bucket's lifecycle rule after a day. */
 export function newClip(): { upload: string; download: string } | null {

@@ -434,29 +434,61 @@ function useRemote() {
 }
 type Remote = ReturnType<typeof useRemote>;
 
-/** The baby's room at a glance: is it listening, last update, last alert. */
+const ago = (ms: number) => {
+  const min = Math.round((Date.now() - ms) / 60_000);
+  return min < 1 ? t("ago.now") : min < 60 ? t("ago.min", { n: min }) : fmtTime(ms);
+};
+const BATTERY = '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 11v2"/>';
+const NOISE = '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>';
+
+/** The baby's phone at a glance: listening or not, white noise, battery, and how fresh that is. */
 function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }) {
   const { m } = useMonitor();
   const room = r.room;
-  const on = !!room?.listening;
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  const checking = r.waiting && r.lastCmd === "status";
+  // It reports every 10 minutes while listening; much longer than that means something's wrong.
+  const stale = !!room?.listening && Date.now() - room.at > 25 * 60_000;
   const recentCry = lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
+  const on = !!room?.listening && !stale;
+  const tone = recentCry ? colors.rose : stale ? colors.peach : on ? colors.sage : colors.muted;
   return (
-    <Card style={styles.hero}>
-      <View style={[styles.heroIcon, on && { backgroundColor: colors.sage }, recentCry && { backgroundColor: colors.rose }]}>
-        <Icon d={ICONS.crib} size={28} color={on || recentCry ? colors.bg : colors.muted} width={2} />
+    <Card style={{ gap: 14 }}>
+      <View style={styles.hero}>
+        <View style={[styles.heroIcon, (on || recentCry || stale) && { backgroundColor: tone }]}>
+          <Icon d={ICONS.crib} size={28} color={on || recentCry || stale ? colors.bg : colors.muted} width={2} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.heroTitle} numberOfLines={1}>{t("remote.phoneOf", { name: babyLabel(m.pairedWith) })}</Text>
+          <Text style={[styles.heroStatus, { color: tone }]} numberOfLines={2}>
+            {recentCry ? lastAlert!.body
+              : !room ? (checking ? t("remote.waiting") : t("remote.noState"))
+              : stale ? t("remote.stale", { time: fmtTime(room.at) })
+              : on ? t("remote.listening") : t("remote.notListening")}
+          </Text>
+        </View>
+        <Pressable onPress={() => r.send("status")} hitSlop={10} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
+          {checking ? <ActivityIndicator color={colors.cream} size="small" /> : <Icon d={REFRESH} size={18} color={colors.cream} width={2} />}
+        </Pressable>
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.heroTitle} numberOfLines={1}>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Text>
-        <Text style={[styles.heroStatus, { color: recentCry ? colors.rose : on ? colors.sage : colors.muted }]}>
-          {recentCry ? lastAlert!.body : r.waiting && r.lastCmd === "status" && !room ? t("remote.waiting") : !room ? t("remote.noState") : on ? t("remote.listening") : t("remote.notListening")}
-        </Text>
-        <Text style={styles.heroMeta}>
-          {r.noReply ? t("remote.noReplyShort") : room ? t("remote.updated", { time: fmtTime(room.at) }) : t("parent.connectedTo", { name: babyLabel(m.pairedWith) })}
-        </Text>
-      </View>
-      <Pressable onPress={() => r.send("status")} hitSlop={10} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
-        {r.waiting && r.lastCmd === "status" ? <ActivityIndicator color={colors.cream} size="small" /> : <Icon d={REFRESH} size={18} color={colors.cream} width={2} />}
-      </Pressable>
+      {room && (
+        <View style={styles.facts}>
+          <View style={styles.fact}>
+            <Icon d={NOISE} size={16} color={room.playing ? colors.peach : colors.muted} width={2} />
+            <Text style={styles.factText} numberOfLines={1}>{room.playing ? t(`sound.${room.sound}`) : t("remote.noiseOff")}</Text>
+          </View>
+          {room.battery != null && (
+            <View style={styles.fact}>
+              <Icon d={BATTERY} size={16} color={room.battery <= 20 && !room.charging ? colors.rose : colors.muted} width={2} />
+              <Text style={styles.factText}>{room.battery}%{room.charging ? ` · ${t("remote.charging")}` : ""}</Text>
+            </View>
+          )}
+          <View style={styles.fact}>
+            <Text style={[styles.factText, { color: colors.muted }]}>{r.noReply ? t("remote.noReplyShort") : t("remote.checked", { when: ago(room.at) })}</Text>
+          </View>
+        </View>
+      )}
     </Card>
   );
 }
@@ -509,11 +541,7 @@ function ParentPhone() {
   useEffect(() => {
     const handle = async (n: Notifications.Notification) => {
       const data = n.request.content.data as { type?: string; nursery?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number } | undefined;
-      if (data?.type === "room") {
-        update({ room: { playing: !!data.playing, sound: data.sound ?? "womb", listening: !!data.listening, at: data.at ?? Date.now(), listenSince: data.listenSince } });
-        Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
-        return;
-      }
+      if (data?.type === "room") return; // handled by the monitor state
       const who = pairedBaby(n);
       if (who != null) {
         update({ pairedWith: who, ...(data?.nursery ? { pairedToken: data.nursery } : {}) });
@@ -567,6 +595,10 @@ function ParentPhone() {
           </Card>
         ) : (
           <>
+            <Pressable onPress={() => setScanning(true)} style={styles.another} hitSlop={8}>
+              <Icon d={PLUS} size={16} color={colors.peach} width={2.2} />
+              <Text style={styles.change}>{t("parent.another")}</Text>
+            </Pressable>
             <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
             <ListenCard />
             <NoiseCard r={remote} />
@@ -614,11 +646,6 @@ function ParentPhone() {
           ))
         )}
       </Card>
-      {connected && (
-        <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
-          <Text style={styles.change}>{t("parent.another")}</Text>
-        </Pressable>
-      )}
       <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
     </>
   );
@@ -628,6 +655,10 @@ const ORB = 184;
 const REFRESH = '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>';
 const styles = StyleSheet.create({
   hero: { flexDirection: "row", alignItems: "center", gap: 14 },
+  facts: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  fact: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 7 },
+  factText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, fontVariant: ["tabular-nums"] },
+  another: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end", marginTop: -4, marginBottom: -4, paddingHorizontal: 4 },
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   heroTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream },
   heroStatus: { fontFamily: fonts.bodyBold, fontSize: 14.5 },

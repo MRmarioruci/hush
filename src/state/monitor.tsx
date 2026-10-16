@@ -6,7 +6,7 @@ import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
-import { CLIP_SECONDS, INFO_CHANNEL, newClip, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
+import { CLIP_SECONDS, INFO_CHANNEL, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -110,9 +110,17 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         still: tIn(L, "push.still", { name }),
         lowBattery: tIn(L, "push.lowBattery", { name, pct: "{pct}" }),
         stopped: tIn(L, "push.stopped", { name }),
+        name: p.name,
+        listenReady: tIn(L, "listen.ready", { name, s: "{s}" }),
+        listenOff: tIn(L, "listen.off", { name }),
+        listenNotListening: tIn(L, "listen.notListening", { name }),
+        listenFailed: tIn(L, "listen.failed", { name }),
       };
     }));
   }, [m.parents, m.babyName, lang]);
+  useEffect(() => {
+    cryDetector?.setListen(!!m.allowListen, storageBucket() ?? "", t("listen.nowHere", { who: "{who}", s: "{s}" }));
+  }, [m.allowListen, lang]);
 
   useEffect(() => {
     cryDetector?.configure(THRESHOLDS[m.sensitivity], m.babyName.trim(), tokens, m.alertAfter);
@@ -278,9 +286,12 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // Parent's phone: the baby's room as reported by the baby's phone (shown on Home and Monitor).
   useEffect(() => {
     const sub = addPushListener((n) => {
-      const d = n.request.content.data as { type?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number } | undefined;
+      const d = n.request.content.data as { type?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number; battery?: number; charging?: boolean } | undefined;
       if (d?.type !== "room" || mRef.current.role !== "parent") return;
-      update({ room: { playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at: d.at ?? Date.now(), listenSince: d.listenSince } });
+      const prev = mRef.current.room;
+      const at = d.at ?? Date.now();
+      if (prev && prev.at > at) return; // an older report arriving late
+      update({ room: { playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at, listenSince: d.listenSince, battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging } });
     });
     return () => sub.remove();
   }, [update]);
@@ -296,7 +307,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const d = n.request.content.data as { type?: string; cmd?: string; from?: string; seconds?: number } | undefined;
       const cur = mRef.current;
       const secs = Math.max(5, Math.min(15, Math.round(Number(d?.seconds) || CLIP_SECONDS)));
-      if (d?.type !== "cmd" || d.cmd !== "clip" || !d.from || cur.role !== "nursery") return;
+      // Android answers natively (works with the screen locked); this is for iPhones.
+      if (Platform.OS !== "ios" || d?.type !== "cmd" || d.cmd !== "clip" || !d.from || cur.role !== "nursery") return;
       const parent = cur.parents.find((p) => p.token === d.from);
       if (!parent) return;
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
@@ -313,7 +325,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       // Nobody listens in unnoticed: say so on the baby's phone.
       Notifications.scheduleNotificationAsync({
         content: { title: "hush", body: t("listen.nowHere", { who: parent.name, s: secs }), data: { type: "listen-notice" } },
-        trigger: Platform.OS === "android" ? { channelId: INFO_CHANNEL } : null,
+        trigger: null,
       }).catch(() => {});
       try {
         const res = await cryDetector.recordClip(secs, where.upload);

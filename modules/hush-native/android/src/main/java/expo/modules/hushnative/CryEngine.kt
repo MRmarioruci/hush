@@ -102,6 +102,26 @@ object CryEngine {
   @Volatile var running = false
     private set
 
+  /* ---------- the room's state, reported to the parents ---------- */
+  @Volatile var roomPlaying = false
+  @Volatile var roomSound = "womb"
+  @Volatile var listenSince = 0L
+  private const val HEARTBEAT_MS = 10 * 60 * 1000L
+
+  /** What the parents' phones show: listening, white noise, battery. Sent silently. */
+  fun reportRoom(context: Context, to: List<String> = targets.mapNotNull { it["token"] }.ifEmpty { tokens }) {
+    val (pct, plugged) = battery(context)
+    AlertSender.sendData(to, mapOf(
+      "type" to "room", "listening" to running, "playing" to roomPlaying, "sound" to roomSound,
+      "listenSince" to listenSince, "battery" to pct, "charging" to plugged, "at" to System.currentTimeMillis(),
+    ))
+  }
+
+  /* ---------- "listen in": settings from the app ---------- */
+  @Volatile var allowListen = false
+  @Volatile var bucket = ""
+  @Volatile var txtListenNotice = "{who} is listening to the room for {s} seconds"
+
   /* ---------- short clips for "listen in" (parents asked for a few seconds) ---------- */
   private val clipLock = Any()
   private var clipBuf: ShortArray? = null
@@ -230,6 +250,8 @@ object CryEngine {
       var lastBatteryCheck = 0L
       var lowBatterySent = false
       EventLog.add("listen_start")
+      listenSince = System.currentTimeMillis()
+      var lastReport = 0L
 
       // A spell is recorded once it's over (or when listening stops).
       fun endSpell() {
@@ -288,6 +310,12 @@ object CryEngine {
           mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
         )
 
+        // Every 10 minutes (and right after starting): tell the parents all is well.
+        if (System.currentTimeMillis() - lastReport > HEARTBEAT_MS) {
+          lastReport = System.currentTimeMillis()
+          reportRoom(context)
+        }
+
         // Once a minute: warn the parents if this phone is about to run out of battery.
         if (System.currentTimeMillis() - lastBatteryCheck > 60_000) {
           lastBatteryCheck = System.currentTimeMillis()
@@ -337,7 +365,7 @@ object CryEngine {
     }
   }
 
-  private fun battery(context: Context): Pair<Int, Boolean> {
+  fun battery(context: Context): Pair<Int, Boolean> {
     val i = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)) ?: return 100 to true
     val level = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
     val scale = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)

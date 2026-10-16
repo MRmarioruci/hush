@@ -83,6 +83,10 @@ public class HushCryModule: Module, NotificationDelegate {
 
     Function("takeEvents") { EventLog.take() }
 
+    // Android answers room/listen requests natively; on iOS the app does it.
+    Function("setRoom") { (_: Bool, _: String) in }
+    Function("setListen") { (_: Bool, _: String, _: String) in }
+
     // "Listen in": record the next few seconds while listening and upload them as a WAV.
     AsyncFunction("recordClip") { (seconds: Int, uploadUrl: String, promise: Promise) in
       CryEngine.shared.recordClip(seconds) { data in

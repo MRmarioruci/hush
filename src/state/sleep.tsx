@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
-import { deviceVolume, type VolumeState } from "../../modules/hush-native/src";
+import { cryDetector, deviceVolume, type VolumeState } from "../../modules/hush-native/src";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
 import { outputDb, safeDistance, stepDb } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
@@ -225,6 +225,9 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
   }, [player]);
 
+  // The native listener reports the room to the parents (also with the screen locked).
+  useEffect(() => { cryDetector?.setRoom(playing, soundId); }, [playing, soundId]);
+
   // When the monitor started listening, for the parents (a later "woke up" ends the sleep, not the monitor).
   const listenSince = useRef(0);
   useEffect(() => { listenSince.current = mon.listening ? Date.now() : 0; }, [mon.listening]);
@@ -238,7 +241,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
       const r = remote.current;
       if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
-      if (!["play", "stop", "sound"].includes(d.cmd ?? "")) return; // "woke" is handled with nap times
+      if (!["play", "stop", "sound", "status"].includes(d.cmd ?? "")) return; // "woke" and "clip" are handled elsewhere
       if (d.cmd === "play" && !player.playing) r.toggle();
       else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.parents.find((p) => p.token === d.from)?.name }; player.pause(); }
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });

@@ -42,6 +42,20 @@ class HushCryModule : Module() {
       true
     }
 
+    // What the parents see about the room (white noise), and the "listen in" settings.
+    Function("setRoom") { playing: Boolean, sound: String ->
+      val changed = CryEngine.roomPlaying != playing || CryEngine.roomSound != sound
+      CryEngine.roomPlaying = playing
+      CryEngine.roomSound = sound
+      val ctx = appContext.reactContext
+      if (changed && ctx != null && CryEngine.running) CryEngine.reportRoom(ctx)
+    }
+    Function("setListen") { allow: Boolean, bucket: String, notice: String ->
+      CryEngine.allowListen = allow
+      CryEngine.bucket = bucket
+      CryEngine.txtListenNotice = notice
+    }
+
     // Alert texts for each paired parent, in their own language.
     Function("setTargets") { list: List<Map<String, String>> ->
       CryEngine.targets = list

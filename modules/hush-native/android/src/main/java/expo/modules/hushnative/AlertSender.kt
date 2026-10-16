@@ -32,6 +32,29 @@ object AlertSender {
 
   private const val URL_PUSH = "https://exp.host/--/api/v2/push/send"
 
+  /** A silent message (no notification): room status for the parents' phones. */
+  fun sendData(tokens: List<String>, data: Map<String, Any>) {
+    if (tokens.isEmpty()) return
+    Thread {
+      try {
+        val messages = JSONArray()
+        for (token in tokens) messages.put(JSONObject().apply {
+          put("to", token)
+          put("priority", "high")
+          put("_contentAvailable", true)
+          put("data", JSONObject(data).put("_id", System.nanoTime().toString(36)))
+        })
+        val conn = (URL(URL_PUSH).openConnection() as HttpURLConnection).apply {
+          requestMethod = "POST"; connectTimeout = 10000; readTimeout = 10000; doOutput = true
+          setRequestProperty("Content-Type", "application/json")
+        }
+        conn.outputStream.use { it.write(messages.toString().toByteArray()) }
+        conn.responseCode
+        conn.disconnect()
+      } catch (_: Exception) {}
+    }.start()
+  }
+
   fun send(tokens: List<String>, body: String, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) =
     sendEach(tokens.map { it to body }, data, onDone)
 
@@ -53,7 +76,7 @@ object AlertSender {
             put("channelId", if (alarm) "baby-alarm-2" else "cry-alerts")
             // iPhones: crying breaks through Focus (needs the time-sensitive entitlement).
             put("interruptionLevel", if (alarm) "time-sensitive" else "active")
-            put("data", JSONObject(data))
+            put("data", JSONObject(data).put("_id", System.nanoTime().toString(36)))
           })
         }
         val conn = (URL(URL_PUSH).openConnection() as HttpURLConnection).apply {

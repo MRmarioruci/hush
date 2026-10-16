@@ -21,8 +21,60 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
     super.onMessageReceived(remoteMessage)
     try {
       val data = remoteMessage.data
-      val type = data["body"]?.let { runCatching { JSONObject(it).optString("type") }.getOrNull() }
+      val body = data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() }
+      val type = body?.optString("type")
       if (type in setOf("cry", "stopped", "test") || data["channelId"] == "baby-alarm-2") alarmBuzz(applicationContext)
+      // Requests from a paired parent, answered here so they work with the screen locked.
+      if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
+    } catch (_: Exception) {}
+  }
+}
+
+/** Baby's phone: answers "status" and "clip" (listen in) natively, even when the app is asleep. */
+object RoomCommands {
+  private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+
+  fun handle(context: Context, body: JSONObject) {
+    val from = body.optString("from")
+    val parent = CryEngine.targets.firstOrNull { it["token"] == from } ?: return
+    when (body.optString("cmd")) {
+      "status" -> CryEngine.reportRoom(context, listOf(from))
+      "clip" -> clip(context, from, parent, body.optInt("seconds", 10).coerceIn(5, 15))
+    }
+  }
+
+  private fun clip(context: Context, to: String, parent: Map<String, String>, secs: Int) {
+    fun text(key: String) = (parent[key] ?: key).replace("{s}", secs.toString())
+    fun reply(key: String, extra: Map<String, Any>) =
+      AlertSender.sendEach(listOf(to to text(key)), mapOf("type" to "clip", "at" to System.currentTimeMillis(), "seconds" to secs) + extra)
+    if (!CryEngine.allowListen) return reply("listenOff", mapOf("error" to "off"))
+    if (!CryEngine.running) return reply("listenNotListening", mapOf("error" to "notListening"))
+    if (CryEngine.bucket.isEmpty()) return reply("listenFailed", mapOf("error" to "setup"))
+    if (!busy.compareAndSet(false, true)) return
+    notice(context, CryEngine.txtListenNotice.replace("{who}", parent["name"] ?: "").replace("{s}", secs.toString()))
+    val id = (1..24).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString("")
+    val path = java.net.URLEncoder.encode("clips/$id.wav", "UTF-8")
+    val upload = "https://firebasestorage.googleapis.com/v0/b/${CryEngine.bucket}/o?uploadType=media&name=$path"
+    val download = "https://firebasestorage.googleapis.com/v0/b/${CryEngine.bucket}/o/$path?alt=media"
+    CryEngine.recordClip(secs) { bytes ->
+      try {
+        if (bytes == null) reply("listenNotListening", mapOf("error" to "notListening"))
+        else {
+          val (ok, detail) = AlertSender.upload(upload, bytes, "audio/wav")
+          if (ok) reply("listenReady", mapOf("url" to download))
+          else reply("listenFailed", mapOf("error" to "upload", "detail" to detail.take(300)))
+        }
+      } finally { busy.set(false) }
+    }
+  }
+
+  /** Nobody listens in unnoticed: a notice on the baby's phone. */
+  private fun notice(context: Context, text: String) {
+    try {
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, "cry-alerts")
+        else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
+      nm.notify(4343, builder.setSmallIcon(context.applicationInfo.icon).setContentTitle("hush").setContentText(text).setAutoCancel(true).build())
     } catch (_: Exception) {}
   }
 }
