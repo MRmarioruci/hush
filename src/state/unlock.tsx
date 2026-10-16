@@ -4,7 +4,7 @@
 // The trial starts the first time this phone starts listening as the baby's
 // phone. Copies not installed from Google Play (the GitHub APK) are always unlocked.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
@@ -56,6 +56,8 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [coding, setCoding] = useState(false);
+  const [code, setCode] = useState("");
   const [now, setNow] = useState(Date.now());
   const iap = useRef<Iap | null>(null);
 
@@ -106,6 +108,11 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
         }));
         const owned = await lib.getAvailablePurchases();
         for (const p of owned ?? []) await accept(p);
+        // Promo codes redeemed in the Play Store arrive as purchases; check again whenever hush comes back.
+        subs.push(AppState.addEventListener("change", async (st) => {
+          if (st !== "active") return;
+          try { for (const p of (await lib.getAvailablePurchases()) ?? []) await accept(p); } catch {}
+        }));
         const products = await lib.fetchProducts({ skus: [PRODUCT_ID], type: "in-app" });
         const product = (products ?? []).find((p) => p.id === PRODUCT_ID);
         if (alive && product) setPrice(product.displayPrice);
@@ -186,7 +193,32 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
               </Pressable>
               <Text style={styles.small}>{t("unlock.once")}</Text>
               {error && <Text style={styles.error}>{error}</Text>}
-              <Pressable onPress={restore} disabled={busy} hitSlop={10}><Text style={styles.link}>{t("unlock.restore")}</Text></Pressable>
+              {coding ? (
+                <View style={styles.codeRow}>
+                  <TextInput
+                    value={code}
+                    onChangeText={(v) => setCode(v.toUpperCase().replace(/\s/g, ""))}
+                    placeholder={t("unlock.codePlaceholder")}
+                    placeholderTextColor={colors.muted}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    style={styles.codeInput}
+                    onSubmitEditing={() => code && Linking.openURL(`https://play.google.com/redeem?code=${encodeURIComponent(code)}`)}
+                  />
+                  <Pressable
+                    onPress={() => code && Linking.openURL(`https://play.google.com/redeem?code=${encodeURIComponent(code)}`)}
+                    disabled={!code}
+                    style={[styles.codeBtn, !code && { opacity: 0.4 }]}
+                  >
+                    <Text style={styles.codeBtnText}>{t("unlock.redeem")}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              <View style={styles.links}>
+                <Pressable onPress={() => setCoding((c) => !c)} hitSlop={10}><Text style={styles.link}>{t("unlock.haveCode")}</Text></Pressable>
+                <Pressable onPress={restore} disabled={busy} hitSlop={10}><Text style={styles.link}>{t("unlock.restore")}</Text></Pressable>
+              </View>
+              {coding && <Text style={styles.small}>{t("unlock.codeHint")}</Text>}
             </>
           )}
         </View>
@@ -209,5 +241,10 @@ const styles = StyleSheet.create({
   buyText: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.bg },
   small: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, textAlign: "center" },
   error: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.rose, textAlign: "center" },
+  links: { flexDirection: "row", gap: 24 },
+  codeRow: { alignSelf: "stretch", flexDirection: "row", gap: 8 },
+  codeInput: { flex: 1, backgroundColor: colors.bg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.cream, letterSpacing: 1 },
+  codeBtn: { backgroundColor: colors.card2, borderRadius: 14, paddingHorizontal: 18, justifyContent: "center" },
+  codeBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.peach },
   link: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach, paddingVertical: 4 },
 });

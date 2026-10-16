@@ -155,6 +155,14 @@ one-time unlock. Copies installed outside Google Play (the GitHub APK) are alway
 4. Free trial note: Play only runs trials for subscriptions, so the 3 days are counted by the app itself.
    The listing and the in-app screen both say "free for 3 days, then a one-time purchase".
 
+**Coupons (free unlocks):** use Google Play promo codes. They're free to make, and Play handles them like a
+purchase, so hush unlocks on its own.
+1. **Monetize → Products → Promo codes → Create promotion**, type **One-time use codes**, product `hush_unlock`.
+2. Choose how many (up to **500 per quarter** for one-time products, unused ones don't carry over) and an end date (up to a year).
+3. Download the CSV of codes and hand them out.
+4. People redeem them in hush (unlock sheet → **Have a code?**), in the Play Store app (menu → Redeem code),
+   on the Google Play purchase screen, or through a link: `https://play.google.com/redeem?code=THECODE`.
+
 **Data safety:** purchases go through Google Play Billing. hush only stores "unlocked: yes/no" on the
 phone and sends nothing about purchases anywhere, so no extra data type needs to be declared for it.
 If the form asks about **Financial info → Purchase history**, answer that it's collected by Google Play,
