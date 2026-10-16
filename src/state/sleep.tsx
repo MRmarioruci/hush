@@ -14,6 +14,7 @@ import { useMonitor } from "./monitor";
 import { t } from "../i18n";
 import * as Notifications from "expo-notifications";
 import { addPushListener, sendData } from "../monitor";
+import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -24,6 +25,10 @@ type Sleep = {
   sound: ReturnType<typeof soundById>;
   playing: boolean;
   toggle: () => void;
+  /** Stop the white noise, noting why (shown later as "Stopped at … · why"). */
+  stop: (why: StopWhy, who?: string) => void;
+  /** Why the white noise last stopped. */
+  lastStop: Stop | null;
   /** Goes up each time someone starts a sound (on this phone or from a parent's phone). */
   starts: number;
   timerLeft: number | null;
@@ -76,10 +81,26 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     try { player.updateLockScreenMetadata({ title: t(`sound.${soundId}`), artist: "hush" }); } catch {}
   }, [soundId, sound, player]);
 
+  // Why it stopped: set just before pausing. A stop without one was a call or another app.
+  const stopWhy = useRef<{ why: StopWhy; who?: string } | null>(null);
+  const [lastStop, setLastStop] = useState<Stop | null>(null);
+  useEffect(() => { loadStops().then((st) => setLastStop(st.sound ?? null)); }, []);
+  const stop = useCallback((why: StopWhy, who?: string) => {
+    if (!player.playing) return;
+    stopWhy.current = { why, who };
+    player.pause();
+  }, [player]);
+
   // Note when white noise plays, for the Nights timeline.
   const wasPlaying = useRef(false);
   useEffect(() => {
     if (playing === wasPlaying.current) return;
+    if (wasPlaying.current && !playing) {
+      const st: Stop = { at: Date.now(), ...(stopWhy.current ?? { why: "interrupted" as StopWhy }) };
+      setLastStop(st);
+      saveStops({ sound: st });
+    }
+    stopWhy.current = null;
     wasPlaying.current = playing;
     addEvent({ type: playing ? "noise_start" : "noise_stop", t: Date.now() });
   }, [playing]);
@@ -166,7 +187,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     let fade = 1;
     if (stopAt.current) {
       const left = stopAt.current - Date.now();
-      if (left <= 0) { stopAt.current = 0; player.pause(); }
+      if (left <= 0) { stopAt.current = 0; stopWhy.current = { why: "timer" }; player.pause(); }
       else if (left < 60000) fade = left / 60000; // gentle fade over the last minute
     }
     player.volume = gainRef.current * fade * smartFactor();
@@ -197,17 +218,21 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   const [starts, setStarts] = useState(0);
   const toggle = useCallback(() => {
-    if (player.playing) return player.pause();
+    if (player.playing) { stopWhy.current = { why: "you" }; return player.pause(); }
     setStarts((n) => n + 1);
     player.volume = gainRef.current;
     player.play();
     try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
   }, [player]);
 
+  // When the monitor started listening, for the parents (a later "woke up" ends the sleep, not the monitor).
+  const listenSince = useRef(0);
+  useEffect(() => { listenSince.current = mon.listening ? Date.now() : 0; }, [mon.listening]);
+
   /* ---------- remote control from a paired parent's phone ---------- */
   const remote = useRef({ toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents });
   remote.current = { toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents };
-  const roomFor = useCallback(() => ({ type: "room", playing: player.playing, sound: remote.current.soundId, listening: remote.current.listening, at: Date.now() }), [player]);
+  const roomFor = useCallback(() => ({ type: "room", playing: player.playing, sound: remote.current.soundId, listening: remote.current.listening, listenSince: listenSince.current, at: Date.now() }), [player]);
   useEffect(() => {
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
@@ -215,7 +240,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
       if (!["play", "stop", "sound"].includes(d.cmd ?? "")) return; // "woke" is handled with nap times
       if (d.cmd === "play" && !player.playing) r.toggle();
-      else if (d.cmd === "stop" && player.playing) player.pause();
+      else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.parents.find((p) => p.token === d.from)?.name }; player.pause(); }
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });
       // Answer after the change has taken effect.
       setTimeout(() => sendData([d.from!], roomFor()), 900);
@@ -237,7 +262,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   return (
     <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, starts, timerLeft, setTimer, dev, setStep, safeDist, level, beat, still, smart: isSmart && playing ? smartView : null }}
+      value={{ s, set, soundId, sound, playing, toggle, stop, lastStop, starts, timerLeft, setTimer, dev, setStep, safeDist, level, beat, still, smart: isSmart && playing ? smartView : null }}
     >
       {children}
     </Ctx.Provider>

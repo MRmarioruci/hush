@@ -5,6 +5,7 @@ import { AppState } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
+import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
 import { MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
@@ -13,6 +14,8 @@ type Monitor = {
   m: MonitorSettings;
   update: (patch: Partial<MonitorSettings>) => void;
   listening: boolean;
+  /** Why listening last stopped (null while it hasn't). */
+  lastStop: Stop | null;
   status: CryStatus;
   lastCry: number | null;
   toggleListening: () => Promise<string | null>;
@@ -47,7 +50,33 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const baby = babyLabel(m.babyName);
   const tokens = m.parents.map((p) => p.token);
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
-  const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
+  const [listening, setListeningRaw] = useState(() => cryDetector?.isListening() ?? false);
+  const [lastStop, setLastStop] = useState<Stop | null>(null);
+  // Every change of the switch goes through here, so a stop always has a reason.
+  const setListening = useCallback((on: boolean, why: StopWhy = "you", detail?: string) => {
+    setListeningRaw((was) => {
+      if (was && !on) {
+        const stop: Stop = { at: Date.now(), why, detail };
+        setLastStop(stop);
+        saveStops({ listen: stop, wasListening: false });
+      } else if (on) saveStops({ wasListening: true });
+      return on;
+    });
+  }, []);
+  useEffect(() => {
+    loadStops().then((st) => {
+      // hush was listening last time, but isn't any more: the phone closed it.
+      if (st.wasListening && cryDetector && !cryDetector.isListening()) {
+        const stop: Stop = { at: Date.now(), why: "system" };
+        saveStops({ listen: stop, wasListening: false });
+        setLastStop(stop);
+      } else setLastStop(st.listen ?? null);
+    });
+    // The switch says on, but the listener isn't running: the phone stopped it.
+    const check = () => { if (cryDetector && !cryDetector.isListening()) setListeningRaw((on) => { if (on) { const stop: Stop = { at: Date.now(), why: "system" }; setLastStop(stop); saveStops({ listen: stop, wasListening: false }); } return false; }); };
+    const app = AppState.addEventListener("change", (st) => st === "active" && setTimeout(check, 1500));
+    return () => app.remove();
+  }, []);
   const [soundWantsMic, setSoundWantsMic] = useState(false);
   const [micOn, setMicOn] = useState(() => cryDetector?.isListening() ?? false);
   const [status, setStatus] = useState<CryStatus>({});
@@ -92,7 +121,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const a = cryDetector.onStatus((st) => {
       setStatus(st);
       if (st.crying) setCryHeardAt(Date.now());
-      if (st.error) { setListening(false); setMicOn(false); }
+      if (st.error) { setListening(false, "error", st.error); setMicOn(false); }
     });
     const b = cryDetector.onCry((e) => setLastCry(e.at));
     return () => { a.remove(); b.remove(); };
@@ -203,7 +232,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const toggleListening = useCallback(async (): Promise<string | null> => {
     if (!cryDetector) return t("perm.androidOnly");
     if (listening) {
-      setListening(false);
+      setListening(false, "you");
       setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 1200);
       return null;
     }
@@ -212,7 +241,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (!(await unlock.beforeListen())) return null; // trial over: the unlock sheet is showing
     setListening(true);
     return mRef.current.parents.length ? null : t("perm.pairToGet");
-  }, [listening, syncEvents, sendNightSummary, unlock]);
+  }, [listening, syncEvents, sendNightSummary, unlock, setListening]);
 
   /* ---------- sleep sync between connected phones (no account, through silent pushes) ---------- */
   const [lastSync, setLastSync] = useState(0);
@@ -259,6 +288,6 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, update, listening, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
   );
 }

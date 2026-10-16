@@ -12,6 +12,7 @@ import { Slider } from "../components/Slider";
 import { Card, Chip, Label, Pill, Screen } from "../components/ui";
 import { TIMERS, fmtDist, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { fmtTime, useT } from "../i18n";
+import { stopLine } from "../stops";
 
 export function SleepScreen() {
   const z = useSleep();
@@ -40,7 +41,7 @@ export function SleepScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.nowName}>{t(`sound.${z.soundId}`)}</Text>
           <Text style={styles.nowSub}>
-            {z.playing ? (z.timerLeft != null ? t("sounds.playingStops", { time: fmtLeft(z.timerLeft) }) : t("home.playing")) : t(`sound.${z.soundId}.sub`)}
+            {z.playing ? (z.timerLeft != null ? t("sounds.playingStops", { time: fmtLeft(z.timerLeft) }) : t("home.playing")) : stopLine(z.lastStop, t, fmtTime) ?? t(`sound.${z.soundId}.sub`)}
           </Text>
         </View>
       </Pressable>

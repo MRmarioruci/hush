@@ -11,6 +11,7 @@ import { TIMERS, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 import { fmtTime, useT, babyLabel } from "../i18n";
 import { NapCard } from "../components/Naps";
+import { stopLine } from "../stops";
 
 const greetingKey = () => {
   const h = new Date().getHours();
@@ -66,7 +67,7 @@ export function HomeScreen() {
         />
         <View style={{ alignItems: "center", gap: 2, marginTop: -6 }}>
           <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}</Text>
-          <Text style={styles.sub}>{sleep.playing ? t("home.playing") : t("home.tapMoon")}</Text>
+          <Text style={styles.sub}>{sleep.playing ? t("home.playing") : stopLine(sleep.lastStop, t, fmtTime) ?? t("home.tapMoon")}</Text>
         </View>
 
         <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}

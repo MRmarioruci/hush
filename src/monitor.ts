@@ -8,7 +8,7 @@ import { getLang, t, type Lang } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
 /** What the parent sees about the baby's room, reported by the baby's phone. */
-export type Room = { playing: boolean; sound: string; listening: boolean; at: number };
+export type Room = { playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number };
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";
 export type MonitorSettings = {

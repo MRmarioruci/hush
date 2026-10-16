@@ -9,6 +9,7 @@ import { ALERT_AFTER, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makeP
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
+import { stopLine } from "../stops";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
@@ -117,7 +118,7 @@ function TrialNote() {
 }
 
 function NurseryPhone() {
-  const { m, update, listening, status, lastCry, toggleListening, baby } = useMonitor();
+  const { m, update, listening, lastStop, status, lastCry, toggleListening, baby } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
   const tokens = m.parents.map((p) => p.token);
@@ -155,7 +156,7 @@ function NurseryPhone() {
         <View style={styles.orbWrap}>
           <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={async () => setMsg(await toggleListening())} baby={baby} />
           <Text style={styles.orbMeta}>
-            {listening ? (lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")) : t("nursery.keepNear")}
+            {listening ? (lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")) : stopLine(lastStop, t, fmtTime) ?? t("nursery.keepNear")}
           </Text>
         </View>
       )}
@@ -481,9 +482,9 @@ function ParentPhone() {
 
   useEffect(() => {
     const handle = async (n: Notifications.Notification) => {
-      const data = n.request.content.data as { type?: string; nursery?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number } | undefined;
+      const data = n.request.content.data as { type?: string; nursery?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number } | undefined;
       if (data?.type === "room") {
-        update({ room: { playing: !!data.playing, sound: data.sound ?? "womb", listening: !!data.listening, at: data.at ?? Date.now() } });
+        update({ room: { playing: !!data.playing, sound: data.sound ?? "womb", listening: !!data.listening, at: data.at ?? Date.now(), listenSince: data.listenSince } });
         Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
         return;
       }

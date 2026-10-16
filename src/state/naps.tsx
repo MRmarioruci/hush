@@ -39,7 +39,7 @@ const durIn = (L: Lang, min: number) => {
 const clockIn = (L: Lang, ms: number) => new Date(ms).toLocaleTimeString(L, { hour: "numeric", minute: "2-digit" });
 
 export function NapsProvider({ children }: { children: ReactNode }) {
-  const { s, starts, playing, toggle, soundId } = useSleep();
+  const { s, starts, playing, stop, soundId } = useSleep();
   const mon = useMonitor();
   const lang = useLang();
   const [nights, setNights] = useState<Night[]>([]);
@@ -83,9 +83,17 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     .filter((x, i, all) => all.findIndex((y) => y.from === x.from && y.to === x.to) === i) // a sleep across midnight is in two days
     .sort((a, b) => a.from - b.from), [nights]);
 
+  // "Woke up" ends the sleep but never the monitor, so remember when the baby woke while it listens.
+  const [listenStart, setListenStart] = useState(0);
+  const [awakeAt, setAwakeAt] = useState(0);
+  useEffect(() => { setListenStart(mon.listening ? Date.now() : 0); setAwakeAt(0); }, [mon.listening]);
+
   // Asleep: logged on this phone, or this baby's phone is listening, or the baby's phone says so.
-  const monitorAsleep = s.features.monitor && mon.m.role === "nursery" && mon.listening;
-  const roomAsleep = s.features.monitor && mon.m.role === "parent" && !!mon.m.room?.listening && now - (mon.m.room?.at ?? 0) < 45 * 60_000;
+  const monitorAsleep = s.features.monitor && mon.m.role === "nursery" && mon.listening && !(awakeAt > listenStart);
+  const room = mon.m.room;
+  const roomAsleep = s.features.monitor && mon.m.role === "parent" && !!room?.listening && now - (room?.at ?? 0) < 45 * 60_000
+    // …unless the baby's phone said "woke up" after it started listening
+    && !(peer && !peer.asleep && peer.at > (room?.listenSince ?? 0));
   // A paired phone said the baby fell asleep (and hasn't said awake since).
   const peerAsleep = !!peer?.asleep && now - peer.at < 16 * 3600_000;
   const since = openFrom
@@ -142,26 +150,28 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     return null;
   }, [useMonitorForSleep, mon, reload, notify]);
 
-  /** `skip`: the phone that asked (it already knows). */
+  /** `skip`: the phone that asked (it already knows). Never turns the baby monitor off. */
   const wakeUp = useCallback(async (skip?: string) => {
     const at = Date.now();
     const slept = state.asleep ? (at - state.since) / 60_000 : 0;
-    if (playing) toggle(); // white noise is for sleeping; stop it when the baby is up
+    const who = skip ? (mon.m.parents.find((p) => p.token === skip)?.name ?? t("stop.babyPhone")) : undefined;
+    // White noise is for sleeping; stop it when the baby is up.
+    if (playing) stop("woke", who);
     // Asleep only because another phone said so: ask that phone to end its sleep.
-    if (!openFrom && !(useMonitorForSleep && mon.listening) && peerAsleep && peer) {
+    if (!openFrom && !monitorAsleep && peerAsleep && peer) {
       let me = "";
       try { me = await getMyToken(); } catch {}
       sendData([peer.from], { type: "cmd", cmd: "woke", from: me }).catch(() => {});
       savePeer({ ...peer, asleep: false, at });
       return null;
     }
-    let note: string | null = null;
-    if (useMonitorForSleep && mon.listening) { note = await mon.toggleListening(); setTimeout(reload, 1500); }
-    else { await endSleep(at); reload(); }
-    if (state.asleep && !note) notify("awake", at, { dur: slept, skip });
+    if (openFrom) await endSleep(at);
+    if (mon.listening) setAwakeAt(at); // the monitor keeps listening; this sleep is over
+    reload();
+    if (state.asleep) notify("awake", at, { dur: slept, skip });
     if (peer?.asleep) savePeer({ ...peer, asleep: false, at });
-    return note;
-  }, [useMonitorForSleep, mon, reload, playing, toggle, openFrom, peerAsleep, peer, savePeer, state, notify]);
+    return mon.listening && mon.m.role === "nursery" ? t("nap.stillListening") : null;
+  }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, savePeer, state, notify]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
 
   // Messages from the paired phones: "asleep / awake", and "the baby woke up" from the other side.
