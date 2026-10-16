@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
-import { endSleep, loadNights, openSleep, startSleep, type Night, type Sleep } from "../nights";
+import { deleteSleep, endSleep, loadNights, openSleep, startSleep, type Night, type Sleep } from "../nights";
 import { napState, type NapState } from "../naps";
 import { INFO_CHANNEL } from "../monitor";
 import { babyLabel, t, useLang } from "../i18n";
@@ -18,6 +18,9 @@ type NapsCtx = {
   fellAsleep: () => Promise<string | null>;
   wokeUp: () => Promise<string | null>;
   reload: () => void;
+  /** The sleep in progress was started by the sound; undo removes it. */
+  fromSound: boolean;
+  undoSound: () => Promise<void>;
 };
 
 const Ctx = createContext<NapsCtx | null>(null);
@@ -25,16 +28,17 @@ export const useNaps = () => useContext(Ctx)!;
 const REMINDER = "nap-reminder";
 
 export function NapsProvider({ children }: { children: ReactNode }) {
-  const { s } = useSleep();
+  const { s, starts, playing, toggle } = useSleep();
   const mon = useMonitor();
   const lang = useLang();
   const [nights, setNights] = useState<Night[]>([]);
   const [openFrom, setOpenFrom] = useState<number | null>(null);
+  const [soundSleep, setSoundSleep] = useState<string | null>(null); // id of a sleep the sound started
   const [now, setNow] = useState(Date.now());
 
   const reload = useCallback(() => {
     loadNights().then(setNights).catch(() => {});
-    openSleep().then((o) => setOpenFrom(o?.from ?? null)).catch(() => {});
+    openSleep().then((o) => { setOpenFrom(o?.from ?? null); if (!o) setSoundSleep(null); }).catch(() => {});
     setNow(Date.now());
   }, []);
   useEffect(reload, [reload, mon.nightsVersion, mon.listening]);
@@ -62,11 +66,28 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     return null;
   }, [useMonitorForSleep, mon, reload]);
   const wokeUp = useCallback(async () => {
+    if (playing) toggle(); // white noise is for sleeping; stop it when the baby is up
     if (useMonitorForSleep && mon.listening) { const note = await mon.toggleListening(); setTimeout(reload, 1500); return note; }
     await endSleep();
     reload();
     return null;
-  }, [useMonitorForSleep, mon, reload]);
+  }, [useMonitorForSleep, mon, reload, playing, toggle]);
+
+  // Starting a sound usually means it's sleep time: start a sleep (with an undo on Home).
+  useEffect(() => {
+    if (!starts || !s.features.naps || !s.soundStartsSleep || state.asleep) return;
+    (async () => {
+      await startSleep();
+      const o = await openSleep();
+      setSoundSleep(o?.id ?? null);
+      reload();
+    })().catch(() => {});
+  }, [starts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const undoSound = useCallback(async () => {
+    if (soundSleep) await deleteSleep(soundSleep);
+    setSoundSleep(null);
+    reload();
+  }, [soundSleep, reload]);
 
   // "Nap due soon": 10 minutes before the sweet spot opens.
   useEffect(() => {
@@ -85,5 +106,5 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     })();
   }, [s.features.naps, s.napReminders, state.asleep, state.asleep ? 0 : state.sweet?.[0], lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload, fromSound: !!soundSleep && openFrom != null, undoSound }}>{children}</Ctx.Provider>;
 }

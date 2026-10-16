@@ -57,7 +57,7 @@ export function NapCard({ big }: { big?: boolean }) {
   const t = useT();
   const { s, set } = useSleep();
   const mon = useMonitor();
-  const { state, fellAsleep, wokeUp, sleeps } = useNaps();
+  const { state, fellAsleep, wokeUp, sleeps, fromSound, undoSound } = useNaps();
   const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
   const [guide, setGuide] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -128,6 +128,11 @@ export function NapCard({ big }: { big?: boolean }) {
         )}
       </View>
       {note && <Text style={styles.small}>{note}</Text>}
+      {state.asleep && fromSound && (
+        <Text style={[styles.small, { textAlign: "center" }]}>
+          {t("nap.fromSound")} <Text onPress={undoSound} style={{ color: colors.peach, fontFamily: fonts.bodyBold }}>{t("nap.undo")}</Text>
+        </Text>
+      )}
       <Text style={[styles.small, { textAlign: "center" }]}>
         {t("nap.forgot")} <Text onPress={() => setSheet("new")} style={{ color: colors.peach, fontFamily: fonts.bodyBold }}>{t("nap.addSleep")}</Text>
       </Text>

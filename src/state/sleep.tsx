@@ -24,6 +24,8 @@ type Sleep = {
   sound: ReturnType<typeof soundById>;
   playing: boolean;
   toggle: () => void;
+  /** Goes up each time someone starts a sound (on this phone or from a parent's phone). */
+  starts: number;
   timerLeft: number | null;
   setTimer: (minutes: number) => void;
   dev: VolumeState | null;
@@ -186,8 +188,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     return () => clearInterval(id);
   }, [playing, still, soundId, player]);
 
+  const [starts, setStarts] = useState(0);
   const toggle = useCallback(() => {
     if (player.playing) return player.pause();
+    setStarts((n) => n + 1);
     // Smart starts at the full safe level, so the phone's volume goes to the line.
     if (s.mode === "smart" && deviceVolume) {
       const st = deviceVolume.get();
@@ -231,7 +235,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   return (
     <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, timerLeft, setTimer, dev, setStep, ceiling: safe?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
+      value={{ s, set, soundId, sound, playing, toggle, starts, timerLeft, setTimer, dev, setStep, ceiling: safe?.ceiling ?? null, level, beat, still, smart: isSmart && playing ? smartView : null }}
     >
       {children}
     </Ctx.Provider>

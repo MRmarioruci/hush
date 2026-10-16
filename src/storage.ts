@@ -20,10 +20,12 @@ export type Settings = {
   birthday: string | null;
   /** Remind this phone shortly before the next nap's sweet spot. */
   napReminders: boolean;
+  /** Starting a sound marks the baby as asleep (nap times on). */
+  soundStartsSleep: boolean;
 };
 export type Features = { sounds: boolean; naps: boolean; monitor: boolean };
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true, soundStartsSleep: true };
 
 export async function loadSettings(): Promise<Settings> {
   try {
