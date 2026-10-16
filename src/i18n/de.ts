@@ -289,6 +289,7 @@ export const de: Record<Key, string> = {
   "unlock.redeem": "Einlösen",
   "unlock.codePlaceholder": "Gutscheincode",
   "unlock.codeHint": "Google Play öffnet sich zum Einlösen. Kehren Sie danach zu hush zurück, dann ist das Babyphone freigeschaltet.",
+  "parent.n": "Elternteil {n}",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

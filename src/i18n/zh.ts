@@ -289,6 +289,7 @@ export const zh: Record<Key, string> = {
   "unlock.redeem": "兑换",
   "unlock.codePlaceholder": "兑换码",
   "unlock.codeHint": "将打开 Google Play 进行兑换。兑换后回到 hush，宝宝监听即会解锁。",
+  "parent.n": "家长 {n}",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

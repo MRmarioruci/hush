@@ -289,6 +289,7 @@ export const es: Record<Key, string> = {
   "unlock.redeem": "Canjear",
   "unlock.codePlaceholder": "Código promocional",
   "unlock.codeHint": "Se abre Google Play para canjearlo. Vuelve después a hush y el vigilabebés se desbloquea.",
+  "parent.n": "Padre/madre {n}",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

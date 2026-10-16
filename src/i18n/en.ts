@@ -289,6 +289,7 @@ export const en = {
   "unlock.redeem": "Redeem",
   "unlock.codePlaceholder": "Promo code",
   "unlock.codeHint": "Google Play opens to redeem it. Come back to hush afterwards and the monitor unlocks.",
+  "parent.n": "Parent {n}",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

@@ -289,6 +289,7 @@ export const pt: Record<Key, string> = {
   "unlock.redeem": "Resgatar",
   "unlock.codePlaceholder": "Código promocional",
   "unlock.codeHint": "O Google Play abre para resgatar. Depois volte ao hush e a babá eletrônica é liberada.",
+  "parent.n": "Responsável {n}",
   "settings.title": "Ajustes",
   "settings.babyName": "Nome do bebê",
   "settings.prefs": "Preferências",

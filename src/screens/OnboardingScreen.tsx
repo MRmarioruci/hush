@@ -8,7 +8,7 @@ import { colors, fonts } from "../theme";
 import { LIMIT_DB } from "../safety";
 import { useSleep, fmtDist } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
-import { useT } from "../i18n";
+import { useT, babyLabel } from "../i18n";
 import { Slider } from "../components/Slider";
 import { ICONS, Icon, Pill } from "../components/ui";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
@@ -27,7 +27,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [job, setJob] = useState<Job | null>(mon.m.role ?? null);
   const [picking, setPicking] = useState(false);
   const langLabel = useLangLabel();
-  const baby = mon.m.babyName.trim() || t("baby.default");
+  const baby = babyLabel(mon.m.babyName);
 
   // Steps depend on the job: the parent's phone doesn't need the distance, the sounds-only phone needs no permissions.
   const steps: string[] = ["welcome", "name", "job"];

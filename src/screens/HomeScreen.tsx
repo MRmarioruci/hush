@@ -9,7 +9,7 @@ import { Moon } from "../components/Moon";
 import { Card, ICONS, Icon, Screen } from "../components/ui";
 import { TIMERS, fmtLeft, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
-import { fmtTime, useT } from "../i18n";
+import { fmtTime, useT, babyLabel } from "../i18n";
 
 const greetingKey = () => {
   const h = new Date().getHours();
@@ -116,7 +116,7 @@ export function HomeScreen() {
                 {mon.m.role == null
                   ? t("home.useSecond")
                   : mon.m.role === "parent"
-                    ? mon.m.pairedWith ? t("home.onConnected", { name: mon.m.pairedWith }) : t("home.notConnected")
+                    ? mon.m.pairedWith != null ? t("home.onConnected", { name: babyLabel(mon.m.pairedWith) }) : t("home.notConnected")
                     : !parents ? t("home.connectFirst")
                     : mon.listening ? (crying ? t("orb.crying", { name: mon.baby }) : mon.lastCry ? t("nursery.lastAlert", { time: fmtTime(mon.lastCry) }) : t("nursery.quiet"))
                     : t("home.off")}

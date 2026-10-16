@@ -15,7 +15,7 @@ import {
   saveMonitor,
   type MonitorSettings,
 } from "../monitor";
-import { t, useLang } from "../i18n";
+import { babyLabel, t, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
 type Monitor = {
@@ -50,7 +50,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const baby = m.babyName.trim() || t("baby.default");
+  const baby = babyLabel(m.babyName);
   const tokens = m.parents.map((p) => p.token);
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
   const [listening, setListening] = useState(() => cryDetector?.isListening() ?? false);
@@ -64,18 +64,18 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const lang = useLang();
   useEffect(() => {
     cryDetector?.setTexts({
-      crying: t("push.crying", { name: "{name}" }),
-      still: t("push.still", { name: "{name}" }),
-      lowBattery: t("push.lowBattery", { name: "{name}", pct: "{pct}" }),
-      stopped: t("push.stopped", { name: "{name}" }),
+      crying: t("push.crying", { name: baby }),
+      still: t("push.still", { name: baby }),
+      lowBattery: t("push.lowBattery", { name: baby, pct: "{pct}" }),
+      stopped: t("push.stopped", { name: baby }),
       listenTitle: t("push.listenTitle"),
-      listenText: t("push.listenText", { name: "{name}" }),
+      listenText: t("push.listenText", { name: baby }),
     });
-  }, [lang]);
+  }, [lang, baby]);
 
   useEffect(() => {
-    cryDetector?.configure(THRESHOLDS[m.sensitivity], baby, tokens, m.alertAfter);
-  }, [m.sensitivity, m.alertAfter, baby, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+    cryDetector?.configure(THRESHOLDS[m.sensitivity], m.babyName.trim(), tokens, m.alertAfter);
+  }, [m.sensitivity, m.alertAfter, m.babyName, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!cryDetector) return;
@@ -116,11 +116,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const nights = await loadNights();
     const n = nights.find((x) => x.key === nightKey(Date.now() - 60_000));
     if (!n || n.listenedMin < 120) return;
-    const who = cur.babyName.trim() || t("baby.default");
+    const label = babyLabel(cur.babyName);
     const body = n.cries === 0
-      ? t("push.night0", { name: who })
-      : t("push.night", { name: who, count: n.cries, dur: fmtDur(n.cryMin) });
-    sendPush(to, body, packNight(n, who));
+      ? t("push.night0", { name: label })
+      : t("push.night", { name: label, count: n.cries, dur: fmtDur(n.cryMin) });
+    sendPush(to, body, packNight(n, cur.babyName.trim()));
   }, []);
 
   // Baby's phone: a parent scanned our code and asked to be connected. Save them and confirm.
@@ -137,10 +137,16 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (!req || mRef.current.role !== "nursery") return;
       const cur = mRef.current;
       if (!cur.parents.some((p) => p.token === req.token)) {
-        update({ parents: [...cur.parents, { token: req.token, name: req.name, addedAt: Date.now() }] });
+        // Parents who didn't give a name become "Parent 1", "Parent 2", …
+        let name = req.name.trim();
+        if (!name) {
+          let k = 1;
+          while (cur.parents.some((p) => p.name === t("parent.n", { n: k }))) k++;
+          name = t("parent.n", { n: k });
+        }
+        update({ parents: [...cur.parents, { token: req.token, name, addedAt: Date.now() }] });
       }
-      const who = cur.babyName.trim() || t("baby.default");
-      sendPush([req.token], t("push.paired", { name: who }), { type: "paired", baby: who });
+      sendPush([req.token], t("push.paired", { name: babyLabel(cur.babyName) }), { type: "paired", baby: cur.babyName.trim() });
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
     };
     Notifications.getPresentedNotificationsAsync().then((list) => list.forEach(handle)).catch(() => {});
@@ -160,7 +166,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           const ok = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO).catch(() => false);
           if (!ok || cancelled) return;
         }
-        cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim() || t("baby.default"), mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
+        cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim(), mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
         cryDetector.start();
         setMicOn(true);
       } else if (!wantMic && cryDetector.isListening()) {

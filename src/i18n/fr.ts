@@ -289,6 +289,7 @@ export const fr: Record<Key, string> = {
   "unlock.redeem": "Utiliser",
   "unlock.codePlaceholder": "Code promo",
   "unlock.codeHint": "Google Play s'ouvre pour l'utiliser. Revenez ensuite dans hush et le babyphone est débloqué.",
+  "parent.n": "Parent {n}",
   "settings.title": "Réglages",
   "settings.babyName": "Prénom de bébé",
   "settings.prefs": "Préférences",

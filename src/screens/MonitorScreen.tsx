@@ -11,7 +11,7 @@ import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
-import { fmtTime, heardLabel, t, useT } from "../i18n";
+import { fmtTime, heardLabel, t, useT, babyLabel } from "../i18n";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
 const X = '<path d="M6 6l12 12M18 6 6 18"/>';
 const SEND = '<path d="M4 12 20 4l-6 16-3-7z"/>';
@@ -426,13 +426,13 @@ function ParentPhone() {
       return setErr((e as Error).message);
     }
     setState("connecting");
-    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim() || t("parent.parent") });
+    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim() });
     if (!ok) { setState("failed"); return; }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setState((s) => (s === "connecting" ? "failed" : s)), 20000);
   };
 
-  const connected = !!m.pairedWith && state === "idle";
+  const connected = m.pairedWith != null && state === "idle";
 
   return (
     <>
@@ -440,8 +440,8 @@ function ParentPhone() {
         <Card style={styles.connected}>
           <View style={styles.checkCircle}><Icon d={ICONS.check} size={22} color={colors.bg} width={2.4} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.roleTitle}>{t("parent.connectedTo", { name: m.pairedWith ?? "" })}</Text>
-            <Text style={styles.roleSub}>{t("parent.willNotify", { name: m.pairedWith ?? "" })}</Text>
+            <Text style={styles.roleTitle}>{t("parent.connectedTo", { name: babyLabel(m.pairedWith) })}</Text>
+            <Text style={styles.roleSub}>{t("parent.willNotify", { name: babyLabel(m.pairedWith) })}</Text>
           </View>
         </Card>
       ) : (

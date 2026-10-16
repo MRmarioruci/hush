@@ -88,7 +88,7 @@ export async function loadAlerts(): Promise<AlertRecord[]> {
 /** Name of the baby in a "paired" message, if this notification is one. */
 export function pairedBaby(n: Notifications.Notification): string | null {
   const data = n.request.content.data as { type?: string; baby?: string } | undefined;
-  return data?.type === "paired" ? data.baby || "Baby" : null;
+  return data?.type === "paired" ? (data.baby ?? "") : null;
 }
 
 export async function recordAlert(n: Notifications.Notification) {

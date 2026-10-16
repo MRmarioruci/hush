@@ -137,7 +137,7 @@ function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; sele
         <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
         <Tile value={n.firstWake ? fmtClock(n.firstWake) : "–"} label={t("nights.first")} />
       </View>
-      <WhenChart nights={nights.slice(0, 14)} baby={n.baby ?? baby} />
+      <WhenChart nights={nights.slice(0, 14)} baby={n.baby || baby} />
     </>
   );
 }

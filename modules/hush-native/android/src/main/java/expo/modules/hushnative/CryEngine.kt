@@ -20,11 +20,14 @@ import kotlin.math.sqrt
 /**
  * Listens through the mic and decides whether a baby is crying, entirely on the phone.
  *
- * - Records 16 kHz mono, near-raw, with echo cancellation attached so the white noise
- *   hush itself is playing is reduced.
+ * - Records 16 kHz mono, near-raw, with echo cancellation attached.
+ * - A denoiser removes steady sound first (hush's own white noise, fans, hum), so crying
+ *   still stands out while white noise plays from the same phone.
  * - Every half second it runs YAMNet (a general sound classifier) on the last ~1 s and
- *   combines its baby-cry, crying, whimper, wail and screaming scores.
- * - It calls it crying when 3 of the last 6 windows (about 1.5 s of the last 3 s) pass the
+ *   combines its crying scores, minus talking and laughing.
+ * - A pitch check then turns the score down when the voice is clearly an adult's (low and
+ *   in short syllables) and up when it's high and held, like a cry.
+ * - It calls it crying when 4 of the last 8 windows (about 2 s of the last 4 s) pass the
  *   threshold, then sends an alert to the paired parent phones. While crying continues,
  *   a reminder goes out every [REPEAT_MS].
  *
@@ -43,6 +46,16 @@ object CryEngine {
   private const val WHIMPER = 21
   private const val WAIL = 22
   private const val SCREAMING = 11
+  // Sounds that are easy to mistake for crying.
+  private const val SPEECH = 0
+  private const val CHILD_SPEECH = 1
+  private const val CONVERSATION = 2
+  private const val NARRATION = 3
+  private const val BABBLING = 4
+  private const val LAUGHTER = 13
+  private const val BABY_LAUGHTER = 14
+  /** Above this background level (dBFS) the classifier hears the cleaned audio. */
+  private const val NOISY_DB = -55f
 
   @Volatile var threshold = 0.3f
   /** How long crying has to go on before the first alert. 0 = right away. */
@@ -140,6 +153,10 @@ object CryEngine {
       rec.startRecording()
 
       val window = FloatArray(WINDOW)
+      val clean = FloatArray(WINDOW)
+      val denoiser = Denoiser()
+      val pitch = PitchTracker()
+      val hop = FloatArray(HOP)
       val pcm = ShortArray(HOP)
       var filled = 0
       val history = ArrayDeque<Boolean>()
@@ -170,35 +187,42 @@ object CryEngine {
         }
         if (read < HOP) continue
 
-        // Slide the window and append the new half second.
+        // Slide the windows and append the new half second (raw and cleaned).
         System.arraycopy(window, HOP, window, 0, WINDOW - HOP)
+        System.arraycopy(clean, HOP, clean, 0, WINDOW - HOP)
         var sumSq = 0.0
         for (i in 0 until HOP) {
           val v = pcm[i] / 32768f
+          hop[i] = v
           window[WINDOW - HOP + i] = v
           sumSq += v * v
         }
+        val cleaned = denoiser.process(hop)
+        System.arraycopy(cleaned, 0, clean, WINDOW - HOP, HOP)
+        pitch.add(cleaned)
         filled = minOf(WINDOW, filled + HOP)
         val levelDb = 20 * log10(max(1e-6, sqrt(sumSq / HOP)))
         if (filled < WINDOW) continue
 
-        val scores = classify(model, window, inShape, outShape, classes)
+        val noisy = denoiser.noiseDb > NOISY_DB
+        val scores = classify(model, if (noisy) clean else window, inShape, outShape, classes)
         // Crying usually lights up several related classes at once, so add them up.
-        val score = minOf(
-          1f,
-          scores[BABY_CRY] + 0.6f * scores[CRYING_SOBBING] + 0.5f * scores[WHIMPER] + 0.4f * scores[WAIL] + 0.3f * scores[SCREAMING]
-        )
+        val cry = scores[BABY_CRY] + 0.6f * scores[CRYING_SOBBING] + 0.4f * scores[WHIMPER] + 0.4f * scores[WAIL] + 0.2f * scores[SCREAMING]
+        // Talking, babbling and laughing count against it when they're stronger than the crying.
+        val talk = scores[SPEECH] + 0.6f * scores[CHILD_SPEECH] + 0.5f * (scores[CONVERSATION] + scores[NARRATION]) +
+          0.7f * scores[BABBLING] + scores[LAUGHTER] + scores[BABY_LAUGHTER]
+        val score = (max(0f, cry - 0.5f * max(0f, talk - cry)) * pitch.factor()).coerceIn(0f, 1f)
         var top = 0
         for (c in 1 until classes) if (scores[c] > scores[top]) top = c
 
-        // About 1.5 s of crying within the last 3 s.
+        // About 2 s of crying within the last 4 s.
         history.addLast(score >= threshold)
-        if (history.size > 6) history.removeFirst()
-        val now = history.count { it } >= 3
+        if (history.size > 8) history.removeFirst()
+        val now = history.count { it } >= 4
 
         listener?.invoke(
           "status",
-          mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble())
+          mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
         )
 
         // Once a minute: warn the parents if this phone is about to run out of battery.

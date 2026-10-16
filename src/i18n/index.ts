@@ -54,6 +54,18 @@ export function applyLang(choice: Lang | "auto") {
 type Vars = Record<string, string | number>;
 
 /** Translate a key. Pass `count` in vars to pick the _one / _other form. */
+/** How each language says "the baby" when no name is set. */
+const THE_BABY: Record<Lang, string> = { en: "the baby", el: "το μωρό", de: "das Baby", fr: "le bébé", es: "el bebé", pt: "o bebê", zh: "宝宝" };
+/** Contractions that "the baby" needs after a preposition. */
+const THE_BABY_FIX: Partial<Record<Lang, [RegExp, string][]>> = {
+  fr: [[/\bde le bébé/g, "du bébé"], [/\bà le bébé/g, "au bébé"]],
+  es: [[/\bde el bebé/g, "del bebé"], [/\ba el bebé/g, "al bebé"]],
+  pt: [[/\bde o bebê/g, "do bebê"], [/\ba o bebê/g, "ao bebê"], [/\bem o bebê/g, "no bebê"]],
+  de: [[/\bvon das Baby/g, "vom Baby"], [/\bHilft das Baby/g, "Hilft dem Baby"]],
+};
+/** The baby's name, or "the baby" in the current language when none is set. */
+export const babyLabel = (name?: string | null) => (name ?? "").trim() || THE_BABY[current];
+
 export function t(key: Key | string, vars: Vars = {}): string {
   const dict = DICTS[current];
   let k = key;
@@ -62,7 +74,12 @@ export function t(key: Key | string, vars: Vars = {}): string {
     k = `${key}_${one && current !== "zh" ? "one" : "other"}`;
   }
   const text = (dict as Record<string, string>)[k] ?? (en as Record<string, string>)[k] ?? k;
-  return text.replace(/\{(\w+)\}/g, (_, v) => (vars[v] != null ? String(vars[v]) : `{${v}}`));
+  let out = text.replace(/\{(\w+)\}/g, (_, v) => (vars[v] != null ? String(vars[v]) : `{${v}}`));
+  if (vars.name === THE_BABY[current]) {
+    for (const [re, to] of THE_BABY_FIX[current] ?? []) out = out.replace(re, to);
+    out = out.charAt(0).toLocaleUpperCase(current) + out.slice(1);
+  }
+  return out;
 }
 
 /** Common sounds the baby's phone may hear, translated. Others show in English. */
