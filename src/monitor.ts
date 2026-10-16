@@ -4,6 +4,7 @@ import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { PermissionsAndroid, Platform } from "react-native";
 import { cryDetector } from "../modules/hush-native/src";
+import { onBackgroundPush } from "./background";
 import { getLang, t, type Lang } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
@@ -68,15 +69,38 @@ Notifications.setNotificationHandler({
  * Every push this phone receives, visible or silent. On iOS, silent messages (remote control,
  * sync, pairing) don't reach expo-notifications' listener, so hush's native module passes them on.
  */
+/** Makes every message unique, so two identical requests aren't taken for one delivered twice. */
+const msgId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
 export function addPushListener(cb: (n: Notifications.Notification) => void): { remove: () => void } {
-  const a = Notifications.addNotificationReceivedListener(cb);
-  const b = Platform.OS === "ios" && cryDetector
-    ? cryDetector.onData((data) => cb({
-        date: Date.now(),
-        request: { identifier: `data-${Date.now()}-${Math.random()}`, content: { title: null, subtitle: null, body: null, data, sound: null }, trigger: null },
-      } as unknown as Notifications.Notification))
-    : null;
-  return { remove: () => { a.remove(); b?.remove(); } };
+  ensureHub();
+  hub.add(cb);
+  return { remove: () => { hub.delete(cb); } };
+}
+
+// One place where every push comes in (foreground listener, Android background task, iOS silent
+// pushes), with duplicates dropped: in the foreground Android delivers to both.
+const hub = new Set<(n: Notifications.Notification) => void>();
+const seen = new Map<string, number>();
+let hubReady = false;
+function fanOut(n: Notifications.Notification) {
+  const key = JSON.stringify(n.request.content.data ?? {});
+  const now = Date.now();
+  for (const [k, at] of seen) if (now - at > 60_000) seen.delete(k);
+  if (seen.has(key)) return;
+  seen.set(key, now);
+  hub.forEach((cb) => { try { cb(n); } catch {} });
+}
+const asNotification = (data: Record<string, unknown>) => ({
+  date: Date.now(),
+  request: { identifier: `data-${Date.now()}-${Math.random()}`, content: { title: null, subtitle: null, body: null, data, sound: null }, trigger: null },
+} as unknown as Notifications.Notification);
+function ensureHub() {
+  if (hubReady) return;
+  hubReady = true;
+  Notifications.addNotificationReceivedListener(fanOut);
+  onBackgroundPush((data) => fanOut(asNotification(data)));
+  if (Platform.OS === "ios" && cryDetector) cryDetector.onData((data) => fanOut(asNotification(data)));
 }
 
 /* ---------- microphone permission (both platforms) ---------- */
@@ -211,7 +235,7 @@ export async function sendData(to: string[], data: Record<string, unknown>): Pro
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, data, priority: "high", _contentAvailable: true }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, data: { ...data, _id: msgId() }, priority: "high", _contentAvailable: true }))),
     });
     return res.ok;
   } catch {
@@ -228,7 +252,7 @@ export async function sendDataMany(messages: { to: string; data: Record<string, 
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, priority: "high", _contentAvailable: true }))),
+        body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, data: { ...m.data, _id: msgId() }, priority: "high", _contentAvailable: true }))),
       });
       ok = ok && res.ok;
     }
@@ -247,7 +271,7 @@ export async function sendPush(to: string[], body: string, data: Record<string, 
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active" }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active" }))),
     });
     const json = await res.json().catch(() => null);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");
