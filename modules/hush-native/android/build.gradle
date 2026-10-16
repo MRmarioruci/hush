@@ -18,10 +18,17 @@ android {
   }
 }
 
+// expo-notifications ships as a prebuilt module; match the installed version.
+def notificationsVersion() {
+  def pkg = new File(rootDir, "../node_modules/expo-notifications/package.json")
+  return new groovy.json.JsonSlurper().parse(pkg).version
+}
+
 dependencies {
   // On-device sound classifier for the cry detector (runs YAMNet).
   implementation "org.tensorflow:tensorflow-lite:2.16.1"
   // Push messages: hush extends expo-notifications' service to vibrate on crying alerts.
-  implementation project(':expo-notifications')
-  implementation 'com.google.firebase:firebase-messaging:25.0.1'
+  // Both are already in the app; compile against them only.
+  compileOnly "host.exp.exponent:expo.modules.notifications:${notificationsVersion()}"
+  compileOnly 'com.google.firebase:firebase-messaging:25.0.1'
 }
