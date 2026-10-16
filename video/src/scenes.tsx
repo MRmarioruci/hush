@@ -61,8 +61,44 @@ export const IntroScene: React.FC = () => {
   );
 };
 
+/* 2b · Three things, use any of them. */
+const FEATS = [
+  { title: "Sleep sounds", sub: "White noise at a safe volume", color: C.moon, icon: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>' },
+  { title: "Nap times", sub: "When the next nap is due", color: C.peach, icon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>' },
+  { title: "Baby monitor", sub: "Crying alerts on your phone", color: C.sage, icon: '<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>' },
+];
+export const ThreeScene: React.FC = () => {
+  const f = useCurrentFrame();
+  const head = prog(f, 70, 92);
+  return (
+    <Scene>
+      <Sky glowY="50%" />
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      {FEATS.map((_, i) => <Sfx key={i} at={10 + i * 14} name="pop" volume={0.42} />)}
+      <Sfx at={72} name="chime" volume={0.2} />
+      <div style={{ position: "absolute", left: 0, right: 0, top: 230, display: "flex", justifyContent: "center", gap: 48 }}>
+        {FEATS.map((x, i) => {
+          const q = springIn(f, 10 + i * 14, 40 + i * 14);
+          return (
+            <div key={x.title} style={{ width: 460, background: C.card, borderRadius: 48, padding: "54px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: 22, opacity: Math.min(1, q * 1.4), scale: `${0.7 + 0.3 * q}`, translate: `0px ${(1 - q) * 60 + float(f, i, 6)}px` }}>
+              <div style={{ width: 150, height: 150, borderRadius: 48, background: x.color, display: "grid", placeItems: "center" }}>
+                <svg width={84} height={84} viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: x.icon }} />
+              </div>
+              <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 60, color: C.cream }}>{x.title}</div>
+              <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 34, color: C.muted, textAlign: "center" }}>{x.sub}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ position: "absolute", width: "100%", top: 820, textAlign: "center", fontFamily: DISPLAY, fontWeight: 500, fontSize: 84, color: C.peach, opacity: head, translate: `0px ${(1 - head) * 24}px` }}>
+        Use one, or all three.
+      </div>
+    </Scene>
+  );
+};
+
 /* 3 · Calm sounds. */
-const SOUNDS = ["Womb", "Shush", "Brown", "Pink", "White", "Ocean"];
+const SOUNDS = ["Womb", "Shush", "Rain", "Ocean", "Fan", "Brown", "Pink", "White"];
 export const SoundsScene: React.FC = () => {
   const f = useCurrentFrame();
   const p = springIn(f, 0, 36);
@@ -72,7 +108,7 @@ export const SoundsScene: React.FC = () => {
       <Sfx at={0} name="whoosh" volume={0.35} />
       {SOUNDS.map((s, i) => <Sfx key={s} at={40 + i * 6} name="tick" volume={0.32} />)}
       <Phone src="home.png" style={{ left: 250, top: 120 + (1 - p) * 140 + float(f), opacity: Math.min(1, p * 1.4), rotate: `${(1 - p) * -6 + float(f, 2, 0.6)}deg` }} />
-      <Words title="Calm white noise" sub="Six gentle sounds that keep playing with the screen off." style={{ left: 860, top: 300, width: 900 }} />
+      <Words title="Calm white noise" sub="Twelve gentle sounds that keep playing with the screen off." style={{ left: 860, top: 300, width: 900 }} />
       <div style={{ position: "absolute", left: 860, top: 640, display: "flex", gap: 18, flexWrap: "wrap", width: 900 }}>
         {SOUNDS.map((s, i) => {
           const q = springIn(f, 40 + i * 6, 62 + i * 6);
@@ -171,6 +207,28 @@ export const SmartScene: React.FC = () => {
   );
 };
 
+/* 5b · Nap times: the next nap on Home, and what's normal at this age. */
+export const NapsScene: React.FC = () => {
+  const f = useCurrentFrame();
+  const a = springIn(f, 0, 36);
+  const b = springIn(f, 50, 84);
+  const pill = springIn(f, 30, 54) * (1 - prog(f, 120, 140));
+  return (
+    <Scene>
+      <Sky glowX="30%" glowY="45%" />
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      <Sfx at={32} name="sparkle" volume={0.35} />
+      <Sfx at={52} name="whoosh" volume={0.22} />
+      <Phone src="naps.png" width={400} style={{ left: 200, top: 130 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${-4 + float(f, 1, 0.5)}deg` }} />
+      <Phone src="guide.png" width={360} style={{ left: 560, top: 230 + (1 - b) * 160 + float(f, 2, 6), opacity: Math.min(1, b * 1.4), rotate: `${5 + float(f, 3, 0.5)}deg` }} />
+      <div style={{ position: "absolute", left: 250, top: 975, fontFamily: BODY, fontWeight: 700, fontSize: 36, color: C.bg, background: C.peach, borderRadius: 99, padding: "14px 32px", opacity: Math.min(1, pill * 1.4), scale: `${0.7 + 0.3 * pill}`, rotate: "-4deg" }}>
+        Next nap ≈ 12:24
+      </div>
+      <Words title="Know when the next nap is due" sub="Suggested for your baby's age and tuned to their own rhythm. Log every nap with one tap." style={{ left: 1060, top: 330, width: 760 }} />
+    </Scene>
+  );
+};
+
 /* 6 · Monitor: ripples leave the baby's phone, an alert lands on the parent's. */
 export const MonitorScene: React.FC = () => {
   const f = useCurrentFrame();
@@ -217,9 +275,9 @@ export const NightsScene: React.FC = () => {
       <Sky glowX="70%" glowY="50%" />
       <Sfx at={0} name="whoosh" volume={0.3} />
       <Sfx at={16} name="whoosh" volume={0.2} />
-      <Words title="Watch the nights get calmer" sub="Every night on a timeline, with weekly and monthly trends." style={{ left: 150, top: 300, width: 820 }} />
-      <Phone src="week.png" width={380} style={{ left: 1040, top: 150 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${-5 + float(f, 1, 0.5)}deg` }} />
-      <Phone src="month.png" width={380} style={{ left: 1390, top: 110 + (1 - b) * 140 + float(f, 2, 6), opacity: Math.min(1, b * 1.4), rotate: `${4 + float(f, 3, 0.5)}deg` }} />
+      <Words title="Every nap and night, at a glance" sub="Sleep and crying on a timeline, with weekly and monthly trends." style={{ left: 150, top: 300, width: 820 }} />
+      <Phone src="sleepday.png" width={380} style={{ left: 1040, top: 150 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${-5 + float(f, 1, 0.5)}deg` }} />
+      <Phone src="week.png" width={380} style={{ left: 1390, top: 110 + (1 - b) * 140 + float(f, 2, 6), opacity: Math.min(1, b * 1.4), rotate: `${4 + float(f, 3, 0.5)}deg` }} />
     </Scene>
   );
 };
@@ -249,7 +307,7 @@ export const OutroScene: React.FC = () => {
         <Logo size={280} stars={prog(f, 110, 130)} style={{ left: 820, top: 120 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
         <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center", scale: `${0.94 + 0.06 * end}` }}>
           <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 170, color: C.cream, letterSpacing: -4, lineHeight: 1 }}>hush</div>
-          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor, wherever you sleep</div>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>Sleep sounds, nap times &amp; a baby monitor</div>
           <div style={{ display: "inline-block", marginTop: 50, fontFamily: BODY, fontWeight: 700, fontSize: 40, color: C.bg, background: C.peach, borderRadius: 99, padding: "18px 46px" }}>
             Get it on Google Play
           </div>
