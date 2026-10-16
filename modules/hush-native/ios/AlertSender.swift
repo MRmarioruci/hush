@@ -8,7 +8,6 @@ enum AlertSender {
     var req = URLRequest(url: u, timeoutInterval: 30)
     req.httpMethod = "POST"
     req.setValue(contentType, forHTTPHeaderField: "Content-Type")
-    req.setValue("raw", forHTTPHeaderField: "X-Goog-Upload-Protocol")
     URLSession.shared.uploadTask(with: req, from: body) { data, resp, err in
       let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
       done(code >= 200 && code < 300, data.flatMap { String(data: $0, encoding: .utf8) } ?? (err?.localizedDescription ?? ""))

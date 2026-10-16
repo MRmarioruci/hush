@@ -19,7 +19,6 @@ object AlertSender {
       readTimeout = 30000
       doOutput = true
       setRequestProperty("Content-Type", contentType)
-      setRequestProperty("X-Goog-Upload-Protocol", "raw")
       setFixedLengthStreamingMode(bytes.size)
     }
     conn.outputStream.use { it.write(bytes) }
