@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
@@ -7,44 +7,124 @@ import { useMonitor } from "../state/monitor";
 import { fmtClock, fmtDur, loadNights, type Night } from "../nights";
 import { dateLocale, t, useT } from "../i18n";
 
+type Mode = "night" | "week" | "month";
 const BAR_H = 84;
 const LEFT = '<path d="M15 6l-6 6 6 6"/>';
-const dayName = (key: string) => {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(dateLocale(), { weekday: "short" });
-};
-const longDate = (key: string) => {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "short" });
-};
+
+/* ---------- dates: nights are named after the evening they start on (YYYY-MM-DD) ---------- */
+const keyDate = (key: string) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d); };
+const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const mondayOf = (d: Date) => addDays(d, -((d.getDay() + 6) % 7));
+const fmtDate = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString(dateLocale(), o);
+const dayName = (key: string) => fmtDate(keyDate(key), { weekday: "short" });
+const longDate = (key: string) => fmtDate(keyDate(key), { weekday: "long", day: "numeric", month: "short" });
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+const fmt1 = (n: number) => n.toLocaleString(dateLocale(), { maximumFractionDigits: 1 });
+const tonight = () => new Date(Date.now() - 12 * 3600_000);
+
+/** Typical first-cry clock time; times after midnight count as later than evening ones. */
+function typicalFirstCry(ns: Night[]): string {
+  const mins = ns.filter((n) => n.firstWake).map((n) => {
+    const d = new Date(n.firstWake!);
+    let m = d.getHours() * 60 + d.getMinutes();
+    if (m < 12 * 60) m += 24 * 60;
+    return m;
+  });
+  if (!mins.length) return "–";
+  const m = median(mins) % (24 * 60);
+  return fmtClock(new Date(2000, 0, 1, Math.floor(m / 60), m % 60).getTime());
+}
+
+/** "12% less / more / about the same" compared with an earlier period. */
+function compare(now: Night[], before: Night[], kind: "Week" | "Month") {
+  if (now.length < 2 || before.length < 2) return null;
+  const a = avg(now.map((n) => n.cryMin)), b = avg(before.map((n) => n.cryMin));
+  if (b < 1 && a < 1) return { text: t(`nights.same${kind}`), color: colors.muted };
+  const pct = Math.round(((a - b) / Math.max(b, 1)) * 100);
+  if (Math.abs(pct) < 10) return { text: t(`nights.same${kind}`), color: colors.muted };
+  return pct < 0
+    ? { text: t(`nights.less${kind}`, { pct: -pct }), color: colors.sage }
+    : { text: t(`nights.more${kind}`, { pct }), color: colors.peach };
+}
 
 export function NightsScreen() {
   const { baby, nightsVersion } = useMonitor();
   const [nights, setNights] = useState<Night[] | null>(null);
-  const [i, setI] = useState(0);
+  const [mode, setMode] = useState<Mode>("night");
+  const [key, setKey] = useState<string | null>(null);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(tonight()));
+  const [month, setMonth] = useState(() => new Date(tonight().getFullYear(), tonight().getMonth(), 1));
   useT();
 
   const reload = useCallback(() => { loadNights().then(setNights); }, []);
   useEffect(reload, [nightsVersion, reload]);
   useFocusEffect(reload);
 
+  const byKey = useMemo(() => new Map((nights ?? []).map((n) => [n.key, n])), [nights]);
+
   if (!nights) return <Screen title={t("nights.title")}><View /></Screen>;
   if (!nights.length) return <Screen title={t("nights.title")}><Empty baby={baby} /></Screen>;
 
-  const n = nights[Math.min(i, nights.length - 1)];
-  const who = n.baby ?? baby;
+  const openNight = (k: string) => { if (byKey.has(k)) { setKey(k); setMode("night"); } };
 
   return (
     <Screen title={t("nights.title")}>
+      <View style={styles.modes}>
+        {(["night", "week", "month"] as Mode[]).map((m) => (
+          <Pressable key={m} onPress={() => setMode(m)} style={[styles.mode, mode === m && styles.modeOn]} accessibilityRole="tab" accessibilityState={{ selected: mode === m }}>
+            <Text style={[styles.modeText, mode === m && { color: colors.bg }]}>{t(`nights.${m}`)}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {mode === "night" && <NightView nights={nights} selected={key ?? nights[0].key} onSelect={setKey} baby={baby} />}
+      {mode === "week" && <WeekView byKey={byKey} start={weekStart} setStart={setWeekStart} onOpen={openNight} baby={baby} />}
+      {mode === "month" && <MonthView byKey={byKey} month={month} setMonth={setMonth} onOpen={openNight} baby={baby} />}
+
+      <Text style={styles.foot}>{t("nights.foot")}</Text>
+    </Screen>
+  );
+}
+
+/* ---------------- one night ---------------- */
+
+function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string }) {
+  const i = Math.max(0, nights.findIndex((n) => n.key === selected));
+  const n = nights[i];
+  const strip = nights.slice(0, 60);
+  const max = Math.max(5, ...strip.map((x) => x.cryMin));
+
+  return (
+    <>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dayStrip}
+        style={{ marginHorizontal: -20, transform: [{ scaleX: -1 }] }}
+      >
+        {strip.map((x) => {
+          const on = x.key === n.key;
+          return (
+            <Pressable key={x.key} onPress={() => onSelect(x.key)} style={[styles.day, on && styles.dayOn, { transform: [{ scaleX: -1 }] }]} accessibilityLabel={longDate(x.key)}>
+              <Text style={[styles.dayName, on && { color: colors.bg }]}>{dayName(x.key)}</Text>
+              <Text style={[styles.dayNum, on && { color: colors.bg }]}>{keyDate(x.key).getDate()}</Text>
+              <View style={[styles.dayBar, { width: 6 + 18 * (x.cryMin / max), backgroundColor: on ? colors.bg : colors.rose, opacity: on ? 0.5 : 0.8 }]} />
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       <View style={styles.picker}>
-        <Pressable onPress={() => setI((x) => Math.min(nights.length - 1, x + 1))} disabled={i >= nights.length - 1} hitSlop={12} style={i >= nights.length - 1 && { opacity: 0.25 }} accessibilityLabel={t("nights.earlier")}>
+        <Pressable onPress={() => onSelect(nights[Math.min(nights.length - 1, i + 1)].key)} disabled={i >= nights.length - 1} hitSlop={12} style={i >= nights.length - 1 && { opacity: 0.25 }} accessibilityLabel={t("nights.earlier")}>
           <Icon d={LEFT} size={22} color={colors.cream} width={2} />
         </Pressable>
-        <View style={{ alignItems: "center" }}>
+        <View style={{ alignItems: "center", flexShrink: 1 }}>
           <Text style={styles.pickTitle}>{i === 0 ? t("nights.lastNight") : longDate(n.key)}</Text>
           <Text style={styles.pickSub}>{fmtClock(n.from)} – {fmtClock(n.to)}</Text>
         </View>
-        <Pressable onPress={() => setI((x) => Math.max(0, x - 1))} disabled={i === 0} hitSlop={12} style={i === 0 && { opacity: 0.25 }} accessibilityLabel={t("nights.later")}>
+        <Pressable onPress={() => onSelect(nights[Math.max(0, i - 1)].key)} disabled={i === 0} hitSlop={12} style={i === 0 && { opacity: 0.25 }} accessibilityLabel={t("nights.later")}>
           <Icon d={ICONS.chevron} size={22} color={colors.cream} width={2} />
         </Pressable>
       </View>
@@ -57,12 +137,171 @@ export function NightsScreen() {
         <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
         <Tile value={n.firstWake ? fmtClock(n.firstWake) : "–"} label={t("nights.first")} />
       </View>
+      <WhenChart nights={nights.slice(0, 14)} baby={n.baby ?? baby} />
+    </>
+  );
+}
 
-      <WeekChart nights={nights} selected={n.key} onPick={(k) => setI(nights.findIndex((x) => x.key === k))} />
-      <WhenChart nights={nights.slice(0, 14)} baby={who} />
+/* ---------------- a week ---------------- */
 
-      <Text style={styles.foot}>{t("nights.foot")}</Text>
-    </Screen>
+function WeekView({ byKey, start, setStart, onOpen, baby }: { byKey: Map<string, Night>; start: Date; setStart: (d: Date) => void; onOpen: (k: string) => void; baby: string }) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const week = days.map((d) => byKey.get(dateKey(d))).filter((n): n is Night => !!n);
+  const prevWeek = Array.from({ length: 7 }, (_, i) => byKey.get(dateKey(addDays(start, i - 7)))).filter((n): n is Night => !!n);
+  const canNext = start < mondayOf(tonight());
+  const max = Math.max(5, ...week.map((n) => n.cryMin));
+  const range = `${fmtDate(start, { day: "numeric", month: "short" })} – ${fmtDate(addDays(start, 6), { day: "numeric", month: "short" })}`;
+  const cmp = compare(week, prevWeek, "Week");
+  const calmest = week.length ? week.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
+
+  return (
+    <>
+      <Period title={range} onPrev={() => setStart(addDays(start, -7))} onNext={canNext ? () => setStart(addDays(start, 7)) : undefined} />
+      <Card style={{ gap: 10 }}>
+        <Label right={<Text style={styles.axisText}>{t("nights.avg", { dur: fmtDur(avg(week.map((n) => n.cryMin))) })}</Text>}>{t("nights.perNight")}</Label>
+        <View style={styles.bars}>
+          {days.map((d) => {
+            const k = dateKey(d), n = byKey.get(k);
+            return (
+              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.barCol} accessibilityLabel={n ? t("nights.barA11y", { day: dayName(k), dur: fmtDur(n.cryMin) }) : dayName(k)}>
+                <Text style={styles.barVal}>{n ? Math.round(n.cryMin) : ""}</Text>
+                {n ? (
+                  <View style={[styles.bar, { height: Math.max(3, (n.cryMin / max) * BAR_H), backgroundColor: calmest?.key === k ? colors.sage : "#463d63" }]} />
+                ) : (
+                  <View style={styles.barEmpty} />
+                )}
+                <Text style={styles.axisText}>{dayName(k)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {cmp && <Text style={[styles.trend, { color: cmp.color }]}>{cmp.text}</Text>}
+        <Text style={styles.hintText}>{week.length ? t("nights.tapDay") : t("nights.noWeek")}</Text>
+      </Card>
+      {week.length > 0 && (
+        <>
+          <View style={styles.tiles}>
+            <Tile value={fmtDur(avg(week.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
+            <Tile value={fmt1(avg(week.map((n) => n.cries)))} label={t("nights.avgCries")} />
+            <Tile value={fmtDur(avg(week.map((n) => n.longestQuietMin)))} label={t("nights.avgQuiet")} />
+            <Tile value={typicalFirstCry(week)} label={t("nights.typicalFirst")} />
+          </View>
+          {calmest && <Calmest n={calmest} onOpen={onOpen} />}
+          <WhenChart nights={week} baby={baby} />
+        </>
+      )}
+    </>
+  );
+}
+
+/* ---------------- a month ---------------- */
+
+function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string, Night>; month: Date; setMonth: (d: Date) => void; onOpen: (k: string) => void; baby: string }) {
+  const y = month.getFullYear(), mo = month.getMonth();
+  const daysIn = new Date(y, mo + 1, 0).getDate();
+  const all = Array.from({ length: daysIn }, (_, i) => new Date(y, mo, i + 1));
+  const inMonth = all.map((d) => byKey.get(dateKey(d))).filter((n): n is Night => !!n);
+  const prevMonth = Array.from({ length: new Date(y, mo, 0).getDate() }, (_, i) => byKey.get(dateKey(new Date(y, mo - 1, i + 1)))).filter((n): n is Night => !!n);
+  const now = tonight();
+  const canNext = y < now.getFullYear() || (y === now.getFullYear() && mo < now.getMonth());
+  const max = Math.max(5, ...inMonth.map((n) => n.cryMin));
+  const lead = (all[0].getDay() + 6) % 7; // Monday-first grid
+  const weekdays = Array.from({ length: 7 }, (_, i) => fmtDate(addDays(new Date(2024, 0, 1), i), { weekday: "narrow" })); // 1 Jan 2024 was a Monday
+  const cmp = compare(inMonth, prevMonth, "Month");
+  const calmest = inMonth.length ? inMonth.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
+
+  // Week-by-week averages inside this month.
+  const weeks: { label: string; avg: number; count: number }[] = [];
+  for (let w = mondayOf(all[0]); w <= all[daysIn - 1]; w = addDays(w, 7)) {
+    const ns = Array.from({ length: 7 }, (_, i) => addDays(w, i))
+      .filter((d) => d.getMonth() === mo)
+      .map((d) => byKey.get(dateKey(d)))
+      .filter((n): n is Night => !!n);
+    weeks.push({ label: fmtDate(w < all[0] ? all[0] : w, { day: "numeric" }), avg: avg(ns.map((n) => n.cryMin)), count: ns.length });
+  }
+  const wMax = Math.max(5, ...weeks.map((w) => w.avg));
+
+  return (
+    <>
+      <Period title={fmtDate(month, { month: "long", year: "numeric" })} onPrev={() => setMonth(new Date(y, mo - 1, 1))} onNext={canNext ? () => setMonth(new Date(y, mo + 1, 1)) : undefined} />
+      <Card style={{ gap: 10 }}>
+        <View style={styles.calHead}>{weekdays.map((w, i) => <Text key={i} style={styles.calWd}>{w}</Text>)}</View>
+        <View style={styles.cal}>
+          {Array.from({ length: lead }, (_, i) => <View key={`b${i}`} style={styles.calCell} />)}
+          {all.map((d) => {
+            const k = dateKey(d), n = byKey.get(k);
+            const a = n ? 0.18 + 0.82 * (n.cryMin / max) : 0;
+            return (
+              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.calCell} accessibilityLabel={n ? t("nights.barA11y", { day: longDate(k), dur: fmtDur(n.cryMin) }) : longDate(k)}>
+                <View style={[styles.calDay, n ? { backgroundColor: `rgba(242,165,151,${a})` } : styles.calNone]}>
+                  <Text style={[styles.calNum, !n && { color: colors.muted }, n && a > 0.6 && { color: colors.bg }]}>{d.getDate()}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.legendRow}>
+          <Text style={styles.axisText}>{t("nights.less")}</Text>
+          {[0.18, 0.4, 0.6, 0.8, 1].map((a) => <View key={a} style={[styles.legendCell, { backgroundColor: `rgba(242,165,151,${a})` }]} />)}
+          <Text style={styles.axisText}>{t("nights.more")}</Text>
+        </View>
+        <Text style={styles.hintText}>{inMonth.length ? t("nights.tapDay") : t("nights.noMonth")}</Text>
+      </Card>
+
+      {inMonth.length > 0 && (
+        <>
+          <View style={styles.tiles}>
+            <Tile value={String(inMonth.length)} label={t("nights.recorded", { count: inMonth.length })} />
+            <Tile value={fmtDur(avg(inMonth.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
+            <Tile value={fmt1(avg(inMonth.map((n) => n.cries)))} label={t("nights.avgCries")} />
+            <Tile value={typicalFirstCry(inMonth)} label={t("nights.typicalFirst")} />
+          </View>
+          <Card style={{ gap: 10 }}>
+            <Label>{t("nights.weekly")}</Label>
+            <View style={styles.bars}>
+              {weeks.map((w, i) => (
+                <View key={i} style={styles.barCol}>
+                  <Text style={styles.barVal}>{w.count ? Math.round(w.avg) : ""}</Text>
+                  {w.count ? <View style={[styles.bar, { height: Math.max(3, (w.avg / wMax) * BAR_H), backgroundColor: "#463d63" }]} /> : <View style={styles.barEmpty} />}
+                  <Text style={styles.axisText} numberOfLines={1}>{w.label}</Text>
+                </View>
+              ))}
+            </View>
+            {cmp && <Text style={[styles.trend, { color: cmp.color }]}>{cmp.text}</Text>}
+          </Card>
+          {calmest && <Calmest n={calmest} onOpen={onOpen} />}
+          <WhenChart nights={inMonth} baby={baby} />
+        </>
+      )}
+    </>
+  );
+}
+
+/* ---------------- shared pieces ---------------- */
+
+function Period({ title, onPrev, onNext }: { title: string; onPrev: () => void; onNext?: () => void }) {
+  return (
+    <View style={styles.picker}>
+      <Pressable onPress={onPrev} hitSlop={12} accessibilityLabel={t("nights.prev")}>
+        <Icon d={LEFT} size={22} color={colors.cream} width={2} />
+      </Pressable>
+      <Text style={styles.pickTitle}>{title}</Text>
+      <Pressable onPress={onNext} disabled={!onNext} hitSlop={12} style={!onNext && { opacity: 0.25 }} accessibilityLabel={t("nights.next")}>
+        <Icon d={ICONS.chevron} size={22} color={colors.cream} width={2} />
+      </Pressable>
+    </View>
+  );
+}
+
+function Calmest({ n, onOpen }: { n: Night; onOpen: (k: string) => void }) {
+  return (
+    <Pressable onPress={() => onOpen(n.key)} style={styles.calm}>
+      <View style={styles.calmDot} />
+      <Text style={styles.calmText}>
+        {t("nights.calmest")} · <Text style={{ color: colors.cream }}>{longDate(n.key)}</Text> · {fmtDur(n.cryMin)}
+      </Text>
+      <Icon d={ICONS.chevron} size={16} />
+    </Pressable>
   );
 }
 
@@ -88,7 +327,7 @@ function Tile({ value, label }: { value: string; label: string }) {
 /** The night as a strip: listening shaded, crying spells as marks, white noise as a thin line. */
 function Timeline({ n }: { n: Night }) {
   const start = n.from, end = Math.max(n.to, n.from + 3600_000);
-  const x = (t: number) => `${Math.max(0, Math.min(100, ((t - start) / (end - start)) * 100))}%` as const;
+  const x = (v: number) => `${Math.max(0, Math.min(100, ((v - start) / (end - start)) * 100))}%` as const;
   const w = (a: number, b: number) => `${Math.max(0.8, ((Math.min(b, end) - Math.max(a, start)) / (end - start)) * 100)}%` as const;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => start + f * (end - start));
   return (
@@ -99,7 +338,7 @@ function Timeline({ n }: { n: Night }) {
         {n.noise.map(([a, b], k) => <View key={`n${k}`} style={[styles.noise, { left: x(a), width: w(a, b) }]} />)}
         {n.spells.map(([a, b], k) => <View key={`s${k}`} style={[styles.spell, { left: x(a), width: w(a, b) }]} />)}
       </View>
-      <View style={styles.axis}>{ticks.map((t, k) => <Text key={k} style={styles.axisText}>{fmtClock(t)}</Text>)}</View>
+      <View style={styles.axis}>{ticks.map((v, k) => <Text key={k} style={styles.axisText}>{fmtClock(v)}</Text>)}</View>
       <View style={styles.legend}>
         <Key color={colors.rose} label={t("nights.crying")} />
         <Key color="rgba(169,214,189,0.45)" label={t("nights.listening")} />
@@ -118,40 +357,7 @@ function Key({ color, label, thin }: { color: string; label: string; thin?: bool
   );
 }
 
-/** Crying minutes for the last 7 nights, with a comparison to the 7 before. */
-function WeekChart({ nights, selected, onPick }: { nights: Night[]; selected: string; onPick: (key: string) => void }) {
-  const week = nights.slice(0, 7).reverse();
-  const prev = nights.slice(7, 14);
-  const max = Math.max(5, ...week.map((n) => n.cryMin));
-  const avg = (l: Night[]) => (l.length ? l.reduce((s, n) => s + n.cryMin, 0) / l.length : 0);
-  const now = avg(week), before = avg(prev);
-  let trend: { text: string; color: string } | null = null;
-  if (prev.length >= 3 && week.length >= 3) {
-    const diff = now - before;
-    trend = Math.abs(diff) < 2
-      ? { text: t("nights.same", { dur: fmtDur(before) }), color: colors.muted }
-      : diff < 0
-        ? { text: t("nights.down", { dur: fmtDur(before) }), color: colors.sage }
-        : { text: t("nights.up", { dur: fmtDur(before) }), color: colors.peach };
-  }
-  return (
-    <Card style={{ gap: 10 }}>
-      <Label right={<Text style={styles.axisText}>{t("nights.avg", { dur: fmtDur(now) })}</Text>}>{t("nights.perNight")}</Label>
-      <View style={styles.bars}>
-        {week.map((n) => (
-          <Pressable key={n.key} onPress={() => onPick(n.key)} style={styles.barCol} accessibilityLabel={t("nights.barA11y", { day: dayName(n.key), dur: fmtDur(n.cryMin) })}>
-            <Text style={styles.barVal}>{Math.round(n.cryMin)}</Text>
-            <View style={[styles.bar, { height: Math.max(3, (n.cryMin / max) * BAR_H), backgroundColor: n.key === selected ? colors.peach : "#463d63" }]} />
-            <Text style={[styles.axisText, n.key === selected && { color: colors.cream }]}>{dayName(n.key)}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {trend && <Text style={[styles.trend, { color: trend.color }]}>{trend.text}</Text>}
-    </Card>
-  );
-}
-
-/** When crying tends to happen, by hour from 7 pm to 7 am, across recent nights. */
+/** When crying tends to happen, by hour from 7 pm to 7 am, across the given nights. */
 function WhenChart({ nights, baby }: { nights: Night[]; baby: string }) {
   const order = [19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6];
   const totals = order.map((h) => nights.reduce((s, n) => s + (n.hours[h] ?? 0), 0));
@@ -175,8 +381,20 @@ function WhenChart({ nights, baby }: { nights: Night[]; baby: string }) {
 }
 
 const styles = StyleSheet.create({
-  picker: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 },
-  pickTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
+  modes: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 99, padding: 4 },
+  mode: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 99 },
+  modeOn: { backgroundColor: colors.cream },
+  modeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
+
+  dayStrip: { gap: 6, paddingHorizontal: 20 },
+  day: { width: 50, alignItems: "center", gap: 2, paddingVertical: 9, borderRadius: 16, backgroundColor: colors.card },
+  dayOn: { backgroundColor: colors.peach },
+  dayName: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
+  dayNum: { fontFamily: fonts.display, fontSize: 18, color: colors.cream, fontVariant: ["tabular-nums"] },
+  dayBar: { height: 4, borderRadius: 2, marginTop: 3 },
+
+  picker: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, gap: 10 },
+  pickTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream, textAlign: "center", flexShrink: 1 },
   pickSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
 
   strip: { height: 36, borderRadius: 10, backgroundColor: colors.card2, overflow: "hidden" },
@@ -185,7 +403,7 @@ const styles = StyleSheet.create({
   spell: { position: "absolute", top: 7, bottom: 7, borderRadius: 4, backgroundColor: colors.rose },
   axis: { flexDirection: "row", justifyContent: "space-between" },
   axisText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted, fontVariant: ["tabular-nums"] },
-  legend: { flexDirection: "row", gap: 14 },
+  legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
 
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { flexBasis: "48%", flexGrow: 1, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 13, paddingHorizontal: 14, gap: 2 },
@@ -195,8 +413,24 @@ const styles = StyleSheet.create({
   bars: { flexDirection: "row", gap: 8, alignItems: "flex-end", paddingTop: 4 },
   barCol: { flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 5 },
   bar: { width: "100%", borderTopLeftRadius: 7, borderTopRightRadius: 7, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
+  barEmpty: { width: "60%", height: 2, borderRadius: 1, backgroundColor: colors.card2 },
   barVal: { fontFamily: fonts.body, fontSize: 11, color: colors.muted, fontVariant: ["tabular-nums"] },
   trend: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
+  hintText: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, textAlign: "center" },
+
+  calm: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 13, paddingHorizontal: 14 },
+  calmDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.sage },
+  calmText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: colors.muted },
+
+  calHead: { flexDirection: "row" },
+  calWd: { width: `${100 / 7}%`, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
+  cal: { flexDirection: "row", flexWrap: "wrap" },
+  calCell: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
+  calDay: { flex: 1, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  calNone: { borderWidth: 1, borderColor: colors.card2 },
+  calNum: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, fontVariant: ["tabular-nums"] },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "center" },
+  legendCell: { width: 16, height: 10, borderRadius: 3 },
 
   heat: { flexDirection: "row", gap: 3 },
   heatCell: { flex: 1, height: 26, borderRadius: 5 },

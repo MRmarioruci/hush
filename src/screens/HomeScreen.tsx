@@ -40,7 +40,7 @@ export function HomeScreen() {
   return (
     <Screen
       eyebrow={t(greetingKey())}
-      title="hush"
+      title={mon.m.babyName.trim() ? t("home.family", { name: mon.m.babyName.trim() }) : "hush"}
       right={
         <Pressable onPress={() => nav.navigate("Settings")} hitSlop={12} style={styles.gear} accessibilityLabel={t("home.settings")}>
           <Icon d={ICONS.gear} size={22} color={colors.cream} />
