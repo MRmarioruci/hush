@@ -11,9 +11,13 @@ import { useMonitor } from "../state/monitor";
 import { useT, babyLabel } from "../i18n";
 import { Slider } from "../components/Slider";
 import { ICONS, Icon, Pill } from "../components/ui";
+import { fmtAge, pickBirthday } from "../components/Naps";
+import { ageMonths } from "../naps";
+import { dateLocale } from "../i18n";
+import type { Features } from "../storage";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
 
-type Job = "sounds" | "nursery" | "parent";
+type Job = "nursery" | "parent";
 const MOON = `<svg viewBox="0 0 24 24"><path fill="${colors.moon}" d="M15.5 3.2a9 9 0 1 0 5.3 13.9A7.2 7.2 0 0 1 15.5 3.2z"/></svg>`;
 const GLOBE = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>';
 
@@ -25,23 +29,29 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const mon = useMonitor();
   const [step, setStep] = useState(0);
   const [job, setJob] = useState<Job | null>(mon.m.role ?? null);
+  const [feats, setFeats] = useState<Features>(sleep.s.features);
+  const flip = (k: keyof Features) => setFeats((f) => ({ ...f, [k]: !f[k] }));
+  const months = ageMonths(sleep.s.birthday);
   const [picking, setPicking] = useState(false);
   const langLabel = useLangLabel();
   const baby = babyLabel(mon.m.babyName);
 
-  // Steps depend on the job: the parent's phone doesn't need the distance, the sounds-only phone needs no permissions.
-  const steps: string[] = ["welcome", "name", "job"];
-  if (job !== "parent") steps.push("distance");
-  if (job === "nursery" || job === "parent") steps.push("perms");
+  // Steps depend on what this phone does: only ask about the parts that are turned on.
+  const steps: string[] = ["welcome", "name", "features"];
+  if (feats.naps) steps.push("birthday");
+  if (feats.monitor) steps.push("job");
+  if (feats.sounds && !(feats.monitor && job === "parent")) steps.push("distance");
+  if ((feats.monitor && job) || feats.naps) steps.push("perms");
   const id = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;
 
   const next = () => (last ? finish() : setStep((s) => s + 1));
   const finish = () => {
-    mon.update({ role: job === "sounds" ? null : job });
+    if (feats.monitor) mon.update({ role: job });
+    sleep.set({ features: feats });
     onDone();
   };
-  const canNext = id !== "job" || job != null;
+  const canNext = (id !== "job" || job != null) && (id !== "features" || feats.sounds || feats.naps || feats.monitor);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
@@ -86,11 +96,37 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
+        {id === "features" && (
+          <View style={styles.stepBox}>
+            <Text style={styles.title}>{t("ob.featTitle")}</Text>
+            <Text style={styles.sub}>{t("ob.featSub")}</Text>
+            <View style={{ gap: 10, marginTop: 8 }}>
+              <JobCard multi on={feats.sounds} icon={ICONS.sounds} tone={colors.moon} title={t("feat.sounds")} sub={t("feat.soundsSub")} onPress={() => flip("sounds")} />
+              <JobCard multi on={feats.naps} icon={ICONS.nights} tone={colors.peach} title={t("feat.naps")} sub={t("feat.napsSub")} onPress={() => flip("naps")} />
+              <JobCard multi on={feats.monitor} icon={ICONS.monitor} tone={colors.sage} title={t("feat.monitor")} sub={t("feat.monitorSub")} onPress={() => flip("monitor")} />
+            </View>
+            <Text style={[styles.sub, { fontSize: 13, marginTop: 6 }]}>{t("ob.featHint")}</Text>
+          </View>
+        )}
+
+        {id === "birthday" && (
+          <View style={styles.stepBox}>
+            <Text style={styles.title}>{t("ob.bdayTitle", { name: baby })}</Text>
+            <Text style={styles.sub}>{t("ob.bdaySub")}</Text>
+            <Pressable onPress={() => pickBirthday(sleep.s.birthday, (birthday) => sleep.set({ birthday }))} style={styles.distCard} accessibilityRole="button">
+              <Text style={[styles.distValue, { fontSize: 28 }]}>
+                {sleep.s.birthday ? new Date(sleep.s.birthday + "T12:00:00").toLocaleDateString(dateLocale(), { day: "numeric", month: "long", year: "numeric" }) : t("ob.bdayPick")}
+              </Text>
+              {months != null && <Text style={[styles.sub, { color: colors.cream }]}>{fmtAge(months)}</Text>}
+            </Pressable>
+            {!sleep.s.birthday && <Text style={[styles.sub, { fontSize: 13 }]}>{t("ob.bdaySkip")}</Text>}
+          </View>
+        )}
+
         {id === "job" && (
           <View style={styles.stepBox}>
             <Text style={styles.title}>{t("ob.jobTitle")}</Text>
             <View style={{ gap: 10, marginTop: 8 }}>
-              <JobCard on={job === "sounds"} icon={ICONS.sounds} tone={colors.moon} title={t("ob.jobSounds")} sub={t("ob.jobSoundsSub")} onPress={() => setJob("sounds")} />
               <JobCard on={job === "nursery"} icon={ICONS.crib} tone={colors.sage} title={t("ob.jobNursery", { name: baby })} sub={t("ob.jobNurserySub")} onPress={() => setJob("nursery")} />
               <JobCard on={job === "parent"} icon={ICONS.bell} tone={colors.peach} title={t("ob.jobParent")} sub={t("ob.jobParentSub")} onPress={() => setJob("parent")} />
             </View>
@@ -121,7 +157,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {id === "perms" && job && <Permissions job={job} />}
+        {id === "perms" && <Permissions job={feats.monitor ? job : null} />}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -143,11 +179,11 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function JobCard({ on, icon, tone, title, sub, onPress }: { on: boolean; icon: string; tone: string; title: string; sub: string; onPress: () => void }) {
+function JobCard({ on, icon, tone, title, sub, onPress, multi }: { on: boolean; icon: string; tone: string; title: string; sub: string; onPress: () => void; multi?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="radio"
+      accessibilityRole={multi ? "checkbox" : "radio"}
       accessibilityState={{ checked: on }}
       style={({ pressed }) => [styles.job, on && styles.jobOn, pressed && { transform: [{ scale: 0.98 }] }]}
     >
@@ -158,13 +194,17 @@ function JobCard({ on, icon, tone, title, sub, onPress }: { on: boolean; icon: s
         <Text style={styles.jobTitle}>{title}</Text>
         <Text style={styles.jobSub}>{sub}</Text>
       </View>
-      <View style={[styles.radio, on && styles.radioOn]}>{on && <View style={styles.radioDot} />}</View>
+      {multi ? (
+        <View style={[styles.check, on && styles.checkOn]}>{on && <Icon d={ICONS.check} size={14} color={colors.bg} width={3} />}</View>
+      ) : (
+        <View style={[styles.radio, on && styles.radioOn]}>{on && <View style={styles.radioDot} />}</View>
+      )}
     </Pressable>
   );
 }
 
 /** Ask only for what this phone's job needs, each with its own Allow button. */
-function Permissions({ job }: { job: Job }) {
+function Permissions({ job }: { job: Job | null }) {
   const t = useT();
   const nursery = job === "nursery";
   const [mic, setMic] = useState(false);
@@ -202,7 +242,7 @@ function Permissions({ job }: { job: Job }) {
         )}
         <PermRow
           title={t("ob.notif")}
-          sub={nursery ? t("ob.notifNursery") : t("ob.notifParent")}
+          sub={nursery ? t("ob.notifNursery") : job === "parent" ? t("ob.notifParent") : t("ob.notifNaps")}
           ok={notif}
           onAllow={async () => {
             await Notifications.requestPermissionsAsync().catch(() => null);
@@ -273,6 +313,8 @@ const styles = StyleSheet.create({
   jobSub: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: colors.muted },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#463d63", alignItems: "center", justifyContent: "center" },
   radioOn: { borderColor: colors.peach },
+  check: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: "#463d63", alignItems: "center", justifyContent: "center" },
+  checkOn: { borderColor: colors.peach, backgroundColor: colors.peach },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.peach },
 
   distCard: { backgroundColor: colors.card, borderRadius: 24, padding: 18, gap: 12, marginTop: 14 },

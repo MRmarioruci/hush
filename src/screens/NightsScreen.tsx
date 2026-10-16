@@ -4,7 +4,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { useMonitor } from "../state/monitor";
-import { dayKey, fmtClock, fmtDur, loadNights, type Night } from "../nights";
+import { dayKey, fmtClock, fmtDur, loadManual, type ManualSleep, type Night, type Sleep } from "../nights";
+import { useNaps } from "../state/naps";
+import { useSleep } from "../state/sleep";
+import { SleepRow, SleepSheet, TypicalCard } from "../components/Naps";
 import { dateLocale, t, useT } from "../i18n";
 
 type Mode = "day" | "week" | "month";
@@ -47,24 +50,33 @@ function compare(now: Night[], before: Night[], kind: "Week" | "Month") {
 }
 
 export function NightsScreen() {
-  const { baby, nightsVersion, syncSleep, lastSync } = useMonitor();
-  const [nights, setNights] = useState<Night[] | null>(null);
+  const { baby, syncSleep, lastSync } = useMonitor();
+  const { s } = useSleep();
+  const naps = useNaps();
+  const [loaded, setLoaded] = useState(false);
+  const nights = loaded ? naps.nights : null;
+  const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
+  const [mine, setMine] = useState<Set<string>>(new Set());
+  const f = s.features;
+  const sleepMode = !f.monitor;
   const [mode, setMode] = useState<Mode>("day");
   const [key, setKey] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(today()));
   const [month, setMonth] = useState(() => new Date(today().getFullYear(), today().getMonth(), 1));
   useT();
 
-  const reload = useCallback(() => { loadNights().then(setNights); }, []);
-  useEffect(reload, [nightsVersion, reload]);
+  const reload = useCallback(() => { naps.reload(); loadManual().then((m) => setMine(new Set(m.list.map((x) => x.id)))).catch(() => {}); setTimeout(() => setLoaded(true), 50); }, [naps.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadManual().then((m) => setMine(new Set(m.list.map((x) => x.id)))).catch(() => {}); }, [naps.nights]);
   useFocusEffect(reload);
   // Opening this page shares this phone's days with the connected phones and asks for theirs.
   useFocusEffect(useCallback(() => { syncSleep(); }, [syncSleep]));
+  const edit = (sl: Sleep) => sl.logged && sl.id && mine.has(sl.id) ? () => setSheet({ id: sl.id!, from: sl.from, to: sl.to, kind: sl.kind, note: sl.note }) : undefined;
+  const sheetEl = <SleepSheet value={sheet} onClose={() => setSheet(null)} />;
 
   const byKey = useMemo(() => new Map((nights ?? []).map((n) => [n.key, n])), [nights]);
 
   if (!nights) return <Screen title={t("nights.title")}><View /></Screen>;
-  if (!nights.length) return <Screen title={t("nights.title")}><Empty baby={baby} /></Screen>;
+  if (!nights.length) return <Screen title={t("nights.title")}><Empty baby={baby} naps={f.naps} onAdd={() => setSheet("new")} />{sheetEl}</Screen>;
 
   const openNight = (k: string) => { if (byKey.has(k)) { setKey(k); setMode("day"); } };
 
@@ -78,9 +90,10 @@ export function NightsScreen() {
         ))}
       </View>
 
-      {mode === "day" && <NightView nights={nights} selected={key ?? nights[0].key} onSelect={setKey} baby={baby} />}
-      {mode === "week" && <WeekView byKey={byKey} start={weekStart} setStart={setWeekStart} onOpen={openNight} baby={baby} />}
-      {mode === "month" && <MonthView byKey={byKey} month={month} setMonth={setMonth} onOpen={openNight} baby={baby} />}
+      {mode === "day" && <NightView nights={nights} selected={key ?? nights[0].key} onSelect={setKey} baby={baby} naps={f.naps} edit={edit} onAdd={() => setSheet("new")} />}
+      {mode === "week" && <WeekView byKey={byKey} start={weekStart} setStart={setWeekStart} onOpen={openNight} baby={baby} sleepMode={sleepMode} />}
+      {mode === "month" && <MonthView byKey={byKey} month={month} setMonth={setMonth} onOpen={openNight} baby={baby} sleepMode={sleepMode} />}
+      {sheetEl}
 
       <Text style={styles.foot}>
         {t("nights.foot")}
@@ -92,11 +105,13 @@ export function NightsScreen() {
 
 /* ---------------- one night ---------------- */
 
-function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string }) {
+function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string; naps: boolean; edit: (s: Sleep) => (() => void) | undefined; onAdd: () => void }) {
   const i = Math.max(0, nights.findIndex((n) => n.key === selected));
   const n = nights[i];
   const strip = nights.slice(0, 60);
-  const max = Math.max(5, ...strip.map((x) => x.cryMin));
+  const heard = n.listening.length > 0;
+  const metric = (x: Night) => (strip.some((y) => y.listening.length) ? x.cryMin : x.sleptMin ?? 0);
+  const max = Math.max(5, ...strip.map(metric));
 
   return (
     <>
@@ -112,7 +127,7 @@ function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; sele
             <Pressable key={x.key} onPress={() => onSelect(x.key)} style={[styles.day, on && styles.dayOn, { transform: [{ scaleX: -1 }] }]} accessibilityLabel={longDate(x.key)}>
               <Text style={[styles.dayName, on && { color: colors.bg }]}>{dayName(x.key)}</Text>
               <Text style={[styles.dayNum, on && { color: colors.bg }]}>{keyDate(x.key).getDate()}</Text>
-              <View style={[styles.dayBar, { width: 6 + 18 * (x.cryMin / max), backgroundColor: on ? colors.bg : colors.rose, opacity: on ? 0.5 : 0.8 }]} />
+              <View style={[styles.dayBar, { width: 6 + 18 * (metric(x) / max), backgroundColor: on ? colors.bg : strip.some((y) => y.listening.length) ? colors.rose : colors.sage, opacity: on ? 0.5 : 0.8 }]} />
             </Pressable>
           );
         })}
@@ -124,20 +139,27 @@ function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; sele
         </Pressable>
         <View style={{ alignItems: "center", flexShrink: 1 }}>
           <Text style={styles.pickTitle}>{dayTitle(n.key)}</Text>
-          <Text style={styles.pickSub}>{t("nights.heard", { dur: fmtDur(n.listenedMin) })}</Text>
+          <Text style={styles.pickSub}>{heard ? t("nights.heard", { dur: fmtDur(n.listenedMin) }) : t("nights.slept", { dur: fmtDur(n.sleptMin ?? 0) })}</Text>
         </View>
         <Pressable onPress={() => onSelect(nights[Math.max(0, i - 1)].key)} disabled={i === 0} hitSlop={12} style={i === 0 && { opacity: 0.25 }} accessibilityLabel={t("nights.later")}>
           <Icon d={ICONS.chevron} size={22} color={colors.cream} width={2} />
         </Pressable>
       </View>
 
-      {n.listening.length > 0 && <Timeline n={n} />}
-      {(n.sleeps ?? []).length > 0 && <Sleeps n={n} />}
+      {(heard || (n.logged ?? []).length > 0) && <Timeline n={n} />}
+      {((n.sleeps ?? []).length > 0 || napsOn) && <Sleeps n={n} edit={edit} onAdd={napsOn ? onAdd : undefined} />}
+      {napsOn && <TypicalCard n={n} />}
 
       <View style={styles.tiles}>
-        <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
-        <Tile value={fmtDur(n.cryMin)} label={t("nights.total")} />
-        <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
+        {heard ? (
+          <>
+            <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
+            <Tile value={fmtDur(n.cryMin)} label={t("nights.total")} />
+            <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
+          </>
+        ) : (
+          <Tile value={fmtDur(n.sleptMin ?? 0)} label={t("typ.total")} />
+        )}
         <Tile value={String(naps(n))} label={t("nights.naps", { count: naps(n) })} />
       </View>
       <WhenChart nights={nights.slice(0, 14)} baby={n.baby || baby} />
@@ -147,29 +169,30 @@ function NightView({ nights, selected, onSelect, baby }: { nights: Night[]; sele
 
 /* ---------------- a week ---------------- */
 
-function WeekView({ byKey, start, setStart, onOpen, baby }: { byKey: Map<string, Night>; start: Date; setStart: (d: Date) => void; onOpen: (k: string) => void; baby: string }) {
+function WeekView({ byKey, start, setStart, onOpen, baby, sleepMode }: { byKey: Map<string, Night>; start: Date; setStart: (d: Date) => void; onOpen: (k: string) => void; baby: string; sleepMode: boolean }) {
+  const val = (n: Night) => (sleepMode ? (n.sleptMin ?? 0) : n.cryMin);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const week = days.map((d) => byKey.get(dateKey(d))).filter((n): n is Night => !!n);
   const prevWeek = Array.from({ length: 7 }, (_, i) => byKey.get(dateKey(addDays(start, i - 7)))).filter((n): n is Night => !!n);
   const canNext = start < mondayOf(today());
-  const max = Math.max(5, ...week.map((n) => n.cryMin));
+  const max = Math.max(5, ...week.map(val));
   const range = `${fmtDate(start, { day: "numeric", month: "short" })} – ${fmtDate(addDays(start, 6), { day: "numeric", month: "short" })}`;
-  const cmp = compare(week, prevWeek, "Week");
-  const calmest = week.length ? week.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
+  const cmp = sleepMode ? null : compare(week, prevWeek, "Week");
+  const calmest = sleepMode ? null : week.length ? week.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
 
   return (
     <>
       <Period title={range} onPrev={() => setStart(addDays(start, -7))} onNext={canNext ? () => setStart(addDays(start, 7)) : undefined} />
       <Card style={{ gap: 10 }}>
-        <Label right={<Text style={styles.axisText}>{t("nights.avg", { dur: fmtDur(avg(week.map((n) => n.cryMin))) })}</Text>}>{t("nights.perDay")}</Label>
+        <Label right={<Text style={styles.axisText}>{t("nights.avg", { dur: fmtDur(avg(week.map(val))) })}</Text>}>{t(sleepMode ? "nights.sleepPerDay" : "nights.perDay")}</Label>
         <View style={styles.bars}>
           {days.map((d) => {
             const k = dateKey(d), n = byKey.get(k);
             return (
-              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.barCol} accessibilityLabel={n ? t("nights.barA11y", { day: dayName(k), dur: fmtDur(n.cryMin) }) : dayName(k)}>
-                <Text style={styles.barVal}>{n ? Math.round(n.cryMin) : ""}</Text>
+              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.barCol} accessibilityLabel={n ? `${dayName(k)}: ${fmtDur(val(n))}` : dayName(k)}>
+                <Text style={styles.barVal}>{n ? (sleepMode ? fmt1(val(n) / 60) : Math.round(n.cryMin)) : ""}</Text>
                 {n ? (
-                  <View style={[styles.bar, { height: Math.max(3, (n.cryMin / max) * BAR_H), backgroundColor: calmest?.key === k ? colors.sage : "#463d63" }]} />
+                  <View style={[styles.bar, { height: Math.max(3, (val(n) / max) * BAR_H), backgroundColor: calmest?.key === k || sleepMode ? colors.sage : "#463d63" }]} />
                 ) : (
                   <View style={styles.barEmpty} />
                 )}
@@ -184,9 +207,15 @@ function WeekView({ byKey, start, setStart, onOpen, baby }: { byKey: Map<string,
       {week.length > 0 && (
         <>
           <View style={styles.tiles}>
-            <Tile value={fmtDur(avg(week.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
-            <Tile value={fmt1(avg(week.map((n) => n.cries)))} label={t("nights.avgCries")} />
-            <Tile value={fmtDur(avg(week.map((n) => n.longestQuietMin)))} label={t("nights.avgQuiet")} />
+            {sleepMode ? (
+              <Tile value={fmtDur(avg(week.map(val)))} label={t("nights.avgSleep")} />
+            ) : (
+              <>
+                <Tile value={fmtDur(avg(week.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
+                <Tile value={fmt1(avg(week.map((n) => n.cries)))} label={t("nights.avgCries")} />
+                <Tile value={fmtDur(avg(week.map((n) => n.longestQuietMin)))} label={t("nights.avgQuiet")} />
+              </>
+            )}
             <Tile value={fmt1(avg(week.map(naps)))} label={t("nights.avgNaps")} />
           </View>
           {calmest && <Calmest n={calmest} onOpen={onOpen} />}
@@ -199,7 +228,9 @@ function WeekView({ byKey, start, setStart, onOpen, baby }: { byKey: Map<string,
 
 /* ---------------- a month ---------------- */
 
-function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string, Night>; month: Date; setMonth: (d: Date) => void; onOpen: (k: string) => void; baby: string }) {
+function MonthView({ byKey, month, setMonth, onOpen, baby, sleepMode }: { byKey: Map<string, Night>; month: Date; setMonth: (d: Date) => void; onOpen: (k: string) => void; baby: string; sleepMode: boolean }) {
+  const val = (n: Night) => (sleepMode ? (n.sleptMin ?? 0) : n.cryMin);
+  const tint = sleepMode ? "169,214,189" : "242,165,151";
   const y = month.getFullYear(), mo = month.getMonth();
   const daysIn = new Date(y, mo + 1, 0).getDate();
   const all = Array.from({ length: daysIn }, (_, i) => new Date(y, mo, i + 1));
@@ -207,11 +238,11 @@ function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string
   const prevMonth = Array.from({ length: new Date(y, mo, 0).getDate() }, (_, i) => byKey.get(dateKey(new Date(y, mo - 1, i + 1)))).filter((n): n is Night => !!n);
   const now = today();
   const canNext = y < now.getFullYear() || (y === now.getFullYear() && mo < now.getMonth());
-  const max = Math.max(5, ...inMonth.map((n) => n.cryMin));
+  const max = Math.max(5, ...inMonth.map(val));
   const lead = (all[0].getDay() + 6) % 7; // Monday-first grid
   const weekdays = Array.from({ length: 7 }, (_, i) => fmtDate(addDays(new Date(2024, 0, 1), i), { weekday: "narrow" })); // 1 Jan 2024 was a Monday
-  const cmp = compare(inMonth, prevMonth, "Month");
-  const calmest = inMonth.length ? inMonth.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
+  const cmp = sleepMode ? null : compare(inMonth, prevMonth, "Month");
+  const calmest = sleepMode ? null : inMonth.length ? inMonth.reduce((a, b) => (b.cryMin < a.cryMin ? b : a)) : null;
 
   // Week-by-week averages inside this month.
   const weeks: { label: string; avg: number; count: number }[] = [];
@@ -220,7 +251,7 @@ function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string
       .filter((d) => d.getMonth() === mo)
       .map((d) => byKey.get(dateKey(d)))
       .filter((n): n is Night => !!n);
-    weeks.push({ label: fmtDate(w < all[0] ? all[0] : w, { day: "numeric" }), avg: avg(ns.map((n) => n.cryMin)), count: ns.length });
+    weeks.push({ label: fmtDate(w < all[0] ? all[0] : w, { day: "numeric" }), avg: avg(ns.map(val)), count: ns.length });
   }
   const wMax = Math.max(5, ...weeks.map((w) => w.avg));
 
@@ -233,10 +264,10 @@ function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string
           {Array.from({ length: lead }, (_, i) => <View key={`b${i}`} style={styles.calCell} />)}
           {all.map((d) => {
             const k = dateKey(d), n = byKey.get(k);
-            const a = n ? 0.18 + 0.82 * (n.cryMin / max) : 0;
+            const a = n ? 0.18 + 0.82 * (val(n) / max) : 0;
             return (
-              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.calCell} accessibilityLabel={n ? t("nights.barA11y", { day: longDate(k), dur: fmtDur(n.cryMin) }) : longDate(k)}>
-                <View style={[styles.calDay, n ? { backgroundColor: `rgba(242,165,151,${a})` } : styles.calNone]}>
+              <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.calCell} accessibilityLabel={n ? `${longDate(k)}: ${fmtDur(val(n))}` : longDate(k)}>
+                <View style={[styles.calDay, n ? { backgroundColor: `rgba(${tint},${a})` } : styles.calNone]}>
                   <Text style={[styles.calNum, !n && { color: colors.muted }, n && a > 0.6 && { color: colors.bg }]}>{d.getDate()}</Text>
                 </View>
               </Pressable>
@@ -245,7 +276,7 @@ function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string
         </View>
         <View style={styles.legendRow}>
           <Text style={styles.axisText}>{t("nights.less")}</Text>
-          {[0.18, 0.4, 0.6, 0.8, 1].map((a) => <View key={a} style={[styles.legendCell, { backgroundColor: `rgba(242,165,151,${a})` }]} />)}
+          {[0.18, 0.4, 0.6, 0.8, 1].map((a) => <View key={a} style={[styles.legendCell, { backgroundColor: `rgba(${tint},${a})` }]} />)}
           <Text style={styles.axisText}>{t("nights.more")}</Text>
         </View>
         <Text style={styles.hintText}>{inMonth.length ? t("nights.tapDay") : t("nights.noMonth")}</Text>
@@ -255,17 +286,23 @@ function MonthView({ byKey, month, setMonth, onOpen, baby }: { byKey: Map<string
         <>
           <View style={styles.tiles}>
             <Tile value={String(inMonth.length)} label={t("nights.recorded", { count: inMonth.length })} />
-            <Tile value={fmtDur(avg(inMonth.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
-            <Tile value={fmt1(avg(inMonth.map((n) => n.cries)))} label={t("nights.avgCries")} />
+            {sleepMode ? (
+              <Tile value={fmtDur(avg(inMonth.map(val)))} label={t("nights.avgSleep")} />
+            ) : (
+              <>
+                <Tile value={fmtDur(avg(inMonth.map((n) => n.cryMin)))} label={t("nights.avgCry")} />
+                <Tile value={fmt1(avg(inMonth.map((n) => n.cries)))} label={t("nights.avgCries")} />
+              </>
+            )}
             <Tile value={fmt1(avg(inMonth.map(naps)))} label={t("nights.avgNaps")} />
           </View>
           <Card style={{ gap: 10 }}>
-            <Label>{t("nights.weekly")}</Label>
+            <Label>{t(sleepMode ? "nights.weeklySleep" : "nights.weekly")}</Label>
             <View style={styles.bars}>
               {weeks.map((w, i) => (
                 <View key={i} style={styles.barCol}>
-                  <Text style={styles.barVal}>{w.count ? Math.round(w.avg) : ""}</Text>
-                  {w.count ? <View style={[styles.bar, { height: Math.max(3, (w.avg / wMax) * BAR_H), backgroundColor: "#463d63" }]} /> : <View style={styles.barEmpty} />}
+                  <Text style={styles.barVal}>{w.count ? (sleepMode ? fmt1(w.avg / 60) : Math.round(w.avg)) : ""}</Text>
+                  {w.count ? <View style={[styles.bar, { height: Math.max(3, (w.avg / wMax) * BAR_H), backgroundColor: sleepMode ? colors.sage : "#463d63" }]} /> : <View style={styles.barEmpty} />}
                   <Text style={styles.axisText} numberOfLines={1}>{w.label}</Text>
                 </View>
               ))}
@@ -308,12 +345,15 @@ function Calmest({ n, onOpen }: { n: Night; onOpen: (k: string) => void }) {
   );
 }
 
-function Empty({ baby }: { baby: string }) {
+function Empty({ baby, naps: napsOn, onAdd }: { baby: string; naps: boolean; onAdd: () => void }) {
   return (
     <Card style={{ alignItems: "center", gap: 10, paddingVertical: 28 }}>
       <View style={styles.emptyIcon}><Icon d={ICONS.nights} size={28} color={colors.bg} width={2} /></View>
       <Text style={styles.emptyTitle}>{t("nights.emptyTitle")}</Text>
-      <Text style={styles.emptyText}>{t("nights.emptyText", { name: baby })}</Text>
+      <Text style={styles.emptyText}>{t(napsOn ? "nights.emptyNaps" : "nights.emptyText", { name: baby })}</Text>
+      {napsOn && (
+        <Pressable onPress={onAdd} style={styles.addBtn}><Text style={styles.addText}>{t("nights.addSleep")}</Text></Pressable>
+      )}
     </Card>
   );
 }
@@ -339,44 +379,30 @@ function Timeline({ n }: { n: Night }) {
       <View style={styles.strip}>
         <View style={[styles.nightTint, { left: 0, width: x(at(7)) }]} />
         <View style={[styles.nightTint, { left: x(at(19)), right: 0 }]} />
+        {(n.logged ?? []).map(([a, b], k) => <View key={`g${k}`} style={[styles.logged, { left: x(a), width: w(a, b) }]} />)}
         {n.listening.map(([a, b], k) => <View key={`l${k}`} style={[styles.listen, { left: x(a), width: w(a, b) }]} />)}
         {n.noise.map(([a, b], k) => <View key={`n${k}`} style={[styles.noise, { left: x(a), width: w(a, b) }]} />)}
         {n.spells.map(([a, b], k) => <View key={`s${k}`} style={[styles.spell, { left: x(a), width: w(a, b) }]} />)}
       </View>
       <View style={styles.axis}>{[0, 6, 12, 18, 24].map((h) => <Text key={h} style={styles.axisText}>{fmtClock(at(h % 24))}</Text>)}</View>
       <View style={styles.legend}>
-        <Key color={colors.rose} label={t("nights.crying")} />
-        <Key color="rgba(169,214,189,0.45)" label={t("nights.listening")} />
-        <Key color={colors.moon} label={t("nights.noise")} thin />
+        {(n.logged ?? []).length > 0 && <Key color="rgba(198,184,255,0.55)" label={t("nights.asleep")} />}
+        {n.listening.length > 0 && <Key color={colors.rose} label={t("nights.crying")} />}
+        {n.listening.length > 0 && <Key color="rgba(169,214,189,0.45)" label={t("nights.listening")} />}
+        {n.noise.length > 0 && <Key color={colors.moon} label={t("nights.noise")} thin />}
       </View>
     </Card>
   );
 }
 
-/** Each sleep this day: night or nap, when, and how much crying. */
-function Sleeps({ n }: { n: Night }) {
+/** Each sleep this day: night or nap, when, and how much crying. Logged ones on this phone can be edited. */
+function Sleeps({ n, edit, onAdd }: { n: Night; edit: (s: Sleep) => (() => void) | undefined; onAdd?: () => void }) {
   const list = n.sleeps ?? [];
   return (
     <Card style={{ gap: 4 }}>
-      <Label>{t("nights.sleeps")}</Label>
-      {list.map((sl, k) => (
-        <View key={k} style={styles.sleepRow}>
-          <View style={[styles.sleepIcon, sl.kind === "nap" && { backgroundColor: colors.peach }]}>
-            <Icon d={sl.kind === "night" ? ICONS.nights : SUN} size={16} color={colors.bg} width={2} />
-          </View>
-          <View style={{ flex: 1, gap: 1 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
-              <Text style={styles.sleepTitle}>{t(sl.kind === "night" ? "nights.nightSleep" : "nights.nap")}</Text>
-              <Text style={[styles.sleepCry, sl.cries === 0 && { color: colors.sage }]}>
-                {sl.cries === 0 ? t("nights.noCry") : t("nights.cryShort", { count: sl.cries, dur: fmtDur(sl.cryMin) })}
-              </Text>
-            </View>
-            <Text style={styles.sleepSub} numberOfLines={1}>
-              {dayKey(sl.from) !== n.key ? `${dayName(dayKey(sl.from))} ` : ""}{fmtClock(sl.from)} – {dayKey(sl.to) !== n.key ? `${dayName(dayKey(sl.to))} ` : ""}{fmtClock(sl.to)}
-            </Text>
-          </View>
-        </View>
-      ))}
+      <Label right={onAdd && <Pressable onPress={onAdd} hitSlop={8}><Text style={styles.addLink}>+ {t("nights.addSleep")}</Text></Pressable>}>{t("nights.sleeps")}</Label>
+      {list.map((sl, k) => <SleepRow key={k} sl={sl} dayKey={n.key} onPress={edit(sl)} />)}
+      {!list.length && <Text style={styles.hintText}>{t("nights.noSleeps")}</Text>}
     </Card>
   );
 }
@@ -437,6 +463,10 @@ const styles = StyleSheet.create({
   sleepTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
   sleepSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
   sleepCry: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.rose },
+  logged: { position: "absolute", top: 4, bottom: 4, borderRadius: 6, backgroundColor: "rgba(198,184,255,0.45)" },
+  addLink: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
+  addBtn: { backgroundColor: colors.peach, borderRadius: 99, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
+  addText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.bg },
   listen: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(169,214,189,0.3)" },
   noise: { position: "absolute", bottom: 0, height: 4, backgroundColor: colors.moon, opacity: 0.6 },
   spell: { position: "absolute", top: 7, bottom: 7, borderRadius: 4, backgroundColor: colors.rose },

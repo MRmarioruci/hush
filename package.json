@@ -1,6 +1,6 @@
 {
   "name": "hush",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "main": "index.ts",
   "private": true,
   "scripts": {
@@ -15,6 +15,7 @@
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo/metro-runtime": "~57.0.17",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@react-navigation/bottom-tabs": "^7.21.0",
     "@react-navigation/native": "^7.5.1",
     "expo": "~57.0.29",

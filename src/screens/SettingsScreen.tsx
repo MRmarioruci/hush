@@ -1,5 +1,5 @@
 import { Children, useCallback, useState, type ReactNode } from "react";
-import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { cryDetector } from "../../modules/hush-native/src";
 import { useT } from "../i18n";
@@ -12,6 +12,10 @@ import { LIMIT_DB } from "../safety";
 import { ICONS, Icon, Screen } from "../components/ui";
 import { useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
+import { ageMonths } from "../naps";
+import { fmtAge, pickBirthday } from "../components/Naps";
+import { dateLocale } from "../i18n";
+import type { Features } from "../storage";
 
 const PRIVACY = "https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md";
 // Hugh et al., "Infant Sleep Machines and Hazardous Sound Pressure Levels", Pediatrics 2014.
@@ -19,8 +23,25 @@ const STUDY = "https://doi.org/10.1542/peds.2013-3617";
 
 export function SettingsScreen() {
   const nav = useNavigation<{ navigate: (n: string) => void }>();
-  const { s, set } = useSleep();
-  const { m, update } = useMonitor();
+  const { s, set, playing, toggle } = useSleep();
+  const { m, update, listening, toggleListening } = useMonitor();
+  const months = ageMonths(s.birthday);
+  const setFeature = (k: keyof Features, on: boolean) => {
+    const next = { ...s.features, [k]: on };
+    if (!next.sounds && !next.naps && !next.monitor) return; // keep at least one
+    if (!on && k === "sounds" && playing) toggle();
+    if (!on && k === "monitor" && listening) toggleListening();
+    set({ features: next });
+  };
+  const feature = (k: keyof Features) => (
+    <View style={styles.row}>
+      <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
+        <Text style={styles.rowLabel}>{t(`feat.${k}`)}</Text>
+        <Text style={styles.rowSub}>{t(`feat.${k}Short`)}</Text>
+      </View>
+      <Switch value={s.features[k]} onValueChange={(v) => setFeature(k, v)} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t(`feat.${k}`)} />
+    </View>
+  );
   const unlock = useUnlock();
   const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
   const t = useT();
@@ -59,6 +80,27 @@ export function SettingsScreen() {
         />
       </View>
 
+      {s.features.naps && (
+        <Group title={m.babyName.trim() || t("settings.baby")}>
+          <Row label={t("settings.birthday")} onPress={() => pickBirthday(s.birthday, (birthday) => set({ birthday }))}>
+            <Text style={[styles.value, !s.birthday && { color: colors.peach }]} numberOfLines={1}>
+              {s.birthday && months != null
+                ? `${new Date(s.birthday + "T12:00:00").toLocaleDateString(dateLocale(), { day: "numeric", month: "short", year: "numeric" })} · ${fmtAge(months)}`
+                : t("settings.notSet")}
+            </Text>
+          </Row>
+        </Group>
+      )}
+
+      <View style={{ gap: 8 }}>
+        <Group title={t("settings.features")}>
+          {feature("sounds")}
+          {feature("naps")}
+          {feature("monitor")}
+        </Group>
+        <Text style={styles.note}>{t("settings.featuresNote")}</Text>
+      </View>
+
       <Group title={t("settings.prefs")}>
         <Row label={t("settings.language")} onPress={() => setPicking(true)}>
           <View style={styles.valueRow}>
@@ -66,7 +108,16 @@ export function SettingsScreen() {
             <Icon d={ICONS.chevron} size={18} />
           </View>
         </Row>
-        <Row label={t("settings.distances")}>
+        {s.features.naps && (
+          <View style={styles.row}>
+            <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
+              <Text style={styles.rowLabel}>{t("settings.napReminders")}</Text>
+              <Text style={styles.rowSub}>{t("settings.napRemindersSub")}</Text>
+            </View>
+            <Switch value={s.napReminders} onValueChange={(napReminders) => set({ napReminders })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("settings.napReminders")} />
+          </View>
+        )}
+        {s.features.sounds && <Row label={t("settings.distances")}>
           <View style={styles.seg}>
             {(["m", "ft"] as const).map((u) => (
               <Pressable key={u} onPress={() => set({ unit: u })} style={[styles.segItem, s.unit === u && styles.segOn]}>
@@ -74,21 +125,21 @@ export function SettingsScreen() {
               </Pressable>
             ))}
           </View>
-        </Row>
+        </Row>}
       </Group>
 
       <Group title={t("settings.safety")}>
-        <Row label={t("settings.maxCrib")}><Text style={styles.value}>{LIMIT_DB} dB</Text></Row>
-        {Platform.OS === "android" && (
+        {s.features.sounds && <Row label={t("settings.maxCrib")}><Text style={styles.value}>{LIMIT_DB} dB</Text></Row>}
+        {Platform.OS === "android" && s.features.monitor && (
           <Row label={t("settings.battery")} onPress={exempt ? undefined : () => cryDetector?.requestBatteryExempt()}>
             <Text style={[styles.value, !exempt && { color: colors.peach }]}>{exempt ? t("settings.batteryOn") : t("settings.batteryOff")}</Text>
           </Row>
         )}
-        <Row label={t("settings.why")} onPress={() => Linking.openURL(STUDY)} />
+        {s.features.sounds && <Row label={t("settings.why")} onPress={() => Linking.openURL(STUDY)} />}
       </Group>
 
       <Group title={t("settings.about")}>
-        {IS_PLAY_BUILD && (
+        {IS_PLAY_BUILD && s.features.monitor && (
           <Row label={t("unlock.row")} onPress={unlock.showPaywall}>
             <Text style={[styles.value, unlock.status === "expired" && { color: colors.peach }]}>
               {unlock.status === "unlocked" ? t("unlock.rowOn")
@@ -110,6 +161,7 @@ export function SettingsScreen() {
 }
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
+  if (!Children.toArray(children).length) return null;
   return (
     <View style={{ gap: 8 }}>
       <Text style={styles.groupTitle}>{title}</Text>
@@ -148,6 +200,8 @@ const styles = StyleSheet.create({
   group: { backgroundColor: colors.card, borderRadius: 20, paddingHorizontal: 16 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 54, gap: 12 },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
+  rowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  note: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, color: colors.muted, marginHorizontal: 6 },
   rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
   value: { fontFamily: fonts.body, fontSize: 15, color: colors.muted, flexShrink: 1 },
   valueRow: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1, maxWidth: "60%" },

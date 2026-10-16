@@ -10,6 +10,7 @@ import { Card, ICONS, Icon, Screen } from "../components/ui";
 import { TIMERS, fmtLeft, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 import { fmtTime, useT, babyLabel } from "../i18n";
+import { NapCard } from "../components/Naps";
 
 const greetingKey = () => {
   const h = new Date().getHours();
@@ -23,6 +24,7 @@ export function HomeScreen() {
   const [note, setNote] = useState<string | null>(null);
   const soundScroll = useRef<ScrollView>(null);
   const t = useT();
+  const f = sleep.s.features;
 
   const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === sleep.s.timer));
   const nextTimer = () => sleep.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0]);
@@ -48,8 +50,11 @@ export function HomeScreen() {
         </Pressable>
       }
     >
+      {/* ---- next nap ---- */}
+      {f.naps && !f.sounds && <NapCard big />}
+
       {/* ---- white noise ---- */}
-      <Card style={{ alignItems: "center", paddingTop: 8 }}>
+      {f.sounds && <Card style={{ alignItems: "center", paddingTop: 8 }}>
         <Moon
           size={150}
           playing={sleep.playing}
@@ -97,10 +102,12 @@ export function HomeScreen() {
             </Text>
           </Pressable>
         </View>
-      </Card>
+      </Card>}
+
+      {f.naps && f.sounds && <NapCard />}
 
       {/* ---- baby monitor: what it shows depends on this phone's role ---- */}
-      <Pressable onPress={() => nav.navigate("Monitor")}>
+      {f.monitor && <Pressable onPress={() => nav.navigate("Monitor")}>
         <Card>
           <View style={styles.monHead}>
             <View style={[styles.monIcon, mon.m.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
@@ -138,7 +145,7 @@ export function HomeScreen() {
           </View>
           {note && <Text style={styles.note}>{note}</Text>}
         </Card>
-      </Pressable>
+      </Pressable>}
     </Screen>
   );
 }

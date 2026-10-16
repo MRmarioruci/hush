@@ -10,8 +10,12 @@ export type HushEvent =
   | { type: "alert"; t: number; first?: boolean }
   | { type: "cry"; t: number; start: number; end: number; peak: number; alerted?: boolean };
 
-/** One listening session. Times are the whole session, even when it crosses midnight. */
-export type Sleep = { from: number; to: number; kind: "night" | "nap"; cries: number; cryMin: number };
+/** One sleep: a listening session or a logged one. Times are the whole sleep, even across midnight. */
+export type Sleep = { from: number; to: number; kind: "night" | "nap"; cries: number; cryMin: number; id?: string; note?: string; logged?: boolean };
+
+/** A sleep logged by hand ("fell asleep" / "woke up", or added later). `to` null = still asleep. */
+export type ManualSleep = { id: string; from: number; to: number | null; kind?: "night" | "nap"; note?: string };
+type ManualStore = { list: ManualSleep[]; cleared: Record<string, number> };
 
 /** One day, summarised. Also what the baby's phone sends to parents after a sleep. */
 export type Night = {
@@ -28,6 +32,12 @@ export type Night = {
   sleeps?: Sleep[];
   /** Which phone recorded it. Missing = this phone. */
   device?: string;
+  /** Minutes asleep this day (monitor sessions and logged sleeps together). */
+  sleptMin?: number;
+  /** Logged sleeps, clipped to the day, for the timeline. */
+  logged?: [number, number][];
+  /** When this copy was made; the newest copy of a phone's day wins. */
+  rev?: number;
   spells: [number, number][]; // [start, end] epoch ms; kept only while raw data is kept
   listening: [number, number][];
   noise: [number, number][];
@@ -36,6 +46,7 @@ export type Night = {
 
 const EVENTS = "hush:events";
 const DEVICE = "hush:device";
+const MANUAL = "hush:manual";
 const NIGHTS = "hush:nights";
 export const RAW_DAYS = 14;
 const KEEP_DAYS = 3 * 365;
@@ -56,6 +67,52 @@ async function read<T>(key: string, fallback: T): Promise<T> {
   }
 }
 const write = (key: string, v: unknown) => AsyncStorage.setItem(key, JSON.stringify(v)).catch(() => {});
+
+/* ---------- logged sleeps ---------- */
+
+export async function loadManual(): Promise<ManualStore> {
+  const m = await read<ManualStore>(MANUAL, { list: [], cleared: {} });
+  return { list: m.list ?? [], cleared: m.cleared ?? {} };
+}
+async function saveManual(m: ManualStore) { await write(MANUAL, m); }
+
+/** The sleep in progress, if one was started by hand. */
+export async function openSleep(): Promise<ManualSleep | null> {
+  return (await loadManual()).list.find((x) => x.to == null) ?? null;
+}
+export async function startSleep(at = Date.now()) {
+  const m = await loadManual();
+  if (m.list.some((x) => x.to == null)) return;
+  m.list.push({ id: Math.random().toString(36).slice(2, 10), from: at, to: null });
+  await saveManual(m);
+}
+export async function endSleep(at = Date.now()) {
+  const m = await loadManual();
+  const open = m.list.find((x) => x.to == null);
+  if (!open) return;
+  open.to = Math.max(at, open.from + 60_000);
+  await saveManual(m);
+}
+export async function upsertSleep(x: ManualSleep) {
+  const m = await loadManual();
+  const old = m.list.find((y) => y.id === x.id);
+  if (old) markCleared(m, old);
+  m.list = [...m.list.filter((y) => y.id !== x.id), x].sort((p, q) => p.from - q.from);
+  await saveManual(m);
+}
+export async function deleteSleep(id: string) {
+  const m = await loadManual();
+  const old = m.list.find((y) => y.id === id);
+  if (!old) return;
+  markCleared(m, old);
+  m.list = m.list.filter((y) => y.id !== id);
+  await saveManual(m);
+}
+/** Days a changed or deleted sleep touched, so other phones replace their copies. */
+function markCleared(m: ManualStore, x: ManualSleep) {
+  const end = x.to ?? Date.now();
+  for (let k = dayKey(x.from); dayStart(k) < end; k = dayKey(nextDay(k))) m.cleared[k] = Date.now();
+}
 
 export async function addEvents(list: HushEvent[]) {
   if (!list.length) return;
@@ -90,15 +147,36 @@ function nightOverlap(a: number, b: number) {
 
 type Cry = Extract<HushEvent, { type: "cry" }>;
 
-/** Every listening session in the events, labelled night (2 h+ between 7 pm and 7 am) or nap. */
-function sleepsOf(evs: HushEvent[], now: number): Sleep[] {
+export const kindOf = (a: number, b: number): "night" | "nap" => (nightOverlap(a, b) >= 2 * HOUR ? "night" : "nap");
+
+/**
+ * Every sleep: listening sessions, plus logged sleeps that don't mostly overlap one (so a sleep
+ * recorded both ways counts once). Labelled night (2 h+ between 7 pm and 7 am) or nap.
+ */
+function sleepsOf(evs: HushEvent[], now: number, manual: ManualSleep[] = []): Sleep[] {
+  const sessions = sessionsOf(evs, now);
+  const cries = evs.filter((e): e is Cry => e.type === "cry");
+  const logged: Sleep[] = manual
+    .map((x) => ({ ...x, to: x.to ?? now }))
+    .filter((x) => !sessions.some((s) => Math.min(s.to, x.to) - Math.max(s.from, x.from) > 0.5 * (x.to - x.from)))
+    .map((x) => {
+      const mine = cries.filter((c) => c.start >= x.from && c.start <= x.to);
+      return {
+        from: x.from, to: x.to, kind: x.kind ?? kindOf(x.from, x.to), id: x.id, note: x.note, logged: true,
+        cries: mine.length, cryMin: Math.round(mine.reduce((n, c) => n + Math.max(1000, c.end - c.start), 0) / 6000) / 10,
+      };
+    });
+  return [...sessions, ...logged].sort((p, q) => p.from - q.from);
+}
+
+function sessionsOf(evs: HushEvent[], now: number): Sleep[] {
   const cries = evs.filter((e): e is Cry => e.type === "cry");
   return spans(evs, "listen_start", "listen_stop", now).map(([a, b]) => {
     const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
     return {
       from: a,
       to: b,
-      kind: nightOverlap(a, b) >= 2 * HOUR ? "night" : "nap",
+      kind: kindOf(a, b),
       cries: mine.length,
       cryMin: Math.round(mine.reduce((n, c) => n + Math.max(1000, c.end - c.start), 0) / 6000) / 10,
     };
@@ -109,14 +187,17 @@ const clip = (list: [number, number][], a: number, b: number) =>
   list.map(([s, e]) => [Math.max(s, a), Math.min(e, b)] as [number, number]).filter(([s, e]) => e > s);
 
 /** One day from the raw events (which may start before and end after it). */
-export function summarise(key: string, evs: HushEvent[], now = Date.now()): Night | null {
+export function summarise(key: string, evs: HushEvent[], now = Date.now(), manual: ManualSleep[] = []): Night | null {
   const a = dayStart(key), b = nextDay(key);
   const listening = clip(spans(evs, "listen_start", "listen_stop", now), a, b);
-  if (!listening.length) return null;
+  const sleeps = sleepsOf(evs, now, manual).filter((s) => s.to > a && s.from < b);
+  if (!listening.length && !sleeps.length) return null;
+  const logged = clip(sleeps.filter((x) => x.logged).map((x) => [x.from, x.to] as [number, number]), a, b);
+  const asleep = clip(sleeps.map((x) => [x.from, x.to] as [number, number]), a, b);
   const noise = clip(spans(evs, "noise_start", "noise_stop", now), a, b);
   const cries = evs.filter((e): e is Cry => e.type === "cry" && e.start >= a && e.start < b);
   const spells = cries.map((c) => [c.start, Math.max(c.end, c.start + 1000)] as [number, number]);
-  const sleeps = sleepsOf(evs, now).filter((s) => s.to > a && s.from < b);
+  const spanAll = [...listening, ...logged];
   const min = (ms: number) => Math.round(ms / 60000);
 
   // Longest stretch of listening with no crying.
@@ -138,9 +219,11 @@ export function summarise(key: string, evs: HushEvent[], now = Date.now()): Nigh
 
   return {
     key,
-    from: listening[0][0],
-    to: listening[listening.length - 1][1],
+    from: Math.min(...spanAll.map((x) => x[0])),
+    to: Math.max(...spanAll.map((x) => x[1])),
     listenedMin: min(listening.reduce((n, [s, e]) => n + (e - s), 0)),
+    sleptMin: min(asleep.reduce((n, [s, e]) => n + (e - s), 0)),
+    logged,
     cries: spells.length,
     cryMin: Math.round(spells.reduce((n, [s, e]) => n + (e - s), 0) / 6000) / 10,
     longestQuietMin: min(quiet),
@@ -155,9 +238,10 @@ export function summarise(key: string, evs: HushEvent[], now = Date.now()): Nigh
 }
 
 /** Days touched by any listening in the events. */
-function daysOf(evs: HushEvent[], now: number) {
+function daysOf(evs: HushEvent[], now: number, manual: ManualSleep[] = []) {
   const keys = new Set<string>();
-  for (const [a, b] of spans(evs, "listen_start", "listen_stop", now)) {
+  const all = [...spans(evs, "listen_start", "listen_stop", now), ...manual.map((x) => [x.from, x.to ?? now] as [number, number])];
+  for (const [a, b] of all) {
     for (let k = dayKey(a); dayStart(k) < b; k = dayKey(nextDay(k))) keys.add(k);
   }
   return [...keys];
@@ -190,13 +274,14 @@ export async function ownNights(now = Date.now()): Promise<Night[]> {
 async function loadAllRecords(now = Date.now()): Promise<Night[]> {
   let events = await read<HushEvent[]>(EVENTS, []);
   let stored = await read<Night[]>(NIGHTS, []);
+  const manual = await loadManual();
 
   // Roll up days that ended more than RAW_DAYS ago.
   const cutoff = dayStart(dayKey(now - RAW_DAYS * 24 * HOUR));
-  if (events.some((e) => e.t < cutoff)) {
-    const oldDays = daysOf(events, now).filter((k) => nextDay(k) <= cutoff);
+  if (events.some((e) => e.t < cutoff) || manual.list.some((x) => x.to != null && x.to < cutoff)) {
+    const oldDays = daysOf(events, now, manual.list).filter((k) => nextDay(k) <= cutoff);
     const rolled = oldDays
-      .map((k) => summarise(k, events, now))
+      .map((k) => summarise(k, events, now, manual.list))
       .filter((n): n is Night => !!n)
       .map((n) => ({ ...n, spells: [], listening: [], noise: [] }));
     stored = mergeNights(stored, rolled);
@@ -208,10 +293,18 @@ async function loadAllRecords(now = Date.now()): Promise<Night[]> {
     if (spans(before, "noise_start", "noise_stop", Infinity).some(([, b]) => b === Infinity)) kept.unshift({ type: "noise_start", t: cutoff });
     events = kept.sort((x, y) => x.t - y.t);
     await write(EVENTS, events);
+    manual.list = manual.list.filter((x) => x.to == null || x.to >= cutoff);
+    for (const k of Object.keys(manual.cleared)) if (nextDay(k) <= cutoff) delete manual.cleared[k];
+    await saveManual(manual);
   }
 
-  const live = daysOf(events, now).map((k) => summarise(k, events, now)).filter((n): n is Night => !!n);
-  return mergeNights(stored, live);
+  const live = daysOf(events, now, manual.list).map((k) => summarise(k, events, now, manual.list)).filter((n): n is Night => !!n);
+  // A day whose logged sleeps were all deleted: an empty copy tells other phones to drop theirs.
+  const liveKeys = new Set(live.map((n) => n.key));
+  const cleared: Night[] = Object.entries(manual.cleared)
+    .filter(([k]) => !liveKeys.has(k))
+    .map(([k, rev]) => ({ key: k, from: dayStart(k), to: dayStart(k), listenedMin: 0, sleptMin: 0, cries: 0, cryMin: 0, longestQuietMin: 0, firstWake: null, alerts: 0, hours: new Array(24).fill(0), sleeps: [], spells: [], listening: [], noise: [], logged: [], rev }));
+  return mergeNights(stored, [...live, ...cleared]);
 }
 
 /** Merge by day and phone; a newer or more detailed copy of the same record wins. Newest first. */
@@ -220,13 +313,15 @@ export function mergeNights(a: Night[], b: Night[]): Night[] {
   for (const n of [...a, ...b]) {
     const id = `${n.key}|${n.device ?? ""}`;
     const cur = m.get(id);
-    if (!cur || n.to > cur.to || (n.to === cur.to && n.spells.length >= cur.spells.length)) m.set(id, n);
+    const newer = (n.rev ?? 0) !== (cur?.rev ?? 0) ? (n.rev ?? 0) > (cur?.rev ?? 0) : !cur || n.to > cur.to || (n.to === cur.to && n.spells.length >= cur.spells.length);
+    if (!cur || newer) m.set(id, n);
   }
   return [...m.values()].sort((x, y) => (x.key < y.key ? 1 : -1));
 }
 
 /** Several phones listened on the same day: add their records up into one day. */
 function combine(list: Night[]): Night {
+  if (list.length === 0) return { key: "", from: 0, to: 0, listenedMin: 0, cries: 0, cryMin: 0, longestQuietMin: 0, firstWake: null, alerts: 0, hours: [], spells: [], listening: [], noise: [] };
   if (list.length === 1) return list[0];
   const byStart = <T extends [number, number]>(xs: T[]) => xs.sort((p, q) => p[0] - q[0]);
   const firsts = list.map((n) => n.firstWake).filter((x): x is number => x != null);
@@ -235,6 +330,8 @@ function combine(list: Night[]): Night {
     from: Math.min(...list.map((n) => n.from)),
     to: Math.max(...list.map((n) => n.to)),
     listenedMin: list.reduce((a, n) => a + n.listenedMin, 0),
+    sleptMin: list.reduce((a, n) => a + (n.sleptMin ?? n.listenedMin), 0),
+    logged: byStart(list.flatMap((n) => n.logged ?? [])),
     cries: list.reduce((a, n) => a + n.cries, 0),
     cryMin: Math.round(list.reduce((a, n) => a + n.cryMin, 0) * 10) / 10,
     longestQuietMin: Math.max(...list.map((n) => n.longestQuietMin)),
@@ -252,7 +349,10 @@ function combine(list: Night[]): Night {
 function combineByDay(records: Night[]): Night[] {
   const by = new Map<string, Night[]>();
   for (const n of records) (by.get(n.key) ?? by.set(n.key, []).get(n.key)!).push(n);
-  return [...by.values()].map(combine).sort((x, y) => (x.key < y.key ? 1 : -1));
+  return [...by.values()]
+    .map((list) => combine(list.filter((n) => n.listenedMin > 0 || (n.sleeps ?? []).length > 0 || n.spells.length > 0)))
+    .filter((n) => n.listenedMin > 0 || (n.sleeps ?? []).length > 0)
+    .sort((x, y) => (x.key < y.key ? 1 : -1));
 }
 
 /** Keep days that arrived from another phone (never our own, echoed back). */
@@ -273,7 +373,7 @@ async function saveNow(list: Night[]) {
 /** The sleep that just ended, and the days it touched (for the summary push). */
 export async function lastSleep(now = Date.now()): Promise<{ sleep: Sleep; days: Night[] } | null> {
   const events = await read<HushEvent[]>(EVENTS, []);
-  const all = sleepsOf(events, now);
+  const all = sessionsOf(events, now);
   const sleep = all[all.length - 1];
   if (!sleep) return null;
   const days = [dayKey(sleep.from), dayKey(sleep.to)]
@@ -293,6 +393,8 @@ export function packNights(list: Night[], baby: string, device?: string) {
       const m = (t: number) => Math.round((t - n.from) / 60000);
       return {
         ...n,
+        rev: n.rev ?? Date.now(),
+        logged: (n.logged ?? []).slice(0, 12),
         spells: undefined,
         listening: undefined,
         noise: undefined,

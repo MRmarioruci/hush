@@ -15,6 +15,7 @@ import { LangProvider, applyLang, getLang, loadLangChoice, type Lang } from "./s
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { MonitorProvider } from "./src/state/monitor";
 import { UnlockProvider } from "./src/state/unlock";
+import { NapsProvider } from "./src/state/naps";
 import { Sky } from "./src/components/Sky";
 import { TabBar } from "./src/components/TabBar";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -59,8 +60,10 @@ export default function App() {
             <UnlockProvider>
               <MonitorProvider>
                 <SleepProvider initial={settings} still={still}>
-                  <Sky still={still} />
-                  <Shell />
+                  <NapsProvider>
+                    <Sky still={still} />
+                    <Shell />
+                  </NapsProvider>
                 </SleepProvider>
               </MonitorProvider>
             </UnlockProvider>
@@ -75,6 +78,7 @@ export default function App() {
 function Shell() {
   const { s, set } = useSleep();
   if (!s.onboarded) return <OnboardingScreen onDone={() => set({ onboarded: true })} />;
+  const f = s.features;
   return (
     <NavigationContainer theme={theme}>
       <Tab.Navigator
@@ -82,9 +86,9 @@ function Shell() {
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" }, animation: "fade" }}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Sounds" component={SleepScreen} />
-        <Tab.Screen name="Monitor" component={MonitorScreen} />
-        <Tab.Screen name="Nights" component={NightsScreen} />
+        {f.sounds && <Tab.Screen name="Sounds" component={SleepScreen} />}
+        {f.monitor && <Tab.Screen name="Monitor" component={MonitorScreen} />}
+        {(f.naps || f.monitor) && <Tab.Screen name="Nights" component={NightsScreen} />}
         <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>
