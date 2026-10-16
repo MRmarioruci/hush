@@ -38,8 +38,15 @@ class HushCryModule : Module() {
     Function("start") {
       val ctx = appContext.reactContext ?: return@Function false
       val intent = Intent(ctx, CryListenerService::class.java)
-      if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(intent) else ctx.startService(intent)
-      true
+      // Android doesn't allow starting the microphone from the background (e.g. white noise
+      // started from a parent's phone with this screen locked). Say no instead of crashing.
+      try {
+        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(intent) else ctx.startService(intent)
+        true
+      } catch (e: Exception) {
+        android.util.Log.w("HushCry", "Can't start listening now", e)
+        false
+      }
     }
 
     // What the parents see about the room (white noise), and the "listen in" settings.

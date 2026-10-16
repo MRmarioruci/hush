@@ -190,7 +190,9 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       if (left <= 0) { stopAt.current = 0; stopWhy.current = { why: "timer" }; player.pause(); }
       else if (left < 60000) fade = left / 60000; // gentle fade over the last minute
     }
-    player.volume = gainRef.current * fade * smartFactor();
+    // Smart mode only ever lowers the volume; never let a bad number silence or crash playback.
+    const v = gainRef.current * fade * smartFactor();
+    player.volume = Number.isFinite(v) ? Math.max(0.02, Math.min(1, v)) : 1;
   }, [player, smartFactor]);
 
   useEffect(checkTimer, [appGain, status.currentTime, checkTimer]); // status updates keep arriving while locked

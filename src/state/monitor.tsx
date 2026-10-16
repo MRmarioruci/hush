@@ -227,8 +227,12 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           if (!ok || cancelled) return;
         }
         cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim(), mRef.current.parents.map((p) => p.token), mRef.current.alertAfter);
-        cryDetector.start();
-        setMicOn(true);
+        if (cryDetector.start()) setMicOn(true);
+        else {
+          // Android won't start the microphone while hush is in the background.
+          setMicOn(false);
+          if (listening) setListening(false, "error", "background");
+        }
       } else if (!wantMic && cryDetector.isListening()) {
         cryDetector.stop();
         setMicOn(false);

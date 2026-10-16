@@ -37,13 +37,24 @@ class CryListenerService : Service() {
       .setContentIntent(open)
       .build()
 
-    if (Build.VERSION.SDK_INT >= 29) {
-      startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-    } else {
-      startForeground(ID, notification)
+    try {
+      if (Build.VERSION.SDK_INT >= 29) {
+        startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+      } else {
+        startForeground(ID, notification)
+      }
+    } catch (e: Exception) {
+      // Not allowed right now (started from the background, or restarted by the system):
+      // stop quietly rather than crash the app and its white noise.
+      android.util.Log.w("HushCry", "Microphone service not allowed now", e)
+      CryEngine.listener?.invoke("status", mapOf("error" to "background"))
+      stopSelf()
+      return START_NOT_STICKY
     }
     CryEngine.start(this)
-    return START_STICKY
+    // Not sticky: a system restart would happen in the background, where Android doesn't allow
+    // the microphone, and crash. If it's closed, the parents get the "stopped listening" alert.
+    return START_NOT_STICKY
   }
 
   override fun onDestroy() {
