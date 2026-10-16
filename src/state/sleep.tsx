@@ -68,7 +68,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     player.replace(sound.file);
     player.loop = true;
     if (wasPlaying) player.play();
-    try { player.updateLockScreenMetadata({ title: t("sound.noise", { sound: t(`sound.${soundId}`) }), artist: "hush" }); } catch {}
+    try { player.updateLockScreenMetadata({ title: t(`sound.${soundId}`), artist: "hush" }); } catch {}
   }, [soundId, sound, player]);
 
   // Note when white noise plays, for the Nights timeline.
@@ -194,7 +194,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     }
     player.volume = gainRef.current;
     player.play();
-    try { player.setActiveForLockScreen(true, { title: t("sound.noise", { sound: t(`sound.${loaded.current}`) }), artist: "hush" }); } catch {}
+    try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
   }, [player, s.mode, s.dist]);
 
   // What's actually reaching the crib, including smart mode's quieting.

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Pressable, StyleSheet, Switch, Text, View, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
@@ -21,6 +21,7 @@ export function HomeScreen() {
   const sleep = useSleep();
   const mon = useMonitor();
   const [note, setNote] = useState<string | null>(null);
+  const soundScroll = useRef<ScrollView>(null);
   const t = useT();
 
   const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === sleep.s.timer));
@@ -63,7 +64,8 @@ export function HomeScreen() {
           <Text style={styles.sub}>{sleep.playing ? t("home.playing") : t("home.tapMoon")}</Text>
         </View>
 
-        <View style={styles.soundRow}>
+        <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}
+          onLayout={() => soundScroll.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === sleep.soundId) - 2) * 62, animated: false })}>
           {SOUNDS.map((x) => {
             const on = x.id === sleep.soundId;
             return (
@@ -79,7 +81,7 @@ export function HomeScreen() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
         <View style={styles.quickRow}>
           <Pressable onPress={nextTimer} style={styles.quick}>
@@ -146,8 +148,9 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream },
   sub: { fontFamily: fonts.body, fontSize: 13.5, color: colors.muted, fontVariant: ["tabular-nums"] },
   small: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted },
-  soundRow: { flexDirection: "row", alignSelf: "stretch", justifyContent: "space-between", paddingTop: 6 },
-  soundItem: { alignItems: "center", gap: 5, flex: 1 },
+  soundScroll: { alignSelf: "stretch", marginHorizontal: -18, flexGrow: 0 },
+  soundRow: { flexDirection: "row", gap: 6, paddingTop: 6, paddingHorizontal: 14 },
+  soundItem: { alignItems: "center", gap: 5, width: 56 },
   soundIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   soundName: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
   quickRow: { flexDirection: "row", gap: 8, alignSelf: "stretch" },

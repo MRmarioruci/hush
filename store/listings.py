@@ -8,7 +8,7 @@ L["en-US"] = ("hush: white noise & monitor",
 """No white noise machine or baby monitor? You don't need one. hush turns the phones you already have into both: calm white noise kept gentle at the crib, and a baby monitor that alerts your phone when your baby cries. White noise is free. Try the baby monitor free for 4 days, then unlock it once. No subscription.
 
 WHITE NOISE, KEPT GENTLE
-• Six loops: womb, shush, brown, pink, white and ocean
+• Twelve sounds: womb, shush, rain, ocean, stream, fan, hair dryer, car ride, a music-box lullaby, and white, pink and brown noise
 • Tell hush how far the phone is from the crib and it keeps the sound under 50 dB there, the limit recommended for hospital nurseries
 • While hush plays, your phone's volume can't go past that line
 • Smart mode starts a little louder, then eases down once your baby has settled, and turns back up if crying starts
@@ -41,7 +41,7 @@ L["el-GR"] = ("hush: λευκός θόρυβος & ακρόαση",
 """Δεν έχετε συσκευή λευκού θορύβου ή ενδοεπικοινωνία μωρού; Δεν χρειάζεστε. Το hush κάνει τα κινητά που ήδη έχετε και τα δύο: ήρεμο λευκό θόρυβο σε ήπια ένταση στην κούνια και ακρόαση μωρού που σας ειδοποιεί όταν κλαίει. Ο λευκός θόρυβος είναι δωρεάν. Δοκιμάστε την ακρόαση δωρεάν για 4 μέρες και ξεκλειδώστε τη μία φορά. Χωρίς συνδρομή.
 
 ΛΕΥΚΟΣ ΘΟΡΥΒΟΣ, ΠΑΝΤΑ ΑΠΑΛΟΣ
-• Έξι ήχοι: μήτρα, σςς, καφέ, ροζ, λευκός και θάλασσα
+• Δώδεκα ήχοι: μήτρα, σςς, βροχή, θάλασσα, ρυάκι, ανεμιστήρας, πιστολάκι, βόλτα με αμάξι, νανούρισμα με μουσικό κουτί, και λευκός, ροζ και καφέ θόρυβος
 • Πείτε στο hush πόσο μακριά είναι το κινητό από την κούνια και κρατά τον ήχο κάτω από 50 dB εκεί, το όριο που προτείνεται για τα νεογνικά τμήματα
 • Όσο παίζει, η ένταση του κινητού δεν περνά αυτό το όριο
 • Η έξυπνη λειτουργία ξεκινά λίγο πιο δυνατά, χαμηλώνει όταν το μωρό ηρεμήσει και δυναμώνει ξανά αν αρχίσει να κλαίει
@@ -74,7 +74,7 @@ L["de-DE"] = ("hush: Rauschen & Babyphone",
 """Kein Rauschgerät und kein Babyphone? Brauchen Sie nicht. hush macht aus den Handys, die Sie schon haben, beides: beruhigendes Rauschen, das am Babybett leise bleibt, und ein Babyphone, das Ihr Handy benachrichtigt, wenn Ihr Baby weint. Das Rauschen ist kostenlos. Das Babyphone 4 Tage gratis testen, dann einmal freischalten. Kein Abo.
 
 RAUSCHEN, IMMER SANFT
-• Sechs Klänge: Bauch, Schhh, Braun, Rosa, Weiß und Meer
+• Zwölf Klänge: Bauch, Schhh, Regen, Meer, Bach, Ventilator, Föhn, Autofahrt, Spieluhr sowie weißes, rosa und braunes Rauschen
 • Sagen Sie hush, wie weit das Handy vom Bett entfernt ist, und es bleibt dort unter 50 dB, dem für Säuglingsstationen empfohlenen Grenzwert
 • Während hush spielt, kann die Handylautstärke diese Grenze nicht überschreiten
 • Der smarte Modus startet etwas lauter, wird leiser, sobald Ihr Baby ruhig ist, und wieder lauter, wenn es weint
@@ -107,7 +107,7 @@ L["fr-FR"] = ("hush : bruit blanc & babyphone",
 """Pas de machine à bruit blanc ni de babyphone ? Pas besoin. hush transforme les téléphones que vous avez déjà en l'un et l'autre : un bruit blanc apaisant, modéré près du lit, et un babyphone qui vous alerte quand bébé pleure. Le bruit blanc est gratuit. Essayez le babyphone 4 jours gratuitement, puis débloquez-le une fois. Sans abonnement.
 
 UN BRUIT BLANC TOUJOURS DOUX
-• Six sons : ventre, chut, brun, rose, blanc et océan
+• Douze sons : ventre, chut, pluie, océan, ruisseau, ventilateur, sèche-cheveux, voiture, berceuse en boîte à musique, et bruit blanc, rose et brun
 • Indiquez à quelle distance du lit se trouve le téléphone : hush garde le son sous 50 dB à cet endroit, la limite recommandée pour les maternités
 • Pendant la lecture, le volume du téléphone ne peut pas dépasser cette limite
 • Le mode intelligent démarre un peu plus fort, baisse quand bébé s'est calmé et remonte s'il se met à pleurer
@@ -140,7 +140,7 @@ L["es-ES"] = ("hush: ruido blanco y monitor",
 """¿No tienes máquina de ruido blanco ni vigilabebés? No te hace falta. hush convierte los móviles que ya tienes en ambas cosas: ruido blanco relajante y suave en la cuna, y un vigilabebés que te avisa cuando tu bebé llora. El ruido blanco es gratis. Prueba el vigilabebés 4 días gratis y luego desbloquéalo una vez. Sin suscripción.
 
 RUIDO BLANCO, SIEMPRE SUAVE
-• Seis sonidos: vientre, chist, marrón, rosa, blanco y mar
+• Doce sonidos: vientre, chist, lluvia, mar, arroyo, ventilador, secador, coche, nana de cajita de música y ruido blanco, rosa y marrón
 • Dile a hush a qué distancia está el móvil de la cuna y mantendrá el sonido por debajo de 50 dB allí, el límite recomendado para las salas de neonatos
 • Mientras suena, el volumen del móvil no puede superar esa línea
 • El modo inteligente empieza algo más alto, baja cuando el bebé se calma y vuelve a subir si empieza a llorar
@@ -173,7 +173,7 @@ L["pt-BR"] = ("hush: ruído branco e babá",
 """Sem aparelho de ruído branco nem babá eletrônica? Você não precisa. O hush transforma os celulares que você já tem nos dois: ruído branco relaxante e suave no berço, e uma babá eletrônica que avisa você quando o bebê chora. O ruído branco é grátis. Experimente a babá eletrônica grátis por 4 dias e depois libere com uma compra única. Sem assinatura.
 
 RUÍDO BRANCO, SEMPRE SUAVE
-• Seis sons: barriga, shhh, marrom, rosa, branco e mar
+• Doze sons: barriga, shhh, chuva, mar, riacho, ventilador, secador, passeio de carro, canção de ninar de caixinha de música e ruído branco, rosa e marrom
 • Diga ao hush a que distância o celular está do berço e ele mantém o som abaixo de 50 dB ali, o limite recomendado para berçários hospitalares
 • Enquanto toca, o volume do celular não passa desse limite
 • O modo inteligente começa um pouco mais alto, abaixa quando o bebê se acalma e aumenta de novo se ele começar a chorar
@@ -206,7 +206,7 @@ L["zh-CN"] = ("hush：白噪音与宝宝监听",
 """没有白噪音机，也没有宝宝监视器？不需要。hush 把你现有的手机变成两者：在婴儿床边保持柔和音量的舒缓白噪音，以及宝宝哭时提醒你的监听器。白噪音免费。宝宝监听可免费试用 4 天，之后一次性解锁。无需订阅。
 
 柔和的白噪音
-• 六种声音：子宫、嘘声、棕噪音、粉噪音、白噪音和海浪
+• 十二种声音：子宫、嘘声、雨声、海浪、小溪、风扇、吹风机、坐车、八音盒摇篮曲，以及白噪音、粉噪音和棕噪音
 • 告诉 hush 手机离婴儿床多远，它会让床边的声音保持在 50 分贝以下，这是医院新生儿室推荐的上限
 • 播放时，手机音量无法超过这条线
 • 智能模式开始时稍大一些，宝宝安静后逐渐降低，开始哭时再调高
