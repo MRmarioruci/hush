@@ -2,6 +2,18 @@ import Foundation
 
 /// Sends alerts to the paired parent phones through Expo's push service (same as Android's AlertSender).
 enum AlertSender {
+  /// POSTs bytes (Firebase Storage's simple upload).
+  static func upload(_ url: String, _ body: Data, contentType: String, done: @escaping (Bool, String) -> Void) {
+    guard let u = URL(string: url) else { done(false, "Bad URL"); return }
+    var req = URLRequest(url: u, timeoutInterval: 30)
+    req.httpMethod = "POST"
+    req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+    URLSession.shared.uploadTask(with: req, from: body) { data, resp, err in
+      let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+      done(code >= 200 && code < 300, data.flatMap { String(data: $0, encoding: .utf8) } ?? (err?.localizedDescription ?? ""))
+    }.resume()
+  }
+
   private static let pushURL = URL(string: "https://exp.host/--/api/v2/push/send")!
 
   static func send(_ tokens: [String], _ body: String, _ data: [String: Any], wait: Bool = false, done: ((Bool, String) -> Void)? = nil) {

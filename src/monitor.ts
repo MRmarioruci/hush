@@ -26,6 +26,10 @@ export type MonitorSettings = {
   pairedToken?: string | null;
   /** Parent phone only: last reported state of the baby's room. */
   room?: Room | null;
+  /** Baby's phone: parents may ask for a few seconds of the room's sound. */
+  allowListen?: boolean;
+  /** Parent phone: the last clip from the baby's room, or why there isn't one. */
+  clip?: { url?: string; at: number; error?: string } | null;
 };
 export type AlertRecord = { id: string; body: string; at: number };
 
@@ -124,6 +128,22 @@ export async function setupAlertChannel() {
     vibrationPattern: [0, 300, 200, 300],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
+}
+
+/* ---------- "listen in" clips (Firebase Storage, simple REST upload) ---------- */
+
+const bucket = () => (Constants.expoConfig?.extra as { storageBucket?: string } | undefined)?.storageBucket;
+export const CLIP_SECONDS = 10;
+/** Where a new clip goes: an unguessable name, deleted by the bucket's lifecycle rule after a day. */
+export function newClip(): { upload: string; download: string } | null {
+  const b = bucket();
+  if (!b) return null;
+  const id = Array.from({ length: 24 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join("");
+  const path = encodeURIComponent(`clips/${id}.wav`);
+  return {
+    upload: `https://firebasestorage.googleapis.com/v0/b/${b}/o?uploadType=media&name=${path}`,
+    download: `https://firebasestorage.googleapis.com/v0/b/${b}/o/${path}?alt=media`,
+  };
 }
 
 export function projectId(): string | undefined {

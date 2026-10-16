@@ -71,6 +71,53 @@ final class CryEngine {
   private var lowBatterySent = false
   private var observers: [NSObjectProtocol] = []
 
+  /* ---------- short clips for "listen in" ---------- */
+  private var clip: [Int16] = []
+  private var clipWant = 0
+  private var clipDone: ((Data?) -> Void)?
+
+  /// Records the next `seconds` of raw sound while listening; nil if not listening.
+  func recordClip(_ seconds: Int, done: @escaping (Data?) -> Void) {
+    guard running else { done(nil); return }
+    queue.async {
+      self.clipDone?(nil)
+      self.clip = []
+      self.clip.reserveCapacity(16000 * seconds)
+      self.clipWant = 16000 * max(1, min(30, seconds))
+      self.clipDone = done
+      EventLog.add("clip")
+    }
+  }
+
+  private func feedClip(_ x: [Float]) {
+    guard clipWant > 0, let done = clipDone else { return }
+    for v in x.prefix(clipWant - clip.count) { clip.append(Int16(max(-1, min(1, v)) * 32767)) }
+    if clip.count >= clipWant {
+      let data = wav(clip)
+      clip = []; clipWant = 0; clipDone = nil
+      DispatchQueue.global().async { done(data) }
+    }
+  }
+
+  private func cancelClip() {
+    let d = clipDone
+    clip = []; clipWant = 0; clipDone = nil
+    d?(nil)
+  }
+
+  /// 16 kHz mono 16-bit WAV.
+  private func wav(_ pcm: [Int16]) -> Data {
+    var d = Data()
+    func u32(_ v: UInt32) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 4)) }
+    func u16(_ v: UInt16) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 2)) }
+    let bytes = UInt32(pcm.count * 2)
+    d.append("RIFF".data(using: .ascii)!); u32(36 + bytes); d.append("WAVE".data(using: .ascii)!)
+    d.append("fmt ".data(using: .ascii)!); u32(16); u16(1); u16(1); u32(16000); u32(32000); u16(2); u16(16)
+    d.append("data".data(using: .ascii)!); u32(bytes)
+    pcm.withUnsafeBufferPointer { d.append(Data(buffer: $0)) }
+    return d
+  }
+
   private func now() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
   func fill(_ s: String, _ pct: Int = 0) -> String {
     s.replacingOccurrences(of: "{name}", with: babyName).replacingOccurrences(of: "{pct}", with: String(pct))
@@ -107,6 +154,7 @@ final class CryEngine {
     observers.removeAll()
     queue.async {
       self.endSpell()
+      self.cancelClip()
       EventLog.add("listen_stop")
     }
   }
@@ -219,6 +267,7 @@ final class CryEngine {
 
   private func feed(_ samples: [Float]) {
     guard running else { return }
+    feedClip(samples)
     pending.append(contentsOf: samples)
     while pending.count >= HOP {
       let hop = Array(pending[0..<HOP])

@@ -1,12 +1,12 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
-import { MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
+import { CLIP_SECONDS, INFO_CHANNEL, newClip, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -14,6 +14,8 @@ type Monitor = {
   m: MonitorSettings;
   update: (patch: Partial<MonitorSettings>) => void;
   listening: boolean;
+  /** Parent's phone: ask the baby's phone for a few seconds of sound. Returns when it was asked. */
+  requestClip: () => Promise<number>;
   /** Why listening last stopped (null while it hasn't). */
   lastStop: Stop | null;
   status: CryStatus;
@@ -283,6 +285,73 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [update]);
 
+  /* ---------- "listen in": a parent asks for a few seconds of the room ---------- */
+
+  // Baby's phone: record, upload, and send the parent a link (or say why not).
+  const listeningRef = useRef(listening);
+  listeningRef.current = listening;
+  useEffect(() => {
+    const busy = { current: false };
+    const sub = addPushListener(async (n) => {
+      const d = n.request.content.data as { type?: string; cmd?: string; from?: string } | undefined;
+      const cur = mRef.current;
+      if (d?.type !== "cmd" || d.cmd !== "clip" || !d.from || cur.role !== "nursery") return;
+      const parent = cur.parents.find((p) => p.token === d.from);
+      if (!parent) return;
+      Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+      const L = parent.lang ?? getLang();
+      const name = babyLabelIn(L, cur.babyName);
+      const reply = (key: string, data: Record<string, unknown>) =>
+        sendPush([parent.token], tIn(L, key, { name }), { type: "clip", at: Date.now(), ...data });
+      if (!cur.allowListen) return reply("listen.off", { error: "off" });
+      if (!listeningRef.current || !cryDetector) return reply("listen.notListening", { error: "notListening" });
+      const where = newClip();
+      if (!where) return reply("listen.failed", { error: "setup" });
+      if (busy.current) return;
+      busy.current = true;
+      // Nobody listens in unnoticed: say so on the baby's phone.
+      Notifications.scheduleNotificationAsync({
+        content: { title: "hush", body: t("listen.nowHere", { who: parent.name, s: CLIP_SECONDS }), data: { type: "listen-notice" } },
+        trigger: Platform.OS === "android" ? { channelId: INFO_CHANNEL } : null,
+      }).catch(() => {});
+      try {
+        const res = await cryDetector.recordClip(CLIP_SECONDS, where.upload);
+        if (res.ok) await reply("listen.ready", { url: where.download });
+        else await reply(res.detail === "notListening" ? "listen.notListening" : "listen.failed", { error: res.detail === "notListening" ? "notListening" : "upload" });
+      } catch {
+        await reply("listen.failed", { error: "upload" });
+      }
+      busy.current = false;
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Parent's phone: keep the latest clip (or the reason there's none).
+  useEffect(() => {
+    const take = (n: Notifications.Notification) => {
+      const d = n.request.content.data as { type?: string; url?: string; at?: number; error?: string } | undefined;
+      if (d?.type !== "clip" || mRef.current.role !== "parent") return;
+      const at = d.at ?? n.date ?? Date.now();
+      if ((mRef.current.clip?.at ?? 0) >= at) return;
+      update({ clip: { url: d.url, at, error: d.error } });
+    };
+    const sub = addPushListener(take);
+    const catchUp = () => Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {});
+    catchUp();
+    const app = AppState.addEventListener("change", (st) => st === "active" && catchUp());
+    return () => { sub.remove(); app.remove(); };
+  }, [update]);
+
+  const requestClip = useCallback(async () => {
+    const to = mRef.current.pairedToken;
+    const at = Date.now();
+    if (!to) return at;
+    let me = "";
+    try { me = await getMyToken(); } catch {}
+    await sendData([to], { type: "cmd", cmd: "clip", from: me });
+    return at;
+  }, []);
+
   // Another phone asked for our days.
   useEffect(() => {
     const replied = new Map<string, number>();
@@ -298,6 +367,6 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, update, listening, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, update, listening, requestClip, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
   );
 }

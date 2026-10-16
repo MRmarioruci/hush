@@ -13,6 +13,7 @@ import { fmtTime, useT, babyLabel } from "../i18n";
 import { NapCard } from "../components/Naps";
 import { stopLine } from "../stops";
 import { roomCmd } from "./MonitorScreen";
+import { ListenButton } from "../components/Listen";
 
 const greetingKey = () => {
   const h = new Date().getHours();
@@ -164,6 +165,7 @@ export function HomeScreen() {
               </Text>
             </View>
           )}
+          {mon.m.role === "parent" && mon.m.pairedToken && <View style={{ marginTop: 10 }}><ListenButton compact /></View>}
           {note && <Text style={styles.note}>{note}</Text>}
         </Card>
       </Pressable>}

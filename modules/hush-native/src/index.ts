@@ -24,6 +24,7 @@ type CryNative = {
   requestBatteryExempt(): boolean;
   installer(): string;
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
+  recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
   addListener(event: "onData", cb: (d: Record<string, unknown>) => void): Subscription;
@@ -59,6 +60,8 @@ export const cryDetector = cry
       requestBatteryExempt: () => cry.requestBatteryExempt(),
       installer: () => { try { return cry.installer(); } catch { return ""; } },
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),
+      /** Records the next seconds while listening and uploads a WAV to uploadUrl. */
+      recordClip: (seconds: number, uploadUrl: string) => cry.recordClip(seconds, uploadUrl),
       onStatus: (cb: (s: CryStatus) => void) => cry.addListener("onStatus", cb),
       onCry: (cb: (e: { at: number; first: boolean }) => void) => cry.addListener("onCry", cb),
       /** iOS: silent push messages (expo-notifications only reports visible ones there). */

@@ -11,6 +11,25 @@ import java.net.URL
  * Runs in native code so alerts still go out while the screen is locked.
  */
 object AlertSender {
+  /** Uploads bytes with a POST (Firebase Storage's simple upload). Blocking; call off the main thread. */
+  fun upload(url: String, bytes: ByteArray, contentType: String): Pair<Boolean, String> = try {
+    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+      requestMethod = "POST"
+      connectTimeout = 15000
+      readTimeout = 30000
+      doOutput = true
+      setRequestProperty("Content-Type", contentType)
+      setFixedLengthStreamingMode(bytes.size)
+    }
+    conn.outputStream.use { it.write(bytes) }
+    val code = conn.responseCode
+    val text = (if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+    conn.disconnect()
+    (code in 200..299) to text
+  } catch (e: Exception) {
+    false to (e.message ?: "Network error")
+  }
+
   private const val URL_PUSH = "https://exp.host/--/api/v2/push/send"
 
   fun send(tokens: List<String>, body: String, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) =

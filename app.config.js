@@ -6,6 +6,9 @@ const fs = require("fs");
 const EXPO_PROJECT_ID = process.env.EXPO_PROJECT_ID || "3ff0084b-2451-476b-8b98-37acf2c1a20b";
 const EXPO_OWNER = process.env.EXPO_OWNER || undefined;
 const hasFirebase = fs.existsSync("./google-services.json");
+// Firebase Storage bucket for "listen in" clips (same Firebase project as push).
+const STORAGE_BUCKET = process.env.HUSH_STORAGE_BUCKET
+  || (hasFirebase ? JSON.parse(fs.readFileSync("./google-services.json", "utf8")).project_info?.storage_bucket : undefined);
 
 // Play needs a higher versionCode for every upload: 1.5.0 -> 10500, 1.5.1 -> 10501.
 const VERSION = require("./package.json").version;
@@ -60,6 +63,7 @@ module.exports = ({ config }) => ({
   extra: {
     ...(config.extra || {}),
     eas: EXPO_PROJECT_ID ? { projectId: EXPO_PROJECT_ID } : undefined,
+    storageBucket: STORAGE_BUCKET,
   },
   web: {
     favicon: "./assets/favicon.png",

@@ -102,6 +102,55 @@ object CryEngine {
   @Volatile var running = false
     private set
 
+  /* ---------- short clips for "listen in" (parents asked for a few seconds) ---------- */
+  private val clipLock = Any()
+  private var clipBuf: ShortArray? = null
+  private var clipN = 0
+  private var clipDone: ((ByteArray?) -> Unit)? = null
+
+  /** Records the next [seconds] of raw sound while listening; null if not listening. */
+  fun recordClip(seconds: Int, done: (ByteArray?) -> Unit) {
+    if (!running) { done(null); return }
+    synchronized(clipLock) {
+      clipDone?.invoke(null)
+      clipBuf = ShortArray(SR * seconds.coerceIn(1, 30))
+      clipN = 0
+      clipDone = done
+    }
+    EventLog.add("clip")
+  }
+
+  private fun feedClip(pcm: ShortArray, n: Int) {
+    val finished: Pair<ByteArray, (ByteArray?) -> Unit>? = synchronized(clipLock) {
+      val buf = clipBuf ?: return
+      val take = minOf(n, buf.size - clipN)
+      System.arraycopy(pcm, 0, buf, clipN, take)
+      clipN += take
+      if (clipN < buf.size) null else {
+        val cb = clipDone!!
+        clipBuf = null; clipDone = null
+        wav(buf) to cb
+      }
+    }
+    finished?.let { (bytes, cb) -> Thread { cb(bytes) }.start() }
+  }
+
+  private fun cancelClip() {
+    val cb = synchronized(clipLock) { val c = clipDone; clipBuf = null; clipDone = null; c }
+    cb?.invoke(null)
+  }
+
+  /** 16 kHz mono 16-bit WAV. */
+  private fun wav(pcm: ShortArray): ByteArray {
+    val data = pcm.size * 2
+    val b = ByteBuffer.allocate(44 + data).order(ByteOrder.LITTLE_ENDIAN)
+    b.put("RIFF".toByteArray()).putInt(36 + data).put("WAVE".toByteArray())
+    b.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(SR).putInt(SR * 2).putShort(2).putShort(16)
+    b.put("data".toByteArray()).putInt(data)
+    for (v in pcm) b.putShort(v)
+    return b.array()
+  }
+
   private var thread: Thread? = null
   private var wakeLock: PowerManager.WakeLock? = null
 
@@ -199,6 +248,7 @@ object CryEngine {
           read += n
         }
         if (read < HOP) continue
+        feedClip(pcm, read)
 
         // Slide the windows and append the new half second (raw and cleaned).
         System.arraycopy(window, HOP, window, 0, WINDOW - HOP)
@@ -272,7 +322,9 @@ object CryEngine {
         }
       }
       endSpell()
+      cancelClip()
     } catch (e: Exception) {
+      cancelClip()
       Log.w(TAG, "Listening stopped", e)
       listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
       reportUnexpectedStop()

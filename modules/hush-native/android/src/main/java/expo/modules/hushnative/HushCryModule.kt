@@ -104,6 +104,15 @@ class HushCryModule : Module() {
       EventLog.take()
     }
 
+    // "Listen in": record the next few seconds while listening and upload them as a WAV.
+    AsyncFunction("recordClip") { seconds: Int, uploadUrl: String, promise: Promise ->
+      CryEngine.recordClip(seconds) { bytes ->
+        if (bytes == null) { promise.resolve(mapOf("ok" to false, "detail" to "notListening")); return@recordClip }
+        val (ok, detail) = AlertSender.upload(uploadUrl, bytes, "audio/wav")
+        promise.resolve(mapOf("ok" to ok, "detail" to detail))
+      }
+    }
+
     AsyncFunction("sendAlert") { tokens: List<String>, body: String, kind: String, promise: Promise ->
       AlertSender.send(tokens, body, mapOf("type" to kind, "baby" to CryEngine.babyName)) { ok, detail ->
         promise.resolve(mapOf("ok" to ok, "detail" to detail))

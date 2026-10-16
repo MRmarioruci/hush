@@ -4,8 +4,8 @@ _Last updated: 16 October 2026_
 
 hush is a white-noise and baby-monitor app for Android, made by Mario Ruci.
 This policy explains what the app does with your information. The short version:
-**hush has no accounts, no ads and no analytics, and never records or uploads
-sound.**
+**hush has no accounts, no ads and no analytics. It never records or uploads
+sound, except for the optional "listen in" clips you turn on yourself (below).**
 
 ## Microphone
 
@@ -18,6 +18,18 @@ respond to crying), hush listens through the microphone to notice crying.
   as soon as it has been checked.
 - Android shows a notification the whole time hush is listening, and you can stop
   it at any time from the app.
+
+### Optional: listen in
+
+If you turn on **Let parents listen in** on the baby's phone (it's off unless you
+turn it on), a paired parent's phone can ask for a 10-second clip of the room:
+
+- The baby's phone records the next 10 seconds and shows a notice that a parent is
+  listening. It never records unless a paired parent asks.
+- The clip is uploaded to Google's Firebase Storage
+  ([policy](https://policies.google.com/privacy)) under a long random name, and the
+  link is sent only to the parent who asked.
+- Clips are deleted automatically after one day. Turning the switch off stops new clips.
 
 ## Camera
 

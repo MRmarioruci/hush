@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Switch } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { stopLine } from "../stops";
+import { ListenButton } from "../components/Listen";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
@@ -208,6 +209,13 @@ function NurseryPhone() {
               value={m.sensitivity}
               onChange={(sensitivity) => update({ sensitivity })}
             />
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
+              <Text style={styles.roleSub}>{t("listen.allowSub", { s: CLIP_SECONDS })}</Text>
+            </View>
+            <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
           </View>
         </Card>
       )}
@@ -470,6 +478,7 @@ function RoomCard({ onRescan }: { onRescan: () => void }) {
           );
         })}
       </ScrollView>
+      <ListenButton />
     </Card>
   );
 }
@@ -596,6 +605,7 @@ function ParentPhone() {
 
 const ORB = 184;
 const styles = StyleSheet.create({
+  listenTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
   roomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   soundChip: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9 },
