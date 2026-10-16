@@ -76,8 +76,8 @@ export const es: Record<Key, string> = {
   "sounds.highest": "Nivel más alto",
   "sounds.phoneVolume": "Volumen del móvil",
   "sounds.volume": "Volumen",
-  "sounds.hintDev": "Mientras suena hush, el volumen del móvil no puede pasar la línea, así que se queda por debajo de {db} dB en la cuna.",
-  "sounds.hintCap": "El volumen está limitado para no pasar de {db} dB en la cuna, aunque el móvil esté al máximo.",
+  "sounds.hintDev": "Mientras suena hush, el volumen del móvil no puede pasar la línea, así que se queda por debajo de {db} dB en la cuna. Los niveles son estimaciones; cada móvil es distinto.",
+  "sounds.hintCap": "El volumen está limitado para no pasar de {db} dB en la cuna, aunque el móvil esté al máximo. Los niveles son estimaciones; cada móvil es distinto.",
   "sounds.moveFurther": "Con el móvil a {dist} o más, puede sonar con más cuerpo.",
 
   "smart.smart": "Inteligente",
@@ -99,7 +99,7 @@ export const es: Record<Key, string> = {
   "smart.curveRest": "Resto de la noche",
 
   "monitor.title": "Monitor",
-  "monitor.helper": "Una ayuda, no un dispositivo médico.",
+  "monitor.helper": "Una ayuda, no un dispositivo médico. Comprueba siempre tú mismo cómo está tu bebé.",
   "role.lead": "Escucha a {name} desde cualquier sitio",
   "role.leadSub": "Un móvil se queda en la habitación de {name} y escucha. El tuyo recibe un aviso cuando {name} llora.",
   "role.ask": "¿Qué hará este móvil?",
@@ -275,7 +275,7 @@ export const es: Record<Key, string> = {
   "settings.batteryOff": "Activar",
   "settings.about": "Acerca de",
   "settings.version": "Versión",
-  "settings.latest": "Descargar la última versión",
+  "settings.privacy": "Política de privacidad",
   "settings.setup": "Repetir la configuración",
   "settings.foot": "El sonido se queda en el móvil del bebé. Solo se envían avisos.",
 

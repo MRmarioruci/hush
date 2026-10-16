@@ -76,8 +76,8 @@ export const zh: Record<Key, string> = {
   "sounds.highest": "最高音量",
   "sounds.phoneVolume": "手机音量",
   "sounds.volume": "音量",
-  "sounds.hintDev": "hush 播放时，手机音量不会超过这条线，婴儿床处保持在 {db} 分贝以下。",
-  "sounds.hintCap": "音量已限制，即使手机开到最大，婴儿床处也不会超过 {db} 分贝。",
+  "sounds.hintDev": "hush 播放时，手机音量不会超过这条线，婴儿床处保持在 {db} 分贝以下。数值为估算，不同手机会有差异。",
+  "sounds.hintCap": "音量已限制，即使手机开到最大，婴儿床处也不会超过 {db} 分贝。数值为估算，不同手机会有差异。",
   "sounds.moveFurther": "把手机放到 {dist} 或更远，声音可以更饱满。",
 
   "smart.smart": "智能",
@@ -99,7 +99,7 @@ export const zh: Record<Key, string> = {
   "smart.curveRest": "后半夜",
 
   "monitor.title": "监护",
-  "monitor.helper": "仅为辅助工具，并非医疗设备。",
+  "monitor.helper": "仅为辅助工具，并非医疗设备。请始终亲自查看宝宝。",
   "role.lead": "随时随地听到{name}",
   "role.leadSub": "一部手机留在{name}的房间聆听。{name}一哭，你的手机就会收到通知。",
   "role.ask": "这部手机用来做什么？",
@@ -275,7 +275,7 @@ export const zh: Record<Key, string> = {
   "settings.batteryOff": "开启",
   "settings.about": "关于",
   "settings.version": "版本",
-  "settings.latest": "获取最新版本",
+  "settings.privacy": "隐私政策",
   "settings.setup": "重新设置",
   "settings.foot": "声音只留在宝宝的手机上，只会发送提醒。",
 

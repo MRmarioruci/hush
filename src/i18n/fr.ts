@@ -76,8 +76,8 @@ export const fr: Record<Key, string> = {
   "sounds.highest": "Niveau maximal",
   "sounds.phoneVolume": "Volume du téléphone",
   "sounds.volume": "Volume",
-  "sounds.hintDev": "Pendant la lecture, le volume du téléphone ne peut pas dépasser la ligne : il reste sous {db} dB au lit.",
-  "sounds.hintCap": "Le volume est limité pour ne jamais dépasser {db} dB au lit, même téléphone à fond.",
+  "sounds.hintDev": "Pendant la lecture, le volume du téléphone ne peut pas dépasser la ligne : il reste sous {db} dB au lit. Ces niveaux sont des estimations ; chaque téléphone est différent.",
+  "sounds.hintCap": "Le volume est limité pour ne jamais dépasser {db} dB au lit, même téléphone à fond. Ces niveaux sont des estimations ; chaque téléphone est différent.",
   "sounds.moveFurther": "À {dist} ou plus, le son peut être plus ample.",
 
   "smart.smart": "Auto",
@@ -99,7 +99,7 @@ export const fr: Record<Key, string> = {
   "smart.curveRest": "Reste de la nuit",
 
   "monitor.title": "Écoute",
-  "monitor.helper": "Une aide, pas un dispositif médical.",
+  "monitor.helper": "Une aide, pas un dispositif médical. Allez toujours voir votre bébé vous-même.",
   "role.lead": "Entendez {name} de partout",
   "role.leadSub": "Un téléphone reste dans la chambre de {name} et écoute. Le vôtre reçoit une notification quand {name} pleure.",
   "role.ask": "Que fera ce téléphone ?",
@@ -275,7 +275,7 @@ export const fr: Record<Key, string> = {
   "settings.batteryOff": "Activer",
   "settings.about": "À propos",
   "settings.version": "Version",
-  "settings.latest": "Obtenir la dernière version",
+  "settings.privacy": "Politique de confidentialité",
   "settings.setup": "Refaire la configuration",
   "settings.foot": "Le son reste sur le téléphone de bébé. Seules les alertes sont envoyées.",
 

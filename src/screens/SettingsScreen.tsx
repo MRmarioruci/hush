@@ -12,8 +12,9 @@ import { ICONS, Icon, Screen } from "../components/ui";
 import { useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 
-const RELEASES = "https://github.com/MRmarioruci/hush/releases/latest";
-const STUDY = "https://www.sciencenews.org/blog/growth-curve/should-you-hush-white-noise";
+const PRIVACY = "https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md";
+// Hugh et al., "Infant Sleep Machines and Hazardous Sound Pressure Levels", Pediatrics 2014.
+const STUDY = "https://doi.org/10.1542/peds.2013-3617";
 
 export function SettingsScreen() {
   const nav = useNavigation<{ navigate: (n: string) => void }>();
@@ -86,7 +87,7 @@ export function SettingsScreen() {
 
       <Group title={t("settings.about")}>
         <Row label={t("settings.version")}><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
-        <Row label={t("settings.latest")} onPress={() => Linking.openURL(RELEASES)} />
+        <Row label={t("settings.privacy")} onPress={() => Linking.openURL(PRIVACY)} />
         <Row label={t("settings.setup")} onPress={() => set({ onboarded: false })} />
       </Group>
 

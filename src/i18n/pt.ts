@@ -76,8 +76,8 @@ export const pt: Record<Key, string> = {
   "sounds.highest": "Nível máximo",
   "sounds.phoneVolume": "Volume do celular",
   "sounds.volume": "Volume",
-  "sounds.hintDev": "Enquanto o hush toca, o volume do celular não passa da linha, então fica abaixo de {db} dB no berço.",
-  "sounds.hintCap": "O volume é limitado para não passar de {db} dB no berço, mesmo com o celular no máximo.",
+  "sounds.hintDev": "Enquanto o hush toca, o volume do celular não passa da linha, então fica abaixo de {db} dB no berço. Os níveis são estimativas; cada celular é diferente.",
+  "sounds.hintCap": "O volume é limitado para não passar de {db} dB no berço, mesmo com o celular no máximo. Os níveis são estimativas; cada celular é diferente.",
   "sounds.moveFurther": "Com o celular a {dist} ou mais, o som pode ficar mais cheio.",
 
   "smart.smart": "Inteligente",
@@ -99,7 +99,7 @@ export const pt: Record<Key, string> = {
   "smart.curveRest": "Resto da noite",
 
   "monitor.title": "Babá eletrônica",
-  "monitor.helper": "Uma ajuda, não um aparelho médico.",
+  "monitor.helper": "Uma ajuda, não um aparelho médico. Sempre confira o bebê você mesmo.",
   "role.lead": "Ouça {name} de qualquer lugar",
   "role.leadSub": "Um celular fica no quarto de {name} e escuta. O seu recebe uma notificação quando {name} chora.",
   "role.ask": "O que este celular vai fazer?",
@@ -275,7 +275,7 @@ export const pt: Record<Key, string> = {
   "settings.batteryOff": "Ativar",
   "settings.about": "Sobre",
   "settings.version": "Versão",
-  "settings.latest": "Baixar a versão mais recente",
+  "settings.privacy": "Política de privacidade",
   "settings.setup": "Refazer a configuração",
   "settings.foot": "O som fica no celular do bebê. Só os alertas são enviados.",
 

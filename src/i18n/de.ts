@@ -76,8 +76,8 @@ export const de: Record<Key, string> = {
   "sounds.highest": "Höchste Stufe",
   "sounds.phoneVolume": "Handy-Lautstärke",
   "sounds.volume": "Lautstärke",
-  "sounds.hintDev": "Während hush läuft, kann die Lautstärke die Linie nicht überschreiten. So bleibt es am Bett unter {db} dB.",
-  "sounds.hintCap": "Die Lautstärke ist begrenzt, damit es am Bett nie über {db} dB geht, auch bei voll aufgedrehtem Handy.",
+  "sounds.hintDev": "Während hush läuft, kann die Lautstärke die Linie nicht überschreiten. So bleibt es am Bett unter {db} dB. Die Werte sind Schätzungen, jedes Handy ist anders.",
+  "sounds.hintCap": "Die Lautstärke ist begrenzt, damit es am Bett nie über {db} dB geht, auch bei voll aufgedrehtem Handy. Die Werte sind Schätzungen, jedes Handy ist anders.",
   "sounds.moveFurther": "Steht das Handy {dist} oder weiter weg, darf es voller klingen.",
 
   "smart.smart": "Smart",
@@ -99,7 +99,7 @@ export const de: Record<Key, string> = {
   "smart.curveRest": "Rest der Nacht",
 
   "monitor.title": "Babyfon",
-  "monitor.helper": "Eine Hilfe, kein Medizinprodukt.",
+  "monitor.helper": "Eine Hilfe, kein Medizinprodukt. Schauen Sie immer auch selbst nach Ihrem Baby.",
   "role.lead": "Hör {name} von überall",
   "role.leadSub": "Ein Handy bleibt im Zimmer von {name} und hört zu. Deins bekommt eine Nachricht, wenn {name} weint.",
   "role.ask": "Was macht dieses Handy?",
@@ -275,7 +275,7 @@ export const de: Record<Key, string> = {
   "settings.batteryOff": "Einschalten",
   "settings.about": "Über",
   "settings.version": "Version",
-  "settings.latest": "Neueste Version holen",
+  "settings.privacy": "Datenschutzerklärung",
   "settings.setup": "Einrichtung erneut starten",
   "settings.foot": "Der Ton bleibt auf dem Handy des Babys. Nur Alarme werden gesendet.",
 

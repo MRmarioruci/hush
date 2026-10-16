@@ -76,8 +76,8 @@ export const en = {
   "sounds.highest": "Highest level",
   "sounds.phoneVolume": "Phone volume",
   "sounds.volume": "Volume",
-  "sounds.hintDev": "While hush plays, your phone's volume can't go past the line, so it stays under {db} dB at the crib.",
-  "sounds.hintCap": "Volume is capped so it can't pass {db} dB at the crib, even with your phone turned all the way up.",
+  "sounds.hintDev": "While hush plays, your phone's volume can't go past the line, so it stays under {db} dB at the crib. Levels are estimates; phones vary.",
+  "sounds.hintCap": "Volume is capped so it can't pass {db} dB at the crib, even with your phone turned all the way up. Levels are estimates; phones vary.",
   "sounds.moveFurther": "Moving the phone to {dist} or more lets it play fuller.",
 
   "smart.smart": "Smart",
@@ -99,7 +99,7 @@ export const en = {
   "smart.curveRest": "Rest of the night",
 
   "monitor.title": "Monitor",
-  "monitor.helper": "A helper, not a medical device.",
+  "monitor.helper": "A helper, not a medical device. Always check on your baby yourself.",
   "role.lead": "Hear {name} from anywhere",
   "role.leadSub": "One phone stays in {name}'s room and listens. Yours gets a notification when {name} cries.",
   "role.ask": "What will this phone do?",
@@ -275,7 +275,7 @@ export const en = {
   "settings.batteryOff": "Turn on",
   "settings.about": "About",
   "settings.version": "Version",
-  "settings.latest": "Get the latest version",
+  "settings.privacy": "Privacy policy",
   "settings.setup": "Run setup again",
   "settings.foot": "Sound stays on the baby's phone. Only alerts are sent.",
 

@@ -7,11 +7,16 @@ const EXPO_PROJECT_ID = process.env.EXPO_PROJECT_ID || "3ff0084b-2451-476b-8b98-
 const EXPO_OWNER = process.env.EXPO_OWNER || undefined;
 const hasFirebase = fs.existsSync("./google-services.json");
 
+// Play needs a higher versionCode for every upload: 1.5.0 -> 10500, 1.5.1 -> 10501.
+const VERSION = require("./package.json").version;
+const [MA, MI, PA] = VERSION.split(".").map(Number);
+const VERSION_CODE = MA * 10000 + MI * 100 + PA;
+
 module.exports = ({ config }) => ({
   ...config,
   name: "hush",
   slug: "hush",
-  version: "1.5.0",
+  version: VERSION,
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
@@ -30,6 +35,7 @@ module.exports = ({ config }) => ({
     },
     predictiveBackGestureEnabled: false,
     package: "com.mrmarioruci.hush",
+    versionCode: VERSION_CODE,
     ...(hasFirebase ? { googleServicesFile: "./google-services.json" } : {}),
     // Keep plugins from adding permissions hush doesn't use. (The mic is used by the
     // baby monitor and declared by modules/hush-native.)
@@ -48,6 +54,7 @@ module.exports = ({ config }) => ({
     favicon: "./assets/favicon.png",
   },
   plugins: [
+    "./plugins/withReleaseSigning",
     "expo-font",
     "expo-status-bar",
     [
@@ -80,7 +87,7 @@ module.exports = ({ config }) => ({
     [
       "expo-camera",
       {
-        cameraPermission: "hush uses the camera to scan the pairing code on a parent's phone.",
+        cameraPermission: "hush uses the camera to scan the pairing code shown on the baby's phone.",
         microphonePermission: false,
         recordAudioAndroid: false,
         barcodeScannerEnabled: true,

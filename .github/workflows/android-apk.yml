@@ -53,6 +53,21 @@ jobs:
           echo "class 20: $LINE"
           echo "$LINE" | grep -q "Baby cry, infant cry" || { echo "::error::YAMNet class 20 is not 'Baby cry': $LINE"; exit 1; }
 
+      # Play upload key, from repo secrets. Without it the APK is debug-signed (fine
+      # for sideloading) and no Play bundle is built.
+      - name: Restore upload key
+        env:
+          KEYSTORE_B64: ${{ secrets.HUSH_UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.HUSH_UPLOAD_STORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "No upload key secret; skipping Play bundle."; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          {
+            echo "HUSH_UPLOAD_STORE_FILE=$RUNNER_TEMP/upload.jks"
+            echo "HUSH_UPLOAD_STORE_PASSWORD=$STORE_PASSWORD"
+            echo "HUSH_UPLOAD_KEY_ALIAS=hush"
+          } >> "$GITHUB_ENV"
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
@@ -60,18 +75,27 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
+      # Play bundle for every common phone CPU (Play delivers only the right one to
+      # each phone, so the download stays small).
+      - name: Build Play bundle (.aab)
+        if: env.HUSH_UPLOAD_STORE_FILE != ''
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64
+
       - name: Name the APK
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk "dist/hush-${VERSION}.apk"
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          if [ -f "$AAB" ]; then cp "$AAB" "dist/hush-${VERSION}-play.aab"; fi
           ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: hush-apk
-          path: dist/*.apk
+          path: dist/*
           retention-days: 30
 
       - name: Publish release
@@ -83,7 +107,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           make_latest: true
           overwrite_files: true
-          files: dist/*.apk
+          files: dist/*
           body: |
             Download the APK below on your Android phone and open it to install.
             If Android asks, allow your browser to install unknown apps.
@@ -98,5 +122,5 @@ jobs:
           prerelease: true
           make_latest: false
           overwrite_files: true
-          files: dist/*.apk
+          files: dist/*
           body: Test build from the ${{ github.ref_name }} branch. Not the stable release.
