@@ -6,7 +6,7 @@ name: iOS
 #   Secrets (see store/APP_STORE.md): APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64.
 on:
   push:
-    branches: [main]
+    branches: [main, monitor]
   workflow_dispatch:
 
 concurrency:
