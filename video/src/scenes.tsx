@@ -1,6 +1,6 @@
 import React from "react";
 import { interpolate, useCurrentFrame } from "remotion";
-import { BODY, C, DISPLAY, Moon, Phone, Scene, Sfx, Sky, Words, clamp, ease, float, prog, springIn } from "./theme";
+import { BODY, C, DISPLAY, Logo, Phone, Scene, Sfx, Sky, Words, clamp, ease, float, prog, springIn } from "./theme";
 
 /* 1 · The problem: no white noise machine, no baby monitor. */
 const Speaker: React.FC = () => (
@@ -50,7 +50,7 @@ export const IntroScene: React.FC = () => {
     <Scene>
       <Sky glowY="55%" />
       <Sfx at={2} name="sparkle" volume={0.45} />
-      <Moon size={260} style={{ left: 830, top: interpolate(rise, [0, 1], [1150, 150]) + float(f, 1, 5) }} />
+      <Logo size={330} stars={prog(f, 40, 60)} style={{ left: 795, top: interpolate(rise, [0, 1], [1150, 110]) + float(f, 1, 5), rotate: `${interpolate(rise, [0, 1], [-25, 0])}deg` }} />
       <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center" }}>
         <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 190, color: C.cream, letterSpacing: -4, lineHeight: 1, opacity: name, scale: `${0.9 + 0.1 * name}` }}>hush</div>
         <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 56, color: C.peach, marginTop: 28, opacity: sub, translate: `0px ${(1 - sub) * 20}px` }}>
@@ -246,7 +246,7 @@ export const OutroScene: React.FC = () => {
         })}
       </div>
       <div style={{ opacity: Math.min(1, end * 1.3) }}>
-        <Moon size={210} style={{ left: 855, top: 170 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
+        <Logo size={280} stars={prog(f, 110, 130)} style={{ left: 820, top: 120 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
         <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center", scale: `${0.94 + 0.06 * end}` }}>
           <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 170, color: C.cream, letterSpacing: -4, lineHeight: 1 }}>hush</div>
           <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor, wherever you sleep</div>

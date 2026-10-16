@@ -197,3 +197,14 @@ export const Scene: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const frame = useCurrentFrame();
   return <AbsoluteFill style={{ scale: `${1 + frame * 0.00028}` }}>{children}</AbsoluteFill>;
 };
+
+/** The hush logo: the app icon's crescent with two small stars, softly glowing. */
+export const Logo: React.FC<{ size: number; stars?: number; style?: React.CSSProperties }> = ({ size, stars = 1, style }) => (
+  <div style={{ position: "absolute", width: size, height: size, ...style }}>
+    <svg width={size} height={size} viewBox="0 0 1024 1024" style={{ position: "absolute", inset: 0, overflow: "visible", filter: `drop-shadow(0 0 ${size * 0.08}px rgba(246,226,176,.45))` }}>
+      <path fill={C.moon} d="M600 210a330 330 0 1 0 214 520A270 270 0 0 1 600 210z" />
+      <circle cx={760} cy={300} r={22} fill={C.peach} opacity={stars} />
+      <circle cx={830} cy={420} r={12} fill={C.peach} opacity={0.8 * stars} />
+    </svg>
+  </div>
+);
