@@ -4,8 +4,8 @@ import os
 L = {}
 
 L["en-US"] = ("hush: white noise & monitor",
-"Gentle white noise kept quiet at the crib, plus a cry monitor for your phones.",
-"""hush is a calm night-time companion for parents: soothing white noise that stays at a gentle level at the crib, and a baby monitor that uses two phones you already have.
+"Turn your phones into a baby monitor, with gentle white noise. No subscription.",
+"""Travelling with a baby and the monitor stayed at home? hush turns the phones you already have into a baby monitor, and plays calm white noise at a gentle level at the crib. No subscription and no extra device needed.
 
 WHITE NOISE, KEPT GENTLE
 • Six loops: womb, shush, brown, pink, white and ocean
@@ -29,7 +29,7 @@ NIGHTS
 
 PRIVATE BY DESIGN
 • Sound is checked on the phone and never recorded or uploaded
-• No account, no ads, no tracking
+• No account, no tracking
 • Night history stays on your phones
 
 Available in English, Ελληνικά, Deutsch, Français, Español, Português and 中文.
@@ -37,8 +37,8 @@ Available in English, Ελληνικά, Deutsch, Français, Español, Português
 hush is a helper, not a medical device. Always check on your baby yourself. Volume levels are estimates and vary between phones.""")
 
 L["el-GR"] = ("hush: λευκός θόρυβος & ακρόαση",
-"Απαλός λευκός θόρυβος σε ήπια ένταση και ειδοποίηση όταν κλαίει το μωρό.",
-"""Το hush είναι ένας ήρεμος βοηθός για τη νύχτα: χαλαρωτικός λευκός θόρυβος σε ήπια ένταση στην κούνια και ενδοεπικοινωνία μωρού με δύο κινητά που ήδη έχετε.
+"Τα κινητά σας γίνονται ενδοεπικοινωνία μωρού, με λευκό θόρυβο. Χωρίς συνδρομή.",
+"""Ταξιδεύετε με το μωρό και η ενδοεπικοινωνία έμεινε σπίτι; Το hush κάνει τα κινητά που ήδη έχετε ενδοεπικοινωνία μωρού και παίζει ήρεμο λευκό θόρυβο σε ήπια ένταση στην κούνια. Χωρίς συνδρομή και χωρίς επιπλέον συσκευή.
 
 ΛΕΥΚΟΣ ΘΟΡΥΒΟΣ, ΠΑΝΤΑ ΑΠΑΛΟΣ
 • Έξι ήχοι: μήτρα, σςς, καφέ, ροζ, λευκός και θάλασσα
@@ -62,7 +62,7 @@ L["el-GR"] = ("hush: λευκός θόρυβος & ακρόαση",
 
 ΙΔΙΩΤΙΚΟΤΗΤΑ
 • Ο ήχος ελέγχεται στο κινητό και δεν ηχογραφείται ούτε ανεβαίνει πουθενά
-• Χωρίς λογαριασμό, διαφημίσεις ή παρακολούθηση
+• Χωρίς λογαριασμό και χωρίς παρακολούθηση
 • Το ιστορικό μένει στα κινητά σας
 
 Διαθέσιμο σε English, Ελληνικά, Deutsch, Français, Español, Português και 中文.
@@ -70,8 +70,8 @@ L["el-GR"] = ("hush: λευκός θόρυβος & ακρόαση",
 Το hush είναι βοήθημα, όχι ιατρική συσκευή. Να ελέγχετε πάντα το μωρό και μόνοι σας. Οι εντάσεις είναι εκτιμήσεις και διαφέρουν ανά κινητό.""")
 
 L["de-DE"] = ("hush: Rauschen & Babyphone",
-"Sanftes Einschlafrauschen in leiser Stärke am Bett und ein Babyphone fürs Handy.",
-"""hush ist ein ruhiger Begleiter für die Nacht: beruhigendes Rauschen, das am Babybett leise bleibt, und ein Babyphone mit zwei Handys, die Sie schon haben.
+"Ihre Handys als Babyphone, dazu sanftes Einschlafrauschen. Ohne Abo.",
+"""Mit Baby unterwegs und das Babyphone liegt zu Hause? hush macht aus den Handys, die Sie schon haben, ein Babyphone und spielt beruhigendes Rauschen, das am Babybett leise bleibt. Ohne Abo und ohne extra Gerät.
 
 RAUSCHEN, IMMER SANFT
 • Sechs Klänge: Bauch, Schhh, Braun, Rosa, Weiß und Meer
@@ -95,7 +95,7 @@ NÄCHTE
 
 PRIVAT VON ANFANG AN
 • Geräusche werden auf dem Handy geprüft, nie aufgenommen oder hochgeladen
-• Kein Konto, keine Werbung, kein Tracking
+• Kein Konto, kein Tracking
 • Der Verlauf bleibt auf Ihren Handys
 
 Verfügbar auf English, Ελληνικά, Deutsch, Français, Español, Português und 中文.
@@ -103,8 +103,8 @@ Verfügbar auf English, Ελληνικά, Deutsch, Français, Español, Portugu�
 hush ist eine Hilfe, kein Medizinprodukt. Schauen Sie immer auch selbst nach Ihrem Baby. Lautstärkewerte sind Schätzungen und je nach Handy verschieden.""")
 
 L["fr-FR"] = ("hush : bruit blanc & babyphone",
-"Un bruit blanc doux, à volume modéré près du lit, et un babyphone sur téléphone.",
-"""hush est un compagnon de nuit tout en douceur : un bruit blanc apaisant qui reste modéré près du lit, et un babyphone avec deux téléphones que vous avez déjà.
+"Vos téléphones deviennent babyphone, avec un bruit blanc doux. Sans abonnement.",
+"""En voyage avec bébé et le babyphone est resté à la maison ? hush transforme les téléphones que vous avez déjà en babyphone et diffuse un bruit blanc apaisant, à volume modéré près du lit. Sans abonnement ni appareil en plus.
 
 UN BRUIT BLANC TOUJOURS DOUX
 • Six sons : ventre, chut, brun, rose, blanc et océan
@@ -128,7 +128,7 @@ LES NUITS
 
 PRIVÉ PAR NATURE
 • Le son est analysé sur le téléphone, jamais enregistré ni envoyé
-• Pas de compte, pas de pub, pas de suivi
+• Pas de compte, pas de suivi
 • L'historique reste sur vos téléphones
 
 Disponible en English, Ελληνικά, Deutsch, Français, Español, Português et 中文.
@@ -136,8 +136,8 @@ Disponible en English, Ελληνικά, Deutsch, Français, Español, Portuguê
 hush est une aide, pas un dispositif médical. Allez toujours voir votre bébé vous-même. Les niveaux sonores sont des estimations et varient selon les téléphones.""")
 
 L["es-ES"] = ("hush: ruido blanco y monitor",
-"Ruido blanco suave a volumen moderado en la cuna y un vigilabebés en el móvil.",
-"""hush es un compañero tranquilo para la noche: ruido blanco relajante que se mantiene suave en la cuna y un vigilabebés con dos móviles que ya tienes.
+"Tus móviles se vuelven vigilabebés, con ruido blanco suave. Sin suscripción.",
+"""¿De viaje con el bebé y el vigilabebés se quedó en casa? hush convierte los móviles que ya tienes en un vigilabebés y pone ruido blanco relajante a volumen suave en la cuna. Sin suscripción y sin aparatos extra.
 
 RUIDO BLANCO, SIEMPRE SUAVE
 • Seis sonidos: vientre, chist, marrón, rosa, blanco y mar
@@ -161,7 +161,7 @@ NOCHES
 
 PRIVADO DESDE EL PRINCIPIO
 • El sonido se analiza en el móvil y nunca se graba ni se sube
-• Sin cuenta, sin anuncios, sin rastreo
+• Sin cuenta y sin rastreo
 • El historial se queda en tus móviles
 
 Disponible en English, Ελληνικά, Deutsch, Français, Español, Português y 中文.
@@ -169,8 +169,8 @@ Disponible en English, Ελληνικά, Deutsch, Français, Español, Portuguê
 hush es una ayuda, no un dispositivo médico. Comprueba siempre tú mismo cómo está tu bebé. Los niveles de volumen son estimaciones y varían según el móvil.""")
 
 L["pt-BR"] = ("hush: ruído branco e babá",
-"Ruído branco suave em volume moderado no berço e uma babá eletrônica no celular.",
-"""O hush é um companheiro tranquilo para a noite: ruído branco relaxante que fica suave no berço e uma babá eletrônica com dois celulares que você já tem.
+"Seus celulares viram babá eletrônica, com ruído branco suave. Sem assinatura.",
+"""Viajando com o bebê e a babá eletrônica ficou em casa? O hush transforma os celulares que você já tem em babá eletrônica e toca ruído branco relaxante em volume suave no berço. Sem assinatura e sem aparelho extra.
 
 RUÍDO BRANCO, SEMPRE SUAVE
 • Seis sons: barriga, shhh, marrom, rosa, branco e mar
@@ -194,7 +194,7 @@ NOITES
 
 PRIVADO DESDE O INÍCIO
 • O som é analisado no celular e nunca é gravado nem enviado
-• Sem conta, sem anúncios, sem rastreamento
+• Sem conta e sem rastreamento
 • O histórico fica nos seus celulares
 
 Disponível em English, Ελληνικά, Deutsch, Français, Español, Português e 中文.
@@ -202,8 +202,8 @@ Disponível em English, Ελληνικά, Deutsch, Français, Español, Portugu�
 O hush é uma ajuda, não um aparelho médico. Sempre confira o bebê você mesmo. Os níveis de volume são estimativas e variam entre celulares.""")
 
 L["zh-CN"] = ("hush：白噪音与宝宝监听",
-"在婴儿床边保持柔和音量的白噪音，外加用手机实现的哭声监听。",
-"""hush 是陪伴父母度过夜晚的安静助手：在婴儿床边保持柔和音量的舒缓白噪音，以及用你已有的两部手机实现的宝宝监听。
+"把手机变成宝宝监听器，还有柔和白噪音。无需订阅。",
+"""带宝宝出门，监视器却落在家里？hush 把你现有的手机变成宝宝监听器，并在婴儿床边以柔和音量播放舒缓白噪音。无需订阅，也不用额外设备。
 
 柔和的白噪音
 • 六种声音：子宫、嘘声、棕噪音、粉噪音、白噪音和海浪
@@ -227,7 +227,7 @@ L["zh-CN"] = ("hush：白噪音与宝宝监听",
 
 注重隐私
 • 声音只在手机上分析，从不录音或上传
-• 无需账号，无广告，无追踪
+• 无需账号，无追踪
 • 夜晚记录只保存在你的手机上
 
 支持 English、Ελληνικά、Deutsch、Français、Español、Português 和中文。

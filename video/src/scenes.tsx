@@ -1,57 +1,80 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { BODY, C, DISPLAY, Moon, Phone, Sky, Words, clamp, ease, prog } from "./theme";
+import { interpolate, useCurrentFrame } from "remotion";
+import { BODY, C, DISPLAY, Moon, Phone, Scene, Sfx, Sky, Words, clamp, ease, float, prog, springIn } from "./theme";
 
-/* 1 · Bedtime: the moon rises, the name appears. */
-export const IntroScene: React.FC = () => {
+/* 1 · The problem: travelling, and no baby monitor packed. */
+export const HookScene: React.FC = () => {
   const f = useCurrentFrame();
-  const rise = prog(f, 0, 70);
-  const line = interpolate(f, [10, 30, 62, 76], [0, 1, 1, 0], clamp);
-  const name = prog(f, 78, 104);
+  const bag = springIn(f, 4, 34);
+  const l1 = springIn(f, 14, 40);
+  const l2 = springIn(f, 52, 78);
   return (
-    <AbsoluteFill>
-      <Sky glowY="55%" />
-      <Moon size={300} style={{ left: 810, top: interpolate(rise, [0, 1], [1150, 210]) }} />
-      <div
-        style={{
-          position: "absolute", width: "100%", top: 610, textAlign: "center",
-          fontFamily: DISPLAY, fontWeight: 500, fontSize: 84, color: C.cream, opacity: line,
-          translate: `0px ${(1 - line) * 20}px`,
-        }}
-      >
-        Bedtime, every night.
+    <Scene>
+      <Sky glowY="40%" />
+      <Sfx at={4} name="whoosh" volume={0.35} />
+      <Sfx at={16} name="pop" volume={0.45} />
+      <Sfx at={54} name="pop" volume={0.45} />
+      <svg width={260} height={230} viewBox="0 0 260 230" style={{ position: "absolute", left: 830, top: 150 + float(f, 0, 6), opacity: bag, scale: `${0.7 + 0.3 * bag}` }}>
+        <rect x={95} y={10} width={70} height={44} rx={16} fill="none" stroke={C.muted} strokeWidth={12} />
+        <rect x={20} y={46} width={220} height={160} rx={32} fill={C.peach} />
+        <line x1={90} y1={60} x2={90} y2={192} stroke="rgba(27,23,39,.18)" strokeWidth={10} strokeLinecap="round" />
+        <line x1={170} y1={60} x2={170} y2={192} stroke="rgba(27,23,39,.18)" strokeWidth={10} strokeLinecap="round" />
+      </svg>
+      <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 96, color: C.cream, opacity: l1, translate: `0px ${(1 - l1) * 30}px` }}>
+          Travelling with a baby?
+        </div>
+        <div style={{ position: "relative", display: "inline-block", marginTop: 26, fontFamily: BODY, fontWeight: 700, fontSize: 56, color: C.muted, opacity: l2, translate: `0px ${(1 - l2) * 24}px` }}>
+          Left the baby monitor at home?
+        </div>
       </div>
-      <div style={{ position: "absolute", width: "100%", top: 580, textAlign: "center", opacity: name, scale: `${0.94 + 0.06 * name}` }}>
-        <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 190, color: C.cream, letterSpacing: -4, lineHeight: 1 }}>hush</div>
-        <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor</div>
-      </div>
-    </AbsoluteFill>
+    </Scene>
   );
 };
 
-/* 2 · Calm sounds. */
+/* 2 · The answer: the moon rises, the name appears. */
+export const IntroScene: React.FC = () => {
+  const f = useCurrentFrame();
+  const rise = prog(f, 0, 60);
+  const name = springIn(f, 26, 56);
+  const sub = prog(f, 40, 66);
+  return (
+    <Scene>
+      <Sky glowY="55%" />
+      <Sfx at={2} name="sparkle" volume={0.45} />
+      <Moon size={260} style={{ left: 830, top: interpolate(rise, [0, 1], [1150, 150]) + float(f, 1, 5) }} />
+      <div style={{ position: "absolute", width: "100%", top: 470, textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 190, color: C.cream, letterSpacing: -4, lineHeight: 1, opacity: name, scale: `${0.9 + 0.1 * name}` }}>hush</div>
+        <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 56, color: C.peach, marginTop: 28, opacity: sub, translate: `0px ${(1 - sub) * 20}px` }}>
+          Your phones are all you need.
+        </div>
+      </div>
+    </Scene>
+  );
+};
+
+/* 3 · Calm sounds. */
 const SOUNDS = ["Womb", "Shush", "Brown", "Pink", "White", "Ocean"];
 export const SoundsScene: React.FC = () => {
   const f = useCurrentFrame();
-  const p = prog(f, 0, 34);
+  const p = springIn(f, 0, 36);
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky glowX="25%" glowY="40%" />
-      <Phone
-        src="home.png"
-        style={{ left: 250, top: 120 + (1 - p) * 140, opacity: p, rotate: `${(1 - p) * -6}deg` }}
-      />
+      <Sfx at={0} name="whoosh" volume={0.35} />
+      {SOUNDS.map((s, i) => <Sfx key={s} at={40 + i * 6} name="tick" volume={0.32} />)}
+      <Phone src="home.png" style={{ left: 250, top: 120 + (1 - p) * 140 + float(f), opacity: Math.min(1, p * 1.4), rotate: `${(1 - p) * -6 + float(f, 2, 0.6)}deg` }} />
       <Words title="Calm white noise" sub="Six gentle sounds that keep playing with the screen off." style={{ left: 860, top: 300, width: 900 }} />
       <div style={{ position: "absolute", left: 860, top: 640, display: "flex", gap: 18, flexWrap: "wrap", width: 900 }}>
         {SOUNDS.map((s, i) => {
-          const q = prog(f, 40 + i * 6, 64 + i * 6);
+          const q = springIn(f, 40 + i * 6, 62 + i * 6);
           return (
             <div
               key={s}
               style={{
                 fontFamily: BODY, fontWeight: 700, fontSize: 38, color: i === 0 ? C.bg : C.cream,
                 background: i === 0 ? C.peach : C.card, borderRadius: 99, padding: "16px 34px",
-                opacity: q, scale: `${0.8 + 0.2 * q}`,
+                opacity: Math.min(1, q * 1.5), scale: `${0.6 + 0.4 * q}`, translate: `0px ${float(f, i, 3)}px`,
               }}
             >
               {s}
@@ -59,124 +82,108 @@ export const SoundsScene: React.FC = () => {
           );
         })}
       </div>
-    </AbsoluteFill>
+    </Scene>
   );
 };
 
-/* 3 · Never too loud: a level that settles at 50 dB at the crib. */
+/* 4 · Never too loud: a level that settles at 50 dB at the crib. */
 export const SafeScene: React.FC = () => {
   const f = useCurrentFrame();
-  const p = prog(f, 0, 30);
+  const p = springIn(f, 0, 36);
   const db = interpolate(f, [20, 80], [30, 50], { ...clamp, easing: ease });
-  const arc = (db - 30) / 40; // 30..70 dB scale
+  const arc = (db - 30) / 40;
   const R = 200, cx = 260, cy = 250;
   const pt = (a: number) => [cx + R * Math.cos(Math.PI * (1 - a)), cy - R * Math.sin(Math.PI * (1 - a))];
   const [ex, ey] = pt(arc);
   const [lx, ly] = pt(0.5);
+  const settle = springIn(f, 78, 100);
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky glowX="75%" glowY="40%" />
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      <Sfx at={80} name="chime" volume={0.22} />
       <Words title="Never too loud" sub="Tell hush how far the crib is. It keeps the sound under 50 dB there." style={{ left: 150, top: 200, width: 860 }} />
-      <svg width={520} height={330} style={{ position: "absolute", left: 230, top: 600, opacity: p }}>
+      <svg width={520} height={330} style={{ position: "absolute", left: 230, top: 600, opacity: Math.min(1, p * 1.4), scale: `${1 + 0.04 * settle * (1 - prog(f, 100, 130))}` }}>
         <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`} stroke={C.card} strokeWidth={30} fill="none" strokeLinecap="round" />
         <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${ex} ${ey}`} stroke={C.sage} strokeWidth={30} fill="none" strokeLinecap="round" />
         <line x1={lx} y1={ly - 34} x2={lx} y2={ly + 34} stroke={C.rose} strokeWidth={6} strokeLinecap="round" />
-        <text x={cx} y={cy - 30} textAnchor="middle" fill={C.cream} style={{ fontFamily: DISPLAY, fontSize: 120, fontWeight: 500 }}>
-          {Math.round(db)}
-        </text>
-        <text x={cx} y={cy + 40} textAnchor="middle" fill={C.muted} style={{ fontFamily: BODY, fontSize: 36, fontWeight: 700 }}>
-          dB at the crib
-        </text>
+        <text x={cx} y={cy - 30} textAnchor="middle" fill={C.cream} style={{ fontFamily: DISPLAY, fontSize: 120, fontWeight: 500 }}>{Math.round(db)}</text>
+        <text x={cx} y={cy + 40} textAnchor="middle" fill={C.muted} style={{ fontFamily: BODY, fontSize: 36, fontWeight: 700 }}>dB at the crib</text>
       </svg>
-      <Phone src="sounds.png" style={{ left: 1250, top: 120 + (1 - p) * 140, opacity: p, rotate: `${(1 - p) * 6}deg` }} />
-    </AbsoluteFill>
+      <Phone src="sounds.png" style={{ left: 1250, top: 120 + (1 - p) * 140 + float(f, 1), opacity: Math.min(1, p * 1.4), rotate: `${(1 - p) * 6 + float(f, 3, 0.6)}deg` }} />
+    </Scene>
   );
 };
 
-/* 4 · Smart volume: the curve draws itself, then a cry bumps it back up. */
+/* 5 · Smart volume: the curve draws itself, then a cry bumps it back up. */
 export const SmartScene: React.FC = () => {
   const f = useCurrentFrame();
-  const draw = prog(f, 20, 120);
+  const draw = interpolate(f, [20, 125], [0, 1], { ...clamp, easing: ease });
   const W = 1400, H = 380, x0 = 260, y0 = 560;
   const y = (db: number) => y0 + H - ((db - 40) / 12) * H;
-  // 50 dB hold, ease to 44, cry bump, settle.
   const pts: [number, number][] = [];
-  for (let i = 0; i <= 200; i++) {
-    const u = i / 200;
+  for (let i = 0; i <= 240; i++) {
+    const u = i / 240;
     let db = 50;
     if (u > 0.22) db = 50 - 6 * Math.min(1, (u - 0.22) / 0.3) ** 0.8;
-    const bump = Math.exp(-(((u - 0.7) / 0.035) ** 2));
-    db = Math.max(db, db + 5.2 * bump);
+    db = db + 5.2 * Math.exp(-(((u - 0.7) / 0.035) ** 2));
     pts.push([x0 + u * W, y(db)]);
   }
   const shown = pts.slice(0, Math.max(2, Math.round(draw * pts.length)));
   const d = shown.map(([a, b], i) => `${i ? "L" : "M"} ${a.toFixed(1)} ${b.toFixed(1)}`).join(" ");
   const [hx, hy] = shown[shown.length - 1];
-  const cry = prog(f, 100, 118) * (1 - prog(f, 150, 165));
-  const label = (txt: string, x: number, at: number) => (
-    <div style={{ position: "absolute", left: x, top: y0 + H + 40, fontFamily: BODY, fontWeight: 700, fontSize: 36, color: C.muted, opacity: prog(f, at, at + 20) }}>{txt}</div>
-  );
+  const cry = springIn(f, 96, 116) * (1 - prog(f, 150, 165));
+  const label = (txt: string, x: number, at: number) => {
+    const q = prog(f, at, at + 22);
+    return <div style={{ position: "absolute", left: x, top: y0 + H + 40, fontFamily: BODY, fontWeight: 700, fontSize: 36, color: C.muted, opacity: q, translate: `${(1 - q) * -16}px 0px` }}>{txt}</div>;
+  };
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky />
+      <Sfx at={20} name="whoosh" volume={0.25} />
+      <Sfx at={97} name="pop" volume={0.5} />
       <Words title="Smart volume" sub="Eases down as your baby settles. Turns back up if they cry." align="center" style={{ left: 160, right: 160, top: 120 }} />
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
         {[50, 44].map((v) => (
-          <g key={v}>
+          <g key={v} opacity={prog(f, 6, 26)}>
             <line x1={x0} x2={x0 + W} y1={y(v)} y2={y(v)} stroke={C.card} strokeWidth={3} strokeDasharray="10 12" />
             <text x={x0 - 30} y={y(v) + 14} textAnchor="end" fill={C.muted} style={{ fontFamily: BODY, fontSize: 36, fontWeight: 700 }}>{v} dB</text>
           </g>
         ))}
         <path d={`${d} L ${hx} ${y0 + H} L ${x0} ${y0 + H} Z`} fill="rgba(246,199,176,.10)" />
         <path d={d} stroke={C.peach} strokeWidth={9} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={hx} cy={hy} r={16} fill={C.peach} />
+        <circle cx={hx} cy={hy} r={16 + 3 * Math.sin(f / 6)} fill={C.peach} />
       </svg>
       {label("Falling asleep", x0, 40)}
-      {label("Sound asleep", x0 + W * 0.42, 70)}
-      <div
-        style={{
-          position: "absolute", left: x0 + W * 0.7 + 50, top: y(55.5) - 30, fontFamily: BODY, fontWeight: 700, fontSize: 38,
-          color: C.bg, background: C.rose, borderRadius: 99, padding: "12px 30px", opacity: cry, scale: `${0.85 + 0.15 * cry}`,
-        }}
-      >
+      {label("Sound asleep", x0 + W * 0.42, 72)}
+      <div style={{ position: "absolute", left: x0 + W * 0.7 + 50, top: y(55.5) - 30, fontFamily: BODY, fontWeight: 700, fontSize: 38, color: C.bg, background: C.rose, borderRadius: 99, padding: "12px 30px", opacity: Math.min(1, cry * 1.4), scale: `${0.7 + 0.3 * cry}` }}>
         Crying
       </div>
-    </AbsoluteFill>
+    </Scene>
   );
 };
 
-/* 5 · Monitor: ripples leave the baby's phone, an alert lands on the parent's. */
+/* 6 · Monitor: ripples leave the baby's phone, an alert lands on the parent's. */
 export const MonitorScene: React.FC = () => {
   const f = useCurrentFrame();
-  const p = prog(f, 0, 30);
-  const alert = prog(f, 96, 116);
+  const a = springIn(f, 0, 36);
+  const b = springIn(f, 10, 46);
+  const alert = springIn(f, 100, 124);
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky glowY="60%" />
-      <Words title="Two phones. One monitor." sub="Leave one by the crib. Get an alert on yours when your baby cries." align="center" style={{ left: 160, right: 160, top: 70 }} />
-      {/* ripples */}
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      {[36, 60, 84].map((t) => <Sfx key={t} at={t} name="ripple" volume={0.35} />)}
+      <Sfx at={100} name="chime" volume={0.5} />
+      <Words title="Any phone is a baby monitor" sub="Leave one by the crib. Get an alert on yours, over Wi-Fi or mobile data." align="center" style={{ left: 140, right: 140, top: 70 }} />
       {[0, 1, 2, 3].map((i) => {
         const t = ((f - 30 - i * 16) % 64) / 64;
         const on = f > 30 + i * 16 && f < 150;
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute", left: 615 - 30, top: 620, width: 60, height: 60, borderRadius: "50%",
-              border: `5px solid ${C.sage}`, opacity: on ? (1 - t) * 0.8 : 0, scale: `${1 + t * 6}`,
-            }}
-          />
-        );
+        return <div key={i} style={{ position: "absolute", left: 585, top: 620, width: 60, height: 60, borderRadius: "50%", border: `5px solid ${C.sage}`, opacity: on ? (1 - t) * 0.8 : 0, scale: `${1 + t * 6}` }} />;
       })}
-      <Phone src="monitor.png" width={290} style={{ left: 470, top: 330 + (1 - p) * 120, opacity: p, rotate: "-4deg" }} />
-      <Phone src="parent.png" width={290} style={{ left: 1160, top: 330 + (1 - p) * 120, opacity: p, rotate: "4deg" }}>
-        <div
-          style={{
-            position: "absolute", left: 14, right: 14, top: 14 + (1 - alert) * -140, opacity: alert,
-            background: "rgba(245,238,227,.97)", borderRadius: 26, padding: "18px 20px", display: "flex", gap: 14, alignItems: "center",
-            boxShadow: "0 12px 40px rgba(0,0,0,.4)",
-          }}
-        >
+      <Phone src="monitor.png" width={290} style={{ left: 470, top: 330 + (1 - a) * 120 + float(f, 0, 5), opacity: Math.min(1, a * 1.4), rotate: `${-4 + float(f, 1, 0.5)}deg` }} />
+      <Phone src="parent.png" width={290} style={{ left: 1160, top: 330 + (1 - b) * 120 + float(f, 2, 5), opacity: Math.min(1, b * 1.4), rotate: `${4 + float(f, 3, 0.5)}deg`, scale: `${1 + 0.03 * alert * (1 - prog(f, 124, 150))}` }}>
+        <div style={{ position: "absolute", left: 14, right: 14, top: 14 + (1 - alert) * -140, opacity: Math.min(1, alert * 1.5), background: "rgba(245,238,227,.97)", borderRadius: 26, padding: "18px 20px", display: "flex", gap: 14, alignItems: "center", boxShadow: "0 12px 40px rgba(0,0,0,.4)" }}>
           <div style={{ width: 46, height: 46, borderRadius: 14, background: C.bg, display: "grid", placeItems: "center" }}>
             <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.moon }} />
           </div>
@@ -186,56 +193,60 @@ export const MonitorScene: React.FC = () => {
           </div>
         </div>
       </Phone>
-      <div style={{ position: "absolute", left: 330, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: p }}>Baby's room</div>
-      <div style={{ position: "absolute", left: 1020, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: p }}>Your phone</div>
-    </AbsoluteFill>
+      <div style={{ position: "absolute", left: 330, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: prog(f, 20, 44) }}>Baby's room</div>
+      <div style={{ position: "absolute", left: 1020, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: prog(f, 30, 54) }}>Your phone</div>
+    </Scene>
   );
 };
 
-/* 6 · Nights: the month and the week, side by side. */
+/* 7 · Nights: the month and the week, side by side. */
 export const NightsScene: React.FC = () => {
   const f = useCurrentFrame();
-  const a = prog(f, 0, 30);
-  const b = prog(f, 14, 44);
+  const a = springIn(f, 0, 36);
+  const b = springIn(f, 14, 50);
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky glowX="70%" glowY="50%" />
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      <Sfx at={16} name="whoosh" volume={0.2} />
       <Words title="Watch the nights get calmer" sub="Every night on a timeline, with weekly and monthly trends." style={{ left: 150, top: 300, width: 820 }} />
-      <Phone src="week.png" width={380} style={{ left: 1040, top: 150 + (1 - a) * 140, opacity: a, rotate: "-5deg" }} />
-      <Phone src="month.png" width={380} style={{ left: 1390, top: 110 + (1 - b) * 140, opacity: b, rotate: "4deg" }} />
-    </AbsoluteFill>
+      <Phone src="week.png" width={380} style={{ left: 1040, top: 150 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${-5 + float(f, 1, 0.5)}deg` }} />
+      <Phone src="month.png" width={380} style={{ left: 1390, top: 110 + (1 - b) * 140 + float(f, 2, 6), opacity: Math.min(1, b * 1.4), rotate: `${4 + float(f, 3, 0.5)}deg` }} />
+    </Scene>
   );
 };
 
-/* 7 · Private, then the end card. */
+/* 8 · The promise, then the end card. */
 export const OutroScene: React.FC = () => {
   const f = useCurrentFrame();
-  const lines = ["No account.", "No ads.", "Sound never leaves the phone."];
-  const out = 1 - prog(f, 66, 80);
-  const end = prog(f, 80, 108);
+  const lines = ["No subscription.", "No extra device.", "Just the phones you already have."];
+  const out = 1 - prog(f, 82, 96);
+  const end = springIn(f, 96, 126);
   return (
-    <AbsoluteFill>
+    <Scene>
       <Sky glowY="45%" />
-      <div style={{ position: "absolute", width: "100%", top: 340, textAlign: "center", opacity: out }}>
+      {lines.map((_, i) => <Sfx key={i} at={6 + i * 16} name="pop" volume={0.42} />)}
+      <Sfx at={96} name="swell" volume={0.55} />
+      <div style={{ position: "absolute", width: "100%", top: 330, textAlign: "center", opacity: out, translate: `0px ${(1 - out) * -30}px` }}>
         {lines.map((l, i) => {
-          const q = prog(f, 4 + i * 14, 26 + i * 14);
+          const q = springIn(f, 6 + i * 16, 30 + i * 16);
           return (
-            <div key={l} style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 96, lineHeight: 1.3, color: i === 2 ? C.peach : C.cream, opacity: q, translate: `0px ${(1 - q) * 24}px` }}>
+            <div key={l} style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 96, lineHeight: 1.3, color: i === 2 ? C.peach : C.cream, opacity: Math.min(1, q * 1.4), translate: `0px ${(1 - q) * 30}px` }}>
               {l}
             </div>
           );
         })}
       </div>
-      <div style={{ opacity: end }}>
-        <Moon size={230} style={{ left: 845, top: 190, scale: `${0.9 + 0.1 * end}` }} />
-        <div style={{ position: "absolute", width: "100%", top: 500, textAlign: "center" }}>
+      <div style={{ opacity: Math.min(1, end * 1.3) }}>
+        <Moon size={230} style={{ left: 845, top: 180 + float(f, 0, 5), scale: `${0.85 + 0.15 * end}` }} />
+        <div style={{ position: "absolute", width: "100%", top: 490, textAlign: "center", scale: `${0.94 + 0.06 * end}` }}>
           <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 170, color: C.cream, letterSpacing: -4, lineHeight: 1 }}>hush</div>
-          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor</div>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 48, color: C.muted, marginTop: 18 }}>White noise &amp; baby monitor, wherever you sleep</div>
           <div style={{ display: "inline-block", marginTop: 50, fontFamily: BODY, fontWeight: 700, fontSize: 40, color: C.bg, background: C.peach, borderRadius: 99, padding: "18px 46px" }}>
-            Free on Google Play
+            Get it on Google Play
           </div>
         </div>
       </div>
-    </AbsoluteFill>
+    </Scene>
   );
 };

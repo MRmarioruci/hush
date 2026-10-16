@@ -1,4 +1,5 @@
 import { loadFont } from "@remotion/fonts";
+import { Audio } from "@remotion/media";
 import React from "react";
 import {
   AbsoluteFill,
@@ -178,3 +179,21 @@ export const Moon: React.FC<{ size: number; style?: React.CSSProperties }> = ({ 
     ))}
   </div>
 );
+
+/** Entrance with a soft overshoot, for things that pop in. */
+export const springIn = (frame: number, a: number, b: number) =>
+  interpolate(frame, [a, b], [0, 1], { ...clamp, easing: Easing.spring({ damping: 14 }) });
+
+/** Gentle idle float so nothing on screen is ever fully still. */
+export const float = (frame: number, seed = 0, amp = 7) => Math.sin(frame / 28 + seed) * amp;
+
+/** A small sound effect at a frame inside the current scene. */
+export const Sfx: React.FC<{ at: number; name: string; volume?: number }> = ({ at, name, volume = 0.5 }) => (
+  <Audio from={at} src={staticFile(`sfx-${name}.wav`)} volume={volume} />
+);
+
+/** Scene wrapper: a very slow push-in, like a camera drifting closer. */
+export const Scene: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  return <AbsoluteFill style={{ scale: `${1 + frame * 0.00028}` }}>{children}</AbsoluteFill>;
+};
