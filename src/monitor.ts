@@ -29,7 +29,9 @@ export type MonitorSettings = {
   /** Baby's phone: parents may ask for a few seconds of the room's sound. */
   allowListen?: boolean;
   /** Parent phone: the last clip from the baby's room, or why there isn't one. */
-  clip?: { url?: string; at: number; error?: string; detail?: string } | null;
+  clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number } | null;
+  /** Parent phone: preferred clip length (5, 10 or 15 s). */
+  clipSeconds?: number;
 };
 export type AlertRecord = { id: string; body: string; at: number };
 

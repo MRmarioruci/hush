@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Switch } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
@@ -10,7 +10,8 @@ import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
 import { stopLine } from "../stops";
-import { ListenButton } from "../components/Listen";
+import { ListenCard } from "../components/Listen";
+import { SvgXml } from "react-native-svg";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
@@ -410,75 +411,87 @@ export async function roomCmd(to: string, cmd: string, sound?: string) {
 }
 
 /** The baby's room as last reported, with play/stop and the sounds. */
-function RoomCard({ onRescan }: { onRescan: () => void }) {
+/** Parent's phone: talk to the baby's phone (play, stop, sound, status) and track the reply. */
+function useRemote() {
   const { m } = useMonitor();
   const room = m.room;
   const [sentAt, setSentAt] = useState(0);
   const [lastCmd, setLastCmd] = useState("");
   const [, tick] = useState(0);
-  const chips = useRef<ScrollView>(null);
-  // A plain refresh keeps showing the last known state; a command shows that we're waiting.
-  const waiting = lastCmd !== "status" && sentAt > 0 && (!room || room.at < sentAt) && Date.now() - sentAt < 15000;
-  const noReply = sentAt > 0 && (!room || room.at < sentAt) && Date.now() - sentAt >= 15000;
-
+  const pending = sentAt > 0 && (!room || room.at < sentAt);
+  const waiting = pending && Date.now() - sentAt < 15000;
+  const noReply = pending && Date.now() - sentAt >= 15000;
   const send = async (cmd: string, sound?: string) => {
     if (!m.pairedToken) return;
     setSentAt(Date.now());
     setLastCmd(cmd);
     setTimeout(() => tick((x) => x + 1), 15500);
-    try { await sendData([m.pairedToken], { type: "cmd", cmd, sound, from: await myToken() }); } catch {}
+    await roomCmd(m.pairedToken, cmd, sound);
   };
-  // Ask for the current state when this opens.
+  // Ask for the current state when the page opens.
   useEffect(() => { if (m.pairedToken) send("status"); }, [m.pairedToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { room, send, waiting, noReply, lastCmd };
+}
+type Remote = ReturnType<typeof useRemote>;
 
-  if (!m.pairedToken) {
-    return (
-      <Card style={{ gap: 10 }}>
-        <Label>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Label>
-        <Text style={styles.roleSub}>{t("remote.rescan")}</Text>
-        <Pressable onPress={onRescan} style={styles.primary}><Text style={styles.primaryText}>{t("parent.scan")}</Text></Pressable>
-      </Card>
-    );
-  }
+/** The baby's room at a glance: is it listening, last update, last alert. */
+function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }) {
+  const { m } = useMonitor();
+  const room = r.room;
+  const on = !!room?.listening;
+  const recentCry = lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
+  return (
+    <Card style={styles.hero}>
+      <View style={[styles.heroIcon, on && { backgroundColor: colors.sage }, recentCry && { backgroundColor: colors.rose }]}>
+        <Icon d={ICONS.crib} size={28} color={on || recentCry ? colors.bg : colors.muted} width={2} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.heroTitle} numberOfLines={1}>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Text>
+        <Text style={[styles.heroStatus, { color: recentCry ? colors.rose : on ? colors.sage : colors.muted }]}>
+          {recentCry ? lastAlert!.body : r.waiting && r.lastCmd === "status" && !room ? t("remote.waiting") : !room ? t("remote.noState") : on ? t("remote.listening") : t("remote.notListening")}
+        </Text>
+        <Text style={styles.heroMeta}>
+          {r.noReply ? t("remote.noReplyShort") : room ? t("remote.updated", { time: fmtTime(room.at) }) : t("parent.connectedTo", { name: babyLabel(m.pairedWith) })}
+        </Text>
+      </View>
+      <Pressable onPress={() => r.send("status")} hitSlop={10} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
+        {r.waiting && r.lastCmd === "status" ? <ActivityIndicator color={colors.cream} size="small" /> : <Icon d={REFRESH} size={18} color={colors.cream} width={2} />}
+      </Pressable>
+    </Card>
+  );
+}
+
+/** White noise on the baby's phone: play/stop and the sound. */
+function NoiseCard({ r }: { r: Remote }) {
+  const room = r.room;
   const playing = !!room?.playing;
+  const busy = r.waiting && r.lastCmd !== "status";
   return (
     <Card style={{ gap: 14 }}>
-      <Label right={room ? <Text style={styles.time}>{t("remote.updated", { time: fmtTime(room.at) })}</Text> : undefined}>
-        {t("hero.room", { name: babyLabel(m.pairedWith) })}
-      </Label>
+      <Label>{t("remote.noise")}</Label>
       <View style={styles.roomRow}>
-        <Pressable onPress={() => send(playing ? "stop" : "play")} style={[styles.roomBtn, playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={playing ? t("remote.stop") : t("remote.play")}>
-          <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={26} color={playing ? colors.bg : colors.cream} width={2} />
+        <Pressable onPress={() => r.send(playing ? "stop" : "play")} disabled={busy} style={[styles.roomBtn, playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={playing ? t("remote.stop") : t("remote.play")}>
+          {busy ? <ActivityIndicator color={playing ? colors.bg : colors.cream} /> : (
+            <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={26} color={playing ? colors.bg : colors.cream} width={2} />
+          )}
         </Pressable>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.roleTitle}>
-            {waiting ? t("remote.waiting") : !room ? t("remote.unknown") : playing ? t("remote.playing", { sound: t(`sound.${room.sound}`) }) : t("remote.off")}
-          </Text>
-          {room && !waiting && (
-            <Text style={[styles.roleSub, { color: room.listening ? colors.sage : colors.muted }]}>
-              {room.listening ? t("remote.listening") : t("remote.notListening")}
-            </Text>
-          )}
-          {noReply && <Text style={[styles.roleSub, { color: colors.rose }]}>{t("remote.noReply")}</Text>}
+          <Text style={styles.roleTitle}>{busy ? t("remote.waiting") : playing ? t("remote.playing", { sound: t(`sound.${room!.sound}`) }) : t("remote.off")}</Text>
+          <Text style={styles.roleSub}>{busy ? " " : playing ? t("remote.tapStop") : t("remote.tapPlay")}</Text>
+          {r.noReply && r.lastCmd !== "status" && <Text style={[styles.roleSub, { color: colors.rose }]}>{t("remote.noReply")}</Text>}
         </View>
       </View>
-      <ScrollView
-        ref={chips}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
-        onLayout={() => chips.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 1) * 90, animated: false })}
-      >
+      <View style={styles.soundGrid}>
         {SOUNDS.map((x) => {
           const on = room?.sound === x.id;
           return (
-            <Pressable key={x.id} onPress={() => send("sound", x.id)} style={[styles.soundChip, on && { backgroundColor: colors.peach }]}>
-              <Text style={[styles.soundChipText, on && { color: colors.bg }]}>{t(`sound.${x.id}`)}</Text>
+            <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={({ pressed }) => [styles.soundTile, on && { backgroundColor: colors.peach }, pressed && { transform: [{ scale: 0.95 }] }]} accessibilityRole="button" accessibilityState={{ selected: on }}>
+              <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+              <Text style={[styles.soundTileText, on && { color: colors.bg }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
             </Pressable>
           );
         })}
-      </ScrollView>
-      <ListenButton />
+      </View>
     </Card>
   );
 }
@@ -540,16 +553,25 @@ function ParentPhone() {
 
   const connected = m.pairedWith != null && state === "idle";
 
+  const remote = useRemote();
+  const rescan = !m.pairedToken; // paired before remote control existed
+
   return (
     <>
       {connected ? (
-        <Card style={styles.connected}>
-          <View style={styles.checkCircle}><Icon d={ICONS.check} size={22} color={colors.bg} width={2.4} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.roleTitle}>{t("parent.connectedTo", { name: babyLabel(m.pairedWith) })}</Text>
-            <Text style={styles.roleSub}>{t("parent.willNotify", { name: babyLabel(m.pairedWith) })}</Text>
-          </View>
-        </Card>
+        rescan ? (
+          <Card style={{ gap: 10 }}>
+            <Label>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Label>
+            <Text style={styles.roleSub}>{t("remote.rescan")}</Text>
+            <Pressable onPress={() => setScanning(true)} style={styles.primary}><Text style={styles.primaryText}>{t("parent.scan")}</Text></Pressable>
+          </Card>
+        ) : (
+          <>
+            <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
+            <ListenCard />
+            <NoiseCard r={remote} />
+          </>
+        )
       ) : (
         <Card style={{ gap: 14 }}>
           <Text style={styles.stepTitle}>
@@ -576,12 +598,6 @@ function ParentPhone() {
           </Pressable>
         </Card>
       )}
-      {connected && <RoomCard onRescan={() => setScanning(true)} />}
-      {connected && (
-        <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
-          <Text style={styles.change}>{t("parent.another")}</Text>
-        </Pressable>
-      )}
       {err && <Text style={styles.msg}>{err}</Text>}
 
       <Card style={{ gap: 4 }}>
@@ -598,13 +614,28 @@ function ParentPhone() {
           ))
         )}
       </Card>
+      {connected && (
+        <Pressable onPress={() => setScanning(true)} style={{ alignSelf: "center" }} hitSlop={10}>
+          <Text style={styles.change}>{t("parent.another")}</Text>
+        </Pressable>
+      )}
       <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
     </>
   );
 }
 
 const ORB = 184;
+const REFRESH = '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>';
 const styles = StyleSheet.create({
+  hero: { flexDirection: "row", alignItems: "center", gap: 14 },
+  heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  heroTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream },
+  heroStatus: { fontFamily: fonts.bodyBold, fontSize: 14.5 },
+  heroMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, fontVariant: ["tabular-nums"] },
+  refresh: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  soundGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  soundTile: { flexBasis: "22%", flexGrow: 1, alignItems: "center", gap: 5, backgroundColor: colors.card2, borderRadius: 16, paddingVertical: 11 },
+  soundTileText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
   listenTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
   roomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },

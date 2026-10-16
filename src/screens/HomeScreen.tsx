@@ -165,7 +165,7 @@ export function HomeScreen() {
               </Text>
             </View>
           )}
-          {mon.m.role === "parent" && mon.m.pairedToken && <View style={{ marginTop: 10 }}><ListenButton compact /></View>}
+          {mon.m.role === "parent" && mon.m.pairedToken && <View style={{ marginTop: 10 }}><ListenButton /></View>}
           {note && <Text style={styles.note}>{note}</Text>}
         </Card>
       </Pressable>}
