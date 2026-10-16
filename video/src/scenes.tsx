@@ -98,7 +98,7 @@ export const ThreeScene: React.FC = () => {
 };
 
 /* 3 · Calm sounds. */
-const SOUNDS = ["Womb", "Shush", "Rain", "Ocean", "Fan", "Brown", "Pink", "White"];
+const SOUNDS = ["Womb", "Shush", "Rain", "Ocean", "Fan", "Stream", "Car ride", "Lullaby"];
 export const SoundsScene: React.FC = () => {
   const f = useCurrentFrame();
   const p = springIn(f, 0, 36);
@@ -130,30 +130,39 @@ export const SoundsScene: React.FC = () => {
   );
 };
 
-/* 4 · Never too loud: a level that settles at 50 dB at the crib. */
+/* 4 · Never too loud: pick a volume, hush says how far from the crib. */
 export const SafeScene: React.FC = () => {
   const f = useCurrentFrame();
   const p = springIn(f, 0, 36);
-  const db = interpolate(f, [20, 80], [30, 50], { ...clamp, easing: ease });
-  const arc = (db - 30) / 40;
-  const R = 200, cx = 260, cy = 250;
-  const pt = (a: number) => [cx + R * Math.cos(Math.PI * (1 - a)), cy - R * Math.sin(Math.PI * (1 - a))];
-  const [ex, ey] = pt(arc);
-  const [lx, ly] = pt(0.5);
-  const settle = springIn(f, 78, 100);
+  const vol = interpolate(f, [24, 96], [0.3, 0.62], { ...clamp, easing: ease });
+  // Same model as the app: 80 dB at 30 cm at full volume, Android's volume curve, 6 dB per doubling.
+  const pct = vol * 100;
+  const db = pct <= 20 ? -58 + ((pct - 1) / 19) * 18 : pct <= 60 ? -40 + ((pct - 20) / 40) * 23 : -17 + ((pct - 60) / 40) * 17;
+  const dist = Math.max(0.3, 0.3 * Math.pow(10, (80 + db - 50) / 20));
+  const tag = dist <= 1.2 ? { t: "Nightstand distance", c: C.sage } : dist <= 2 ? { t: "Across the room", c: C.moon } : { t: "Far side of the room", c: C.peach };
+  const settle = springIn(f, 96, 118);
   return (
     <Scene>
       <Sky glowX="75%" glowY="40%" />
       <Sfx at={0} name="whoosh" volume={0.3} />
-      <Sfx at={80} name="chime" volume={0.22} />
-      <Words title="Never too loud" sub="Tell hush how far the crib is. It keeps the sound under 50 dB there." style={{ left: 150, top: 200, width: 860 }} />
-      <svg width={520} height={330} style={{ position: "absolute", left: 230, top: 600, opacity: Math.min(1, p * 1.4), scale: `${1 + 0.04 * settle * (1 - prog(f, 100, 130))}` }}>
-        <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`} stroke={C.card} strokeWidth={30} fill="none" strokeLinecap="round" />
-        <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${ex} ${ey}`} stroke={C.sage} strokeWidth={30} fill="none" strokeLinecap="round" />
-        <line x1={lx} y1={ly - 34} x2={lx} y2={ly + 34} stroke={C.rose} strokeWidth={6} strokeLinecap="round" />
-        <text x={cx} y={cy - 30} textAnchor="middle" fill={C.cream} style={{ fontFamily: DISPLAY, fontSize: 120, fontWeight: 500 }}>{Math.round(db)}</text>
-        <text x={cx} y={cy + 40} textAnchor="middle" fill={C.muted} style={{ fontFamily: BODY, fontSize: 36, fontWeight: 700 }}>dB at the crib</text>
-      </svg>
+      {[30, 46, 62, 78].map((t) => <Sfx key={t} at={t} name="tick" volume={0.25} />)}
+      <Sfx at={98} name="chime" volume={0.22} />
+      <Words title="Never too loud" sub="Pick a volume. hush tells you how far from the crib to put the phone." style={{ left: 150, top: 150, width: 880 }} />
+      <div style={{ position: "absolute", left: 150, top: 470, width: 820, opacity: Math.min(1, p * 1.4), translate: `0px ${(1 - p) * 30}px` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted }}>
+          <span>Volume</span><span style={{ color: C.cream }}>{Math.round(pct)}%</span>
+        </div>
+        <div style={{ position: "relative", height: 16, borderRadius: 99, background: C.card, marginTop: 22 }}>
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, borderRadius: 99, background: C.peach }} />
+          <div style={{ position: "absolute", left: `calc(${pct}% - 22px)`, top: -14, width: 44, height: 44, borderRadius: 22, background: C.cream }} />
+        </div>
+        <div style={{ marginTop: 50, background: C.card, borderRadius: 40, padding: "34px 0", textAlign: "center", scale: `${1 + 0.04 * settle * (1 - prog(f, 118, 140))}` }}>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 32, color: C.muted }}>Place the phone at least</div>
+          <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 120, lineHeight: 1.1, color: tag.c }}>{(Math.ceil(dist * 10) / 10).toFixed(1)} m</div>
+          <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: 32, color: C.muted }}>from the crib</div>
+        </div>
+        <div style={{ display: "inline-block", marginTop: 26, fontFamily: BODY, fontWeight: 700, fontSize: 30, color: C.bg, background: tag.c, borderRadius: 99, padding: "10px 26px" }}>{tag.t}</div>
+      </div>
       <Phone src="sounds.png" style={{ left: 1250, top: 120 + (1 - p) * 140 + float(f, 1), opacity: Math.min(1, p * 1.4), rotate: `${(1 - p) * 6 + float(f, 3, 0.6)}deg` }} />
     </Scene>
   );
@@ -261,6 +270,39 @@ export const MonitorScene: React.FC = () => {
       </Phone>
       <div style={{ position: "absolute", left: 330, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: prog(f, 20, 44) }}>Baby's room</div>
       <div style={{ position: "absolute", left: 1020, width: 570, top: 975, textAlign: "center", fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.muted, opacity: prog(f, 30, 54) }}>Your phone</div>
+    </Scene>
+  );
+};
+
+/* 6b · From your phone: hear the room, white noise on/off, and a note when they fall asleep. */
+const Banner: React.FC<{ text: string; at: number; top: number }> = ({ text, at, top }) => {
+  const f = useCurrentFrame();
+  const q = springIn(f, at, at + 22);
+  return (
+    <div style={{ position: "absolute", left: 120, top, width: 720, opacity: Math.min(1, q * 1.5), translate: `${(1 - q) * -60}px 0px`, background: "rgba(245,238,227,.97)", borderRadius: 30, padding: "22px 26px", display: "flex", gap: 18, alignItems: "center", boxShadow: "0 16px 50px rgba(0,0,0,.4)" }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: C.bg, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: C.moon }} />
+      </div>
+      <div>
+        <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 22, color: "#6f6680" }}>hush · now</div>
+        <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 30, color: C.bg }}>{text}</div>
+      </div>
+    </div>
+  );
+};
+export const RemoteScene: React.FC = () => {
+  const f = useCurrentFrame();
+  const a = springIn(f, 0, 36);
+  return (
+    <Scene>
+      <Sky glowX="70%" glowY="45%" />
+      <Sfx at={0} name="whoosh" volume={0.3} />
+      <Sfx at={60} name="pop" volume={0.45} />
+      <Sfx at={100} name="pop" volume={0.45} />
+      <Words title="Check in from your phone" sub="Hear the room for a few seconds, turn the white noise on or off, and know when they fall asleep." style={{ left: 120, top: 150, width: 800 }} />
+      <Banner text="Leo fell asleep at 20:35" at={60} top={600} />
+      <Banner text="10 seconds from Leo's room. Tap to listen." at={100} top={760} />
+      <Phone src="remote.png" width={400} style={{ left: 1180, top: 130 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${3 + float(f, 1, 0.5)}deg` }} />
     </Scene>
   );
 };
