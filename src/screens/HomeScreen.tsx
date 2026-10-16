@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { SvgXml } from "react-native-svg";
@@ -12,6 +12,7 @@ import { useMonitor } from "../state/monitor";
 import { fmtTime, useT, babyLabel } from "../i18n";
 import { NapCard } from "../components/Naps";
 import { stopLine } from "../stops";
+import { roomCmd } from "./MonitorScreen";
 
 const greetingKey = () => {
   const h = new Date().getHours();
@@ -23,6 +24,9 @@ export function HomeScreen() {
   const sleep = useSleep();
   const mon = useMonitor();
   const [note, setNote] = useState<string | null>(null);
+  const [asked, setAsked] = useState(0);
+  // Parent's phone: ask the baby's phone how the room is when Home opens.
+  useEffect(() => { if (mon.m.role === "parent" && mon.m.pairedToken) roomCmd(mon.m.pairedToken, "status"); }, [mon.m.role, mon.m.pairedToken]); // eslint-disable-line react-hooks/exhaustive-deps
   const soundScroll = useRef<ScrollView>(null);
   const t = useT();
   const f = sleep.s.features;
@@ -142,6 +146,24 @@ export function HomeScreen() {
               <Icon d={ICONS.chevron} size={20} />
             )}
           </View>
+          {mon.m.role === "parent" && mon.m.pairedToken && (
+            <View style={styles.remote}>
+              <Pressable
+                onPress={() => { setAsked(Date.now()); roomCmd(mon.m.pairedToken!, mon.m.room?.playing ? "stop" : "play"); }}
+                style={[styles.remoteBtn, mon.m.room?.playing && { backgroundColor: colors.peach }]}
+                accessibilityRole="button"
+                accessibilityLabel={mon.m.room?.playing ? t("remote.stop") : t("remote.play")}
+              >
+                <Icon d={mon.m.room?.playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={20} color={mon.m.room?.playing ? colors.bg : colors.cream} width={2} />
+              </Pressable>
+              <Text style={styles.remoteText} numberOfLines={1}>
+                {asked && (!mon.m.room || mon.m.room.at < asked) && Date.now() - asked < 15000
+                  ? t("remote.waiting")
+                  : !mon.m.room ? t("remote.unknown")
+                  : mon.m.room.playing ? t("remote.playing", { sound: t(`sound.${mon.m.room.sound}`) }) : t("remote.off")}
+              </Text>
+            </View>
+          )}
           {note && <Text style={styles.note}>{note}</Text>}
         </Card>
       </Pressable>}
@@ -165,6 +187,9 @@ const styles = StyleSheet.create({
   levelDot: { width: 8, height: 8, borderRadius: 4 },
   monHead: { flexDirection: "row", alignItems: "center", gap: 12 },
   monIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  remote: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
+  remoteBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  remoteText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
   monTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
   monFoot: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   note: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.cream },

@@ -273,6 +273,16 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return peers.length;
   }, [sendOwnDays]);
   const lastSyncRef = useRef(0);
+  // Parent's phone: the baby's room as reported by the baby's phone (shown on Home and Monitor).
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number } | undefined;
+      if (d?.type !== "room" || mRef.current.role !== "parent") return;
+      update({ room: { playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at: d.at ?? Date.now(), listenSince: d.listenSince } });
+    });
+    return () => sub.remove();
+  }, [update]);
+
   // Another phone asked for our days.
   useEffect(() => {
     const replied = new Map<string, number>();

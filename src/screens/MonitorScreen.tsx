@@ -396,6 +396,10 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
 
 let myTokenCache: string | null = null;
 const myToken = async () => (myTokenCache ??= await getMyToken());
+/** Parent's phone: ask the baby's phone to play, stop, switch sound, or report. */
+export async function roomCmd(to: string, cmd: string, sound?: string) {
+  try { await sendData([to], { type: "cmd", cmd, sound, from: await myToken() }); } catch {}
+}
 
 /** The baby's room as last reported, with play/stop and the sounds. */
 function RoomCard({ onRescan }: { onRescan: () => void }) {
