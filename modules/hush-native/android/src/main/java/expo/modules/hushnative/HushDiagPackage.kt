@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import com.facebook.react.ReactApplication
 import expo.modules.core.BasePackage
 import expo.modules.core.interfaces.ApplicationLifecycleListener
 import expo.modules.core.interfaces.ReactActivityLifecycleListener
@@ -83,9 +82,12 @@ object Diag {
     c.getMethod("hide").invoke(c.getDeclaredField("INSTANCE").get(null))
   }.isSuccess
 
-  private fun hostState(activity: Activity): String = runCatching {
-    val host = (activity.application as ReactApplication).reactHost
-    "host=${host?.lifecycleState} context=${host?.currentReactContext != null}"
+  /** The React host's state, read by reflection (this module doesn't link React Native). */
+  fun hostState(activity: Activity): String = runCatching {
+    val host = activity.application.javaClass.getMethod("getReactHost").invoke(activity.application) ?: return@runCatching "host=null"
+    val state = host.javaClass.getMethod("getLifecycleState").invoke(host)
+    val ctx = host.javaClass.getMethod("getCurrentReactContext").invoke(host)
+    "host=$state context=${ctx != null}"
   }.getOrDefault("host=?")
 
   /** Opening hush: if the splash is still up after a few seconds, note why and take it down. */
@@ -117,7 +119,7 @@ class HushDiagPackage : BasePackage() {
         Diag.init(activity)
         Diag.watch(activity, if (savedInstanceState != null) "activity recreated" else "activity created")
       }
-      override fun onResume(activity: Activity?) { activity?.let { Diag.add("resume ${runCatching { (it.application as ReactApplication).reactHost?.lifecycleState }.getOrNull()}") } }
+      override fun onResume(activity: Activity?) { activity?.let { Diag.add("resume ${Diag.hostState(it)}") } }
       override fun onPause(activity: Activity?) { Diag.add("pause") }
       override fun onDestroy(activity: Activity?) { Diag.add("activity destroyed finishing=${activity?.isFinishing}") }
     })
