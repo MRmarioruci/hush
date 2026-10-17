@@ -1,6 +1,6 @@
 # Turning on "listen in" clips (Firebase Storage)
 
-Parents can hear 10 seconds of the baby's room. The baby's phone uploads a WAV clip to the
+Parents can hear the last 5–15 seconds of the baby's room, and crying alerts can carry a short clip. The baby's phone uploads a WAV clip to the
 Firebase project's Storage bucket (`hush-20c75.firebasestorage.app`, read from
 google-services.json) and sends the link to the parent who asked. You need to do these once:
 

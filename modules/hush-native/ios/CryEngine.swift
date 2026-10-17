@@ -14,7 +14,8 @@ import UIKit
  - Crying = 4 of the last 8 windows over the threshold; then alert the paired parent phones.
 
  iOS keeps it running with the screen locked through the "audio" background mode, as long as
- listening was started while hush was open. Audio never leaves the phone.
+ listening was started while hush was open. Audio stays on the phone, except short clips
+ when "listen in" is turned on.
  */
 final class CryEngine {
   static let shared = CryEngine()
@@ -71,38 +72,88 @@ final class CryEngine {
   private var lowBatterySent = false
   private var observers: [NSObjectProtocol] = []
 
-  /* ---------- short clips for "listen in" ---------- */
-  private var clip: [Int16] = []
+  /* ---------- "listen in" settings from the app ---------- */
+  var allowListen = false
+  var bucket = ""
+  /// Seconds of sound sent with each crying alert (needs "listen in" on); 0 = none.
+  var cryClipSecs = 10
+
+  /*
+   ---------- short clips ("listen in" and crying alerts) ----------
+   The last RING seconds of raw sound are kept in memory (never saved), so a clip is ready
+   the moment it's asked for instead of being recorded first. Only touched on `queue`.
+   */
+  private let RING = 16000 * 20
+  private var ring = [Int16](repeating: 0, count: 16000 * 20)
+  private var ringPos = 0
+  private var ringFilled = 0
   private var clipWant = 0
   private var clipDone: ((Data?) -> Void)?
 
-  /// Records the next `seconds` of raw sound while listening; nil if not listening.
+  /// The last `seconds` of sound as a WAV, right away (waits if fewer have been heard). nil if not listening.
   func recordClip(_ seconds: Int, done: @escaping (Data?) -> Void) {
     guard running else { done(nil); return }
     queue.async {
-      self.clipDone?(nil)
-      self.clip = []
-      self.clip.reserveCapacity(16000 * seconds)
-      self.clipWant = 16000 * max(1, min(30, seconds))
-      self.clipDone = done
       EventLog.add("clip")
+      let want = 16000 * max(1, min(20, seconds))
+      if self.ringFilled >= want {
+        let data = self.snapshot(want)
+        DispatchQueue.global().async { done(data) }
+      } else {
+        self.clipDone?(nil)
+        self.clipWant = want
+        self.clipDone = done
+      }
     }
   }
 
+  private func snapshot(_ n: Int) -> Data {
+    var out = [Int16](repeating: 0, count: n)
+    let start = (ringPos - n + RING) % RING
+    for i in 0..<n { out[i] = ring[(start + i) % RING] }
+    return wav(out)
+  }
+
   private func feedClip(_ x: [Float]) {
-    guard clipWant > 0, let done = clipDone else { return }
-    for v in x.prefix(clipWant - clip.count) { clip.append(Int16(max(-1, min(1, v)) * 32767)) }
-    if clip.count >= clipWant {
-      let data = wav(clip)
-      clip = []; clipWant = 0; clipDone = nil
+    for v in x {
+      ring[ringPos] = Int16(max(-1, min(1, v)) * 32767)
+      ringPos = (ringPos + 1) % RING
+    }
+    ringFilled = min(RING, ringFilled + x.count)
+    if let done = clipDone, ringFilled >= clipWant {
+      let data = snapshot(clipWant)
+      clipDone = nil; clipWant = 0
       DispatchQueue.global().async { done(data) }
     }
   }
 
   private func cancelClip() {
     let d = clipDone
-    clip = []; clipWant = 0; clipDone = nil
+    clipDone = nil; clipWant = 0; ringFilled = 0; ringPos = 0
     d?(nil)
+  }
+
+  /// After a crying alert: a few more seconds of the cry, then the clip goes to every parent.
+  private func sendCryClip(_ at: Int64) {
+    let secs = cryClipSecs
+    guard allowListen, secs > 0, !bucket.isEmpty else { return }
+    let id = String((0..<24).map { _ in "abcdefghijklmnopqrstuvwxyz0123456789".randomElement()! })
+    let path = "clips%2F\(id).wav"
+    let upload = "https://firebasestorage.googleapis.com/v0/b/\(bucket)/o?uploadType=media&name=\(path)"
+    let download = "https://firebasestorage.googleapis.com/v0/b/\(bucket)/o/\(path)?alt=media"
+    let list = targets.compactMap { t -> (String, String)? in
+      guard let token = t["token"], !token.isEmpty else { return nil }
+      return (token, fill(t["cryClip"] ?? "{name}: {s} s").replacingOccurrences(of: "{s}", with: String(secs)))
+    }
+    queue.asyncAfter(deadline: .now() + 2.5) {
+      guard self.running else { return }
+      self.recordClip(secs) { data in
+        guard let data else { return }
+        AlertSender.upload(upload, data, contentType: "audio/wav") { ok, _ in
+          if ok { AlertSender.sendEach(list, ["type": "clip", "auto": true, "url": download, "seconds": secs, "at": at]) }
+        }
+      }
+    }
   }
 
   /// 16 kHz mono 16-bit WAV.
@@ -336,6 +387,7 @@ final class CryEngine {
         EventLog.add("alert", ["first": first])
         if first { alert("crying", txtCrying, ["type": "cry", "baby": babyName, "at": t]) }
         else { alert("still", txtStill, ["type": "cry", "baby": babyName, "at": t]) }
+        sendCryClip(t)
       }
     }
   }

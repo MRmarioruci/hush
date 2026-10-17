@@ -12,8 +12,10 @@ export const EAR = '<path d="M6 8.5a6 6 0 1 1 12 0c0 2.5-1.5 3.6-2.7 4.6-1 .8-1.
 const PLAY = '<path d="M8 5.5v13l11-6.5z"/>';
 const PAUSE = '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>';
 const LENGTHS = [5, 10, 15];
-/** Upload and delivery on top of the recording itself. */
-const SLACK_MS = 45_000;
+/** The baby's phone keeps the last seconds in memory, so only delivery takes time. */
+const WAIT_MS = 30_000;
+/** Roughly how long a clip takes to arrive (for the progress bar). */
+const TYPICAL_MS = 6_000;
 
 /* "Listen" from a widget, shortcut or notification: the Monitor card picks it up. */
 let pendingOutside: { s: number; at: number } | null = null;
@@ -41,7 +43,7 @@ function useClip(outside = false) {
   const clip = m.clip;
   // Compare with when it arrived here, not the baby's phone's clock.
   const fresh = !!clip && (clip.got ?? clip.at) >= asked;
-  const waiting = asked > 0 && !fresh && Date.now() - asked < askedFor * 1000 + SLACK_MS;
+  const waiting = asked > 0 && !fresh && Date.now() - asked < WAIT_MS;
   const timedOut = asked > 0 && !fresh && !waiting;
 
   const play = (url: string) => {
@@ -94,8 +96,8 @@ export function ListenCard() {
   const t = useT();
   const c = useClip(true);
   const [len, setLen] = useState(c.m.clipSeconds ?? CLIP_SECONDS);
-  const recFrac = Math.min(1, c.elapsed / (c.askedFor * 1000));
-  const recording = c.waiting && recFrac < 1;
+  // Eases towards full and never quite gets there until the clip arrives.
+  const frac = 1 - Math.exp(-c.elapsed / TYPICAL_MS);
   const error = c.fresh && c.clip?.error ? c.clip.error : null;
   const playFrac = c.status.duration > 0 ? Math.min(1, c.status.currentTime / c.status.duration) : 0;
 
@@ -115,10 +117,10 @@ export function ListenCard() {
         style={({ pressed }) => [styles.big, c.waiting && styles.bigBusy, pressed && { transform: [{ scale: 0.98 }] }]}
         accessibilityRole="button"
       >
-        {c.waiting && <View style={[styles.bigFill, { width: `${(recording ? recFrac : 1) * 100}%` }]} />}
+        {c.waiting && <View style={[styles.bigFill, { width: `${frac * 100}%` }]} />}
         {c.waiting ? <ActivityIndicator color={colors.bg} /> : <Icon d={EAR} size={22} color={colors.bg} width={2} />}
         <Text style={styles.bigText}>
-          {c.waiting ? (recording ? t("listen.recordingShort", { s: Math.max(1, Math.ceil(c.askedFor - c.elapsed / 1000)) }) : t("listen.sending")) : t("listen.button", { s: len })}
+          {c.waiting ? t("listen.sending") : t("listen.button", { s: len })}
         </Text>
       </Pressable>
       {c.timedOut && <Text style={styles.err}>{t("listen.noAnswer")}</Text>}
@@ -132,7 +134,7 @@ export function ListenCard() {
           </Pressable>
           <View style={{ flex: 1, gap: 6 }}>
             <View style={styles.clipHead}>
-              <Text style={styles.clipTitle}>{t("listen.latest")}</Text>
+              <Text style={styles.clipTitle}>{c.clip.auto ? t("listen.latestCry") : t("listen.latest")}</Text>
               <Text style={styles.clipMeta}>{fmtWhen(c.clip.at)} · {t("listen.secs", { s: c.clip.seconds ?? CLIP_SECONDS })}</Text>
             </View>
             <View style={styles.track}><View style={[styles.trackFill, { width: `${playFrac * 100}%` }]} /></View>
@@ -150,10 +152,7 @@ export function ListenButton() {
   const t = useT();
   const c = useClip();
   const len = c.m.clipSeconds ?? CLIP_SECONDS;
-  const recording = c.waiting && c.elapsed < c.askedFor * 1000;
-  const label = c.waiting
-    ? (recording ? t("listen.recordingShort", { s: Math.max(1, Math.ceil(c.askedFor - c.elapsed / 1000)) }) : t("listen.sending"))
-    : t("listen.button", { s: len });
+  const label = c.waiting ? t("listen.sending") : t("listen.button", { s: len });
   const line = c.timedOut ? t("listen.noAnswer")
     : c.fresh && c.clip?.error ? t(`listen.err.${c.clip.error}`)
     : c.status.playing ? t("listen.playing")

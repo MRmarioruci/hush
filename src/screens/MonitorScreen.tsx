@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, CLIP_SECONDS, CRY_CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
@@ -185,15 +185,30 @@ function NurseryPhone() {
       {paired && !showCode && <KeepAwake />}
 
       {paired && !showCode && (
-        <Card style={[styles.listenCard, m.allowListen && styles.listenCardOn]}>
-          <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
-            <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
+        <Card style={[{ gap: 16 }, styles.listenBorder, m.allowListen && styles.listenCardOn]}>
+          <View style={styles.listenCard}>
+            <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
+              <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
+            </View>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
+              <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
+            </View>
+            <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
           </View>
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
-            <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
-          </View>
-          <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
+          {m.allowListen && (
+            <View style={{ gap: 10 }}>
+              <Label>{t("listen.withCry")}</Label>
+              <Segmented
+                options={[0, 5, 10].map((v) => ({ value: v, label: v ? t("listen.secs", { s: v }) : t("listen.none") }))}
+                value={m.cryClip ?? CRY_CLIP_SECONDS}
+                onChange={(cryClip) => update({ cryClip })}
+              />
+              <Text style={styles.roleSub}>
+                {(m.cryClip ?? CRY_CLIP_SECONDS) ? t("listen.withCryOn", { s: m.cryClip ?? CRY_CLIP_SECONDS }) : t("listen.withCryOff")}
+              </Text>
+            </View>
+          )}
         </Card>
       )}
 
@@ -690,7 +705,8 @@ const ORB = 184;
 const REFRESH = '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>';
 const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
-  listenCard: { flexDirection: "row", alignItems: "center", gap: 14, borderWidth: 1.5, borderColor: "transparent" },
+  listenCard: { flexDirection: "row", alignItems: "center", gap: 14 },
+  listenBorder: { borderWidth: 1.5, borderColor: "transparent" },
   listenCardOn: { borderColor: "rgba(169,214,189,0.45)" },
   listenIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   hero: { flexDirection: "row", alignItems: "center", gap: 14 },

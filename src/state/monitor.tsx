@@ -6,7 +6,7 @@ import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
-import { CLIP_SECONDS, INFO_CHANNEL, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
+import { CLIP_SECONDS, CRY_CLIP_SECONDS, INFO_CHANNEL, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, pairRequest, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -115,12 +115,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         listenOff: tIn(L, "listen.off", { name }),
         listenNotListening: tIn(L, "listen.notListening", { name }),
         listenFailed: tIn(L, "listen.failed", { name }),
+        cryClip: tIn(L, "listen.cryClip", { name, s: "{s}" }),
       };
     }));
   }, [m.parents, m.babyName, lang]);
   useEffect(() => {
-    cryDetector?.setListen(!!m.allowListen, storageBucket() ?? "", t("listen.nowHere", { who: "{who}", s: "{s}" }));
-  }, [m.allowListen, lang]);
+    cryDetector?.setListen(!!m.allowListen, storageBucket() ?? "", t("listen.nowHere", { who: "{who}", s: "{s}" }), m.cryClip ?? CRY_CLIP_SECONDS);
+  }, [m.allowListen, m.cryClip, lang]);
 
   useEffect(() => {
     cryDetector?.configure(THRESHOLDS[m.sensitivity], m.babyName.trim(), tokens, m.alertAfter);
@@ -346,11 +347,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // Parent's phone: keep the latest clip (or the reason there's none).
   useEffect(() => {
     const take = (n: Notifications.Notification) => {
-      const d = n.request.content.data as { type?: string; url?: string; at?: number; error?: string; detail?: string; seconds?: number } | undefined;
+      const d = n.request.content.data as { type?: string; url?: string; at?: number; error?: string; detail?: string; seconds?: number; auto?: boolean } | undefined;
       if (d?.type !== "clip" || mRef.current.role !== "parent") return;
       const at = d.at ?? n.date ?? Date.now();
       if ((mRef.current.clip?.at ?? 0) >= at) return;
-      update({ clip: { url: d.url, at, error: d.error, detail: d.detail, seconds: d.seconds, got: Date.now() } });
+      update({ clip: { url: d.url, at, error: d.error, detail: d.detail, seconds: d.seconds, got: Date.now(), auto: !!d.auto } });
     };
     const sub = addPushListener(take);
     const catchUp = () => Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {});

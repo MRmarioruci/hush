@@ -26,7 +26,7 @@ type CryNative = {
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   setRoom?(playing: boolean, sound: string): void;
-  setListen?(allow: boolean, bucket: string, notice: string): void;
+  setListen?(allow: boolean, bucket: string, notice: string, cryClip: number): void;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
   addListener(event: "onData", cb: (d: Record<string, unknown>) => void): Subscription;
@@ -62,11 +62,12 @@ export const cryDetector = cry
       requestBatteryExempt: () => cry.requestBatteryExempt(),
       installer: () => { try { return cry.installer(); } catch { return ""; } },
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),
-      /** Records the next seconds while listening and uploads a WAV to uploadUrl. */
+      /** Uploads the last few seconds heard (kept in memory while listening) as a WAV to uploadUrl. */
       recordClip: (seconds: number, uploadUrl: string) => cry.recordClip(seconds, uploadUrl),
       /** Android: the native listener reports the room and answers "status"/"clip" itself. */
       setRoom: (playing: boolean, sound: string) => { try { cry.setRoom?.(playing, sound); } catch {} },
-      setListen: (allow: boolean, bucket: string, notice: string) => { try { cry.setListen?.(allow, bucket, notice); } catch {} },
+      /** cryClip: seconds of sound sent after each crying alert (0 = none). */
+      setListen: (allow: boolean, bucket: string, notice: string, cryClip = 0) => { try { cry.setListen?.(allow, bucket, notice, cryClip); } catch {} },
       onStatus: (cb: (s: CryStatus) => void) => cry.addListener("onStatus", cb),
       onCry: (cb: (e: { at: number; first: boolean }) => void) => cry.addListener("onCry", cb),
       /** iOS: silent push messages (expo-notifications only reports visible ones there). */

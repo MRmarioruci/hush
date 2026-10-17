@@ -57,8 +57,9 @@ class HushCryModule : Module() {
       val ctx = appContext.reactContext
       if (changed && ctx != null && CryEngine.running) CryEngine.reportRoom(ctx)
     }
-    Function("setListen") { allow: Boolean, bucket: String, notice: String ->
+    Function("setListen") { allow: Boolean, bucket: String, notice: String, cryClip: Int ->
       CryEngine.allowListen = allow
+      CryEngine.cryClipSecs = cryClip
       CryEngine.bucket = bucket
       CryEngine.txtListenNotice = notice
     }

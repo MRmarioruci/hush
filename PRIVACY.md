@@ -14,21 +14,24 @@ respond to crying), hush listens through the microphone to notice crying.
 
 - Sound is analysed on the phone itself, half a second at a time, by a small
   built-in sound model.
-- Audio is never recorded, saved, or sent anywhere. Each half second is discarded
-  as soon as it has been checked.
+- Audio is never saved or sent anywhere. While listening, only the last 20 seconds
+  are kept in the phone's memory (so a "listen in" clip is ready at once); older
+  sound is overwritten continuously, and all of it is discarded when listening stops.
 - Android shows a notification the whole time hush is listening, and you can stop
   it at any time from the app.
 
 ### Optional: listen in
 
 If you turn on **Let parents listen in** on the baby's phone (it's off unless you
-turn it on), a paired parent's phone can ask for a 10-second clip of the room:
+turn it on):
 
-- The baby's phone records the next 10 seconds and shows a notice that a parent is
-  listening. It never records unless a paired parent asks.
-- The clip is uploaded to Google's Firebase Storage
+- A paired parent's phone can ask for the last 5, 10 or 15 seconds of the room. The
+  baby's phone shows a notice each time a parent listens.
+- Crying alerts can include a 5- or 10-second clip of the cry, sent to the paired
+  parents. You can turn this off (or change its length) under the same switch.
+- Clips are uploaded to Google's Firebase Storage
   ([policy](https://policies.google.com/privacy)) under a long random name, and the
-  link is sent only to the parent who asked.
+  link is sent only to the paired parent phones.
 - Clips are deleted automatically after one day. Turning the switch off stops new clips.
 
 ## Camera

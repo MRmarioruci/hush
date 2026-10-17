@@ -101,7 +101,7 @@ Sending data to a service provider (Expo / Firebase) that works for you counts a
 | Personal info → **Name** (baby's name, parent phone names in alerts) | Yes | No | No | Optional | App functionality |
 | App activity → **Other actions** (crying events, night summaries sent to paired phones) | Yes | No | No | Optional | App functionality |
 | Device or other IDs → **Device or other IDs** (push notification token) | Yes | No | No | Optional | App functionality |
-| Audio → **Voice or sound recordings** (optional 10-second "listen in" clips, deleted after a day) | Yes | No | No | Optional | App functionality |
+| Audio → **Voice or sound recordings** (optional "listen in" clips and clips with crying alerts, 5–15 s, deleted after a day) | Yes | No | No | Optional | App functionality |
 
 They're **optional** because they're only sent once the user pairs phones for the baby monitor.
 
@@ -119,8 +119,8 @@ Play asks for this because hush uses two foreground service types.
   > baby's room, a microphone foreground service analyses sound on the device to detect crying,
   > and sends a notification to the parent's paired phone. It must keep running with the screen
   > locked all night, which is the purpose of the feature. A persistent notification shows while it
-  > listens, and the user can stop listening at any time from the app. Audio is not recorded, except
-  > for optional 10-second clips a paired parent can request when the user turns on "listen in".
+  > listens, and the user can stop listening at any time from the app. Audio is not saved, except
+  > for optional short clips (on request, or with a crying alert) when the user turns on "listen in".
 - Video: screen recording (30–60 s, uploaded to YouTube as unlisted). Show: Monitor → Start
   listening → lock the screen → the "Listening" notification stays visible → a cry sound plays →
   the second phone gets the alert.

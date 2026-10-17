@@ -31,7 +31,7 @@ import kotlin.math.sqrt
  *   threshold, then sends an alert to the paired parent phones. While crying continues,
  *   a reminder goes out every [REPEAT_MS].
  *
- * Audio never leaves the phone; only the alert text does.
+ * Audio stays on the phone, except short clips when "listen in" is turned on.
  */
 object CryEngine {
   private const val TAG = "HushCry"
@@ -122,42 +122,105 @@ object CryEngine {
   @Volatile var bucket = ""
   @Volatile var txtListenNotice = "{who} is listening to the room for {s} seconds"
 
-  /* ---------- short clips for "listen in" (parents asked for a few seconds) ---------- */
+  /** Seconds of sound sent with each crying alert (needs "listen in" on); 0 = none. */
+  @Volatile var cryClipSecs = 10
+
+  /*
+   * ---------- short clips ("listen in" and crying alerts) ----------
+   * The last RING_S seconds of raw sound are always kept in memory (never saved), so a clip
+   * is ready the moment it's asked for instead of being recorded first.
+   */
+  private const val RING_S = 20
   private val clipLock = Any()
-  private var clipBuf: ShortArray? = null
-  private var clipN = 0
+  private val ring = ShortArray(SR * RING_S)
+  private var ringPos = 0
+  private var ringFilled = 0
+  private var clipWant = 0
   private var clipDone: ((ByteArray?) -> Unit)? = null
 
-  /** Records the next [seconds] of raw sound while listening; null if not listening. */
+  /**
+   * The last [seconds] of sound as a WAV, right away. Just after listening starts, when fewer
+   * seconds have been heard, it waits until there are enough. null if not listening.
+   */
   fun recordClip(seconds: Int, done: (ByteArray?) -> Unit) {
     if (!running) { done(null); return }
-    synchronized(clipLock) {
-      clipDone?.invoke(null)
-      clipBuf = ShortArray(SR * seconds.coerceIn(1, 30))
-      clipN = 0
-      clipDone = done
+    val want = SR * seconds.coerceIn(1, RING_S)
+    val ready = synchronized(clipLock) {
+      if (ringFilled >= want) snapshot(want) else {
+        clipDone?.invoke(null)
+        clipWant = want; clipDone = done
+        null
+      }
     }
     EventLog.add("clip")
+    if (ready != null) Thread { done(ready) }.start()
+  }
+
+  /** Call with clipLock held. */
+  private fun snapshot(n: Int): ByteArray {
+    val out = ShortArray(n)
+    val start = (ringPos - n + ring.size) % ring.size
+    val first = minOf(n, ring.size - start)
+    System.arraycopy(ring, start, out, 0, first)
+    if (first < n) System.arraycopy(ring, 0, out, first, n - first)
+    return wav(out)
   }
 
   private fun feedClip(pcm: ShortArray, n: Int) {
     val finished: Pair<ByteArray, (ByteArray?) -> Unit>? = synchronized(clipLock) {
-      val buf = clipBuf ?: return
-      val take = minOf(n, buf.size - clipN)
-      System.arraycopy(pcm, 0, buf, clipN, take)
-      clipN += take
-      if (clipN < buf.size) null else {
-        val cb = clipDone!!
-        clipBuf = null; clipDone = null
-        wav(buf) to cb
+      var i = 0
+      while (i < n) {
+        val take = minOf(n - i, ring.size - ringPos)
+        System.arraycopy(pcm, i, ring, ringPos, take)
+        ringPos = (ringPos + take) % ring.size
+        i += take
+      }
+      ringFilled = minOf(ring.size, ringFilled + n)
+      val cb = clipDone
+      if (cb == null || ringFilled < clipWant) null else {
+        clipDone = null
+        snapshot(clipWant) to cb
       }
     }
     finished?.let { (bytes, cb) -> Thread { cb(bytes) }.start() }
   }
 
   private fun cancelClip() {
-    val cb = synchronized(clipLock) { val c = clipDone; clipBuf = null; clipDone = null; c }
+    val cb = synchronized(clipLock) { val c = clipDone; clipDone = null; ringFilled = 0; ringPos = 0; c }
     cb?.invoke(null)
+  }
+
+  /** Where a clip goes in Firebase Storage: (upload URL, download URL), or null if not set up. */
+  fun clipUrls(): Pair<String, String>? {
+    if (bucket.isEmpty()) return null
+    val id = (1..24).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString("")
+    val path = java.net.URLEncoder.encode("clips/$id.wav", "UTF-8")
+    return "https://firebasestorage.googleapis.com/v0/b/$bucket/o?uploadType=media&name=$path" to
+      "https://firebasestorage.googleapis.com/v0/b/$bucket/o/$path?alt=media"
+  }
+
+  /**
+   * After a crying alert: a few more seconds of the cry, then the clip goes to every parent
+   * as its own notification ("Tap to hear ..."). Only when "listen in" is on.
+   */
+  private fun sendCryClip(at: Long) {
+    val secs = cryClipSecs
+    if (!allowListen || secs <= 0) return
+    val urls = clipUrls() ?: return
+    Thread {
+      try {
+        Thread.sleep(2500) // a bit more of the cry, past the moment it was recognised
+        if (!running) return@Thread
+        recordClip(secs) { bytes ->
+          if (bytes == null) return@recordClip
+          val (ok, _) = AlertSender.upload(urls.first, bytes, "audio/wav")
+          if (!ok) return@recordClip
+          val list = targets.filter { !it["token"].isNullOrEmpty() }
+            .map { it["token"]!! to fill(it["cryClip"] ?: "{name}: {s} s", 0).replace("{s}", secs.toString()) }
+          AlertSender.sendEach(list, mapOf("type" to "clip", "auto" to true, "url" to urls.second, "seconds" to secs, "at" to at))
+        }
+      } catch (_: Exception) {}
+    }.start()
   }
 
   /** 16 kHz mono 16-bit WAV. */
@@ -346,6 +409,7 @@ object CryEngine {
             EventLog.add("alert", mapOf("first" to first))
             if (first) alert("crying", txtCrying, mapOf("type" to "cry", "baby" to babyName, "at" to t))
             else alert("still", txtStill, mapOf("type" to "cry", "baby" to babyName, "at" to t))
+            sendCryClip(t)
           }
         }
       }

@@ -49,13 +49,9 @@ object RoomCommands {
       AlertSender.sendEach(listOf(to to text(key)), mapOf("type" to "clip", "at" to System.currentTimeMillis(), "seconds" to secs) + extra)
     if (!CryEngine.allowListen) return reply("listenOff", mapOf("error" to "off"))
     if (!CryEngine.running) return reply("listenNotListening", mapOf("error" to "notListening"))
-    if (CryEngine.bucket.isEmpty()) return reply("listenFailed", mapOf("error" to "setup"))
+    val (upload, download) = CryEngine.clipUrls() ?: return reply("listenFailed", mapOf("error" to "setup"))
     if (!busy.compareAndSet(false, true)) return
     notice(context, CryEngine.txtListenNotice.replace("{who}", parent["name"] ?: "").replace("{s}", secs.toString()))
-    val id = (1..24).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString("")
-    val path = java.net.URLEncoder.encode("clips/$id.wav", "UTF-8")
-    val upload = "https://firebasestorage.googleapis.com/v0/b/${CryEngine.bucket}/o?uploadType=media&name=$path"
-    val download = "https://firebasestorage.googleapis.com/v0/b/${CryEngine.bucket}/o/$path?alt=media"
     CryEngine.recordClip(secs) { bytes ->
       try {
         if (bytes == null) reply("listenNotListening", mapOf("error" to "notListening"))

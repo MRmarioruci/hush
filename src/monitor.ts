@@ -33,8 +33,10 @@ export type MonitorSettings = {
   room?: Room | null;
   /** Baby's phone: parents may ask for a few seconds of the room's sound. */
   allowListen?: boolean;
+  /** Baby's phone: seconds of sound sent with each crying alert (0 = none; needs allowListen). */
+  cryClip?: number;
   /** Parent phone: the last clip from the baby's room, or why there isn't one. */
-  clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number; got?: number } | null;
+  clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number; got?: number; auto?: boolean } | null;
   /** Parent phone: preferred clip length (5, 10 or 15 s). */
   clipSeconds?: number;
 };
@@ -165,6 +167,8 @@ export async function setupAlertChannel() {
 export const storageBucket = () => (Constants.expoConfig?.extra as { storageBucket?: string } | undefined)?.storageBucket;
 const bucket = storageBucket;
 export const CLIP_SECONDS = 10;
+/** Default length of the clip that follows a crying alert. */
+export const CRY_CLIP_SECONDS = 10;
 /** Where a new clip goes: an unguessable name, deleted by the bucket's lifecycle rule after a day. */
 export function newClip(): { upload: string; download: string } | null {
   const b = bucket();
