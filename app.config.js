@@ -73,6 +73,38 @@ module.exports = ({ config }) => ({
     // Google Play Billing / StoreKit for the one-time baby monitor unlock (src/state/unlock.tsx).
     "expo-iap",
     "expo-font",
+    [
+      // Long-press shortcuts on the app icon (set at runtime in src/actions.tsx).
+      "expo-quick-actions",
+      {
+        androidIcons: {
+          qa_listen: "./assets/qa/listen.png",
+          qa_noise: "./assets/qa/noise.png",
+          qa_sleep: "./assets/qa/sleep.png",
+          qa_monitor: "./assets/qa/monitor.png",
+        },
+      },
+    ],
+    [
+      // Home-screen widget (src/widget): the baby's status and quick buttons.
+      "react-native-android-widget",
+      {
+        widgets: [
+          {
+            name: "Hush",
+            label: "hush",
+            description: "Your baby's status, listen in, white noise and sleep",
+            minWidth: "250dp",
+            minHeight: "110dp",
+            targetCellWidth: 4,
+            targetCellHeight: 2,
+            resizeMode: "horizontal|vertical",
+            updatePeriodMillis: 1800000,
+            previewImage: "./assets/widget-preview.png",
+          },
+        ],
+      },
+    ],
     "expo-status-bar",
     [
       "expo-audio",

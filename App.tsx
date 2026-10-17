@@ -3,7 +3,8 @@ import { AccessibilityInfo, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import { DarkTheme, NavigationContainer } from "@react-navigation/native";
+import { DarkTheme, NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+import { QuickActionsHub } from "./src/actions";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useFonts, Fredoka_500Medium, Fredoka_600SemiBold } from "@expo-google-fonts/fredoka";
 import { Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
@@ -27,6 +28,7 @@ import { NightsScreen } from "./src/screens/NightsScreen";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Tab = createBottomTabNavigator();
+const navRef = createNavigationContainerRef<Record<string, object | undefined>>();
 const theme = {
   ...DarkTheme,
   colors: { ...DarkTheme.colors, background: "transparent", card: colors.bg, primary: colors.peach, text: colors.cream },
@@ -80,7 +82,8 @@ function Shell() {
   if (!s.onboarded) return <OnboardingScreen onDone={() => set({ onboarded: true })} />;
   const f = s.features;
   return (
-    <NavigationContainer theme={theme}>
+    <NavigationContainer theme={theme} ref={navRef}>
+      <QuickActionsHub nav={navRef} />
       <Tab.Navigator
         tabBar={(props) => <TabBar {...props} />}
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" }, animation: "fade" }}

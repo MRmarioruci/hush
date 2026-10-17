@@ -76,6 +76,8 @@ object AlertSender {
             put("channelId", if (alarm) "baby-alarm-2" else "cry-alerts")
             // iPhones: crying breaks through Focus (needs the time-sensitive entitlement).
             put("interruptionLevel", if (alarm) "time-sensitive" else "active")
+            // A "Listen" button on crying alerts (registered by the parent's app).
+            if (data["type"] == "cry") put("categoryId", "hush-cry")
             put("data", JSONObject(data).put("_id", System.nanoTime().toString(36)))
           })
         }

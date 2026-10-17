@@ -15,8 +15,16 @@ const LENGTHS = [5, 10, 15];
 /** Upload and delivery on top of the recording itself. */
 const SLACK_MS = 45_000;
 
+/* "Listen" from a widget, shortcut or notification: the Monitor card picks it up. */
+let pendingOutside: { s: number; at: number } | null = null;
+const outsideListeners = new Set<(s: number) => void>();
+export function listenFromOutside(seconds: number) {
+  if (outsideListeners.size) outsideListeners.forEach((l) => l(seconds));
+  else pendingOutside = { s: seconds, at: Date.now() };
+}
+
 /** Asking for a clip, waiting for it, and playing it: shared by the card and the Home button. */
-function useClip() {
+function useClip(outside = false) {
   const { m, update, requestClip } = useMonitor();
   const [asked, setAsked] = useState(0);
   const [askedFor, setAskedFor] = useState(CLIP_SECONDS);
@@ -52,6 +60,15 @@ function useClip() {
     return () => clearInterval(id);
   }, [waiting]);
 
+  // Listen requested from outside the app (only the card on the Monitor page takes it).
+  useEffect(() => {
+    if (!outside) return;
+    if (pendingOutside && Date.now() - pendingOutside.at < 30_000) { ask(pendingOutside.s); pendingOutside = null; }
+    const l = (s: number) => ask(s);
+    outsideListeners.add(l);
+    return () => { outsideListeners.delete(l); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const elapsed = asked ? Date.now() - asked : 0;
   return { m, clip, fresh, waiting, timedOut, elapsed, askedFor, status, toggle, ask };
 }
@@ -65,7 +82,7 @@ function fmtWhen(ms: number) {
 /** Monitor tab: choose 5/10/15 s, listen, and the latest clip with a player. */
 export function ListenCard() {
   const t = useT();
-  const c = useClip();
+  const c = useClip(true);
   const [len, setLen] = useState(c.m.clipSeconds ?? CLIP_SECONDS);
   const recFrac = Math.min(1, c.elapsed / (c.askedFor * 1000));
   const recording = c.waiting && recFrac < 1;

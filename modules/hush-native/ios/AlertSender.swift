@@ -26,7 +26,7 @@ enum AlertSender {
     if list.isEmpty { done?(false, "No parent phones are paired yet"); return }
     let alarm = ["cry", "stopped", "test"].contains(data["type"] as? String ?? "")
     let messages: [[String: Any]] = list.map { token, body in
-      [
+      var m: [String: Any] = [
         "to": token,
         "title": "hush",
         "body": body,
@@ -37,6 +37,8 @@ enum AlertSender {
         "interruptionLevel": alarm ? "time-sensitive" : "active",
         "data": data,
       ]
+      if (data["type"] as? String) == "cry" { m["categoryId"] = "hush-cry" } // "Listen" button
+      return m
     }
     var req = URLRequest(url: pushURL, timeoutInterval: 10)
     req.httpMethod = "POST"

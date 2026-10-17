@@ -131,7 +131,8 @@ export function NapsProvider({ children }: { children: ReactNode }) {
         dur: durIn(L, extra.dur ?? 0),
         sound: tIn(L, `sound.${soundId}`),
       });
-      sendPush([p.token], body, data).catch(() => {});
+      // Parents get buttons on it (listen, white noise); see src/actions.tsx.
+      sendPush([p.token], body, data, "hush", undefined, kind === "awake" ? undefined : "hush-sleep").catch(() => {});
     }
   }, [peers, s.notifyOthers, mon.m.babyName, soundId]);
 

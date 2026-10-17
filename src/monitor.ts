@@ -270,13 +270,13 @@ export async function sendDataMany(messages: { to: string; data: Record<string, 
 export const myLang = () => getLang();
 
 /** Send a push through Expo's push service. Returns true when Expo accepted it. */
-export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush", channelId = INFO_CHANNEL): Promise<boolean> {
+export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush", channelId = INFO_CHANNEL, categoryId?: string): Promise<boolean> {
   if (!to.length) return false;
   try {
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active" }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active", ...(categoryId ? { categoryId } : {}) }))),
     });
     const json = await res.json().catch(() => null);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");
