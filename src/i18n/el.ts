@@ -501,7 +501,7 @@ export const el: Record<Key, string> = {
   "listen.title": "Άκου το δωμάτιο",
   "listen.secs": "{s} δλ.",
   "listen.recordingShort": "Ηχογράφηση… {s}",
-  "listen.sending": "Αποστολή κλιπ…",
+  "listen.sending": "Λήψη ήχου…",
   "listen.latest": "Τελευταίο κλιπ",
   "listen.hint": "Διάλεξε διάρκεια και πάτα Άκου. Το κινητό του μωρού ηχογραφεί τόσα δευτερόλεπτα και τα στέλνει εδώ.",
   "remote.noState": "Πάτα ανανέωση για να δεις το δωμάτιο",

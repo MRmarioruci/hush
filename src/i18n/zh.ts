@@ -501,7 +501,7 @@ export const zh: Record<Key, string> = {
   "listen.title": "收听房间",
   "listen.secs": "{s} 秒",
   "listen.recordingShort": "录制中… {s}",
-  "listen.sending": "正在发送片段…",
+  "listen.sending": "正在获取音频…",
   "listen.latest": "最近片段",
   "listen.hint": "选择时长并点按收听。宝宝的手机会录下这几秒并发送到这里。",
   "remote.noState": "点按刷新查看房间",

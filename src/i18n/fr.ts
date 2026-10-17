@@ -501,7 +501,7 @@ export const fr: Record<Key, string> = {
   "listen.title": "Écouter la chambre",
   "listen.secs": "{s} s",
   "listen.recordingShort": "Enregistrement… {s}",
-  "listen.sending": "Envoi de l'extrait…",
+  "listen.sending": "Récupération du son…",
   "listen.latest": "Dernier extrait",
   "listen.hint": "Choisissez une durée et touchez Écouter. Le téléphone de bébé enregistre ces secondes et les envoie ici.",
   "remote.noState": "Touchez actualiser pour voir la chambre",

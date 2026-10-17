@@ -501,7 +501,7 @@ export const en = {
   "listen.title": "Hear the room",
   "listen.secs": "{s} s",
   "listen.recordingShort": "Recording… {s}",
-  "listen.sending": "Sending the clip…",
+  "listen.sending": "Fetching audio…",
   "listen.latest": "Latest clip",
   "listen.hint": "Pick a length and tap Listen. The baby's phone records that many seconds and sends them here.",
   "remote.noState": "Tap refresh to check the room",
