@@ -542,6 +542,7 @@ export const en = {
   "qa.empty": "Open hush to set up",
   "qa.openApp": "Open hush to do this",
   "qa.sent": "Done ✓",
+  "qa.working": "Working…",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

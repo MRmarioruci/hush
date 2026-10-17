@@ -542,6 +542,7 @@ export const de: Record<Key, string> = {
   "qa.empty": "hush öffnen zum Einrichten",
   "qa.openApp": "Dafür hush öffnen",
   "qa.sent": "Erledigt ✓",
+  "qa.working": "Moment…",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

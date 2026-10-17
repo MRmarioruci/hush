@@ -49,17 +49,36 @@ async function standalone(action: string, s: Snap): Promise<Snap> {
   return s;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Commands the baby's phone answers; the loader stays until its reply updates hush (or 20 s).
+const REMOTE = new Set(["noise", "listen"]);
+
 export async function widgetTaskHandler({ widgetAction: event, clickAction, renderWidget }: WidgetTaskHandlerProps) {
   let snap = await readSnap();
-  if (event === "WIDGET_CLICK" && clickAction && snap) {
-    if (clickAction === "OPEN_APP") { /* handled by the system */ }
-    else if (widgetAction(clickAction)) {
-      // The running app does it and redraws the widget; show a hint meanwhile.
-      snap = { ...snap, note: { text: snap.labels.sent, at: Date.now() } };
+  const draw = (s: Snap | null) => renderWidget(<HushWidget snap={s} />);
+  if (event === "WIDGET_CLICK" && clickAction && snap && clickAction !== "OPEN_APP" && clickAction !== "NOOP") {
+    // 1. Show the loader on that button right away.
+    const at = Date.now();
+    snap = { ...snap, busy: { action: clickAction, at }, note: undefined };
+    await writeSnap(snap);
+    draw(snap);
+
+    if (widgetAction(clickAction)) {
+      // 2a. The running app does it, and rewrites the widget (without the loader) when it's done.
+      const remote = REMOTE.has(clickAction) && snap.role === "parent";
+      const until = at + (remote ? 20000 : 6000);
+      while (Date.now() < until) {
+        await sleep(1200);
+        const cur = await readSnap();
+        if (cur && !cur.busy) { draw(cur); return; }
+      }
+      const cur = (await readSnap()) ?? snap;
+      snap = { ...cur, busy: undefined, note: { text: remote ? snap.labels.noAnswer : snap.labels.sent, at: Date.now() } };
     } else {
-      snap = await standalone(clickAction, snap);
+      // 2b. hush isn't running: the widget does what it can itself.
+      snap = { ...(await standalone(clickAction, snap)), busy: undefined };
     }
     await writeSnap(snap);
   }
-  if (event !== "WIDGET_DELETED") renderWidget(<HushWidget snap={snap} />);
+  if (event !== "WIDGET_DELETED") draw(snap);
 }

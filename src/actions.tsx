@@ -145,13 +145,14 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
         listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"),
         asleep: t("qa.asleepShort"), woke: t("qa.wokeShort"), monitorOn: t("qa.monitorOnShort"), monitorOff: t("qa.monitorOffShort"),
         empty: t("qa.empty"), fetching: t("listen.sending"), openApp: t("qa.openApp"), sent: t("qa.sent"),
+        working: t("qa.working"), noAnswer: t("remote.noReplyShort"),
       },
     };
     const id = setTimeout(() => {
       writeSnap(snap).then(() => requestWidgetUpdate({ widgetName: "Hush", renderWidget: () => <HushWidget snap={snap} /> })).catch(() => {});
     }, 300);
     return () => clearTimeout(id);
-  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.m.pairedToken, mon.m.pairedWith, mon.m.parents, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.m.pairedToken, mon.m.pairedWith, mon.m.parents, mon.m.clip?.got, room?.got, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

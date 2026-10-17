@@ -542,6 +542,7 @@ export const el: Record<Key, string> = {
   "qa.empty": "Άνοιξε το hush για ρύθμιση",
   "qa.openApp": "Άνοιξε το hush γι' αυτό",
   "qa.sent": "Έγινε ✓",
+  "qa.working": "Γίνεται…",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

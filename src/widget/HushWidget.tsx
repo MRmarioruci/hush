@@ -11,11 +11,25 @@ const I = {
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  // Loader: an hourglass (widgets can't animate).
+  wait: '<path d="M7 3h10M7 21h10M8 3c0 5 8 6 8 9s-8 4-8 9M16 3c0 5-8 6-8 9s8 4 8 9"/>',
 };
 
-type Btn = { label: string; icon: string; on?: boolean; action: string; data?: Record<string, unknown> };
+type Btn = { label: string; icon: string; on?: boolean; action: string; data?: Record<string, unknown>; busy?: string };
 
 function Button({ b }: { b: Btn }) {
+  if (b.busy) {
+    // Working: an hourglass and "…" on an outlined button, until it's done.
+    return (
+      <FlexWidget
+        clickAction="NOOP"
+        style={{ flex: 1, height: "match_parent", backgroundColor: C.card, borderRadius: 18, borderWidth: 2, borderColor: C.peach, flexDirection: "column", alignItems: "center", justifyContent: "center", flexGap: 4, paddingHorizontal: 4 }}
+      >
+        <SvgWidget svg={svg(I.wait, C.peach)} style={{ height: 20, width: 20 }} />
+        <TextWidget text={b.busy} maxLines={1} style={{ fontSize: 12, fontWeight: "700", color: C.peach }} />
+      </FlexWidget>
+    );
+  }
   const fg = b.on ? C.bg : C.cream;
   return (
     <FlexWidget
@@ -51,6 +65,8 @@ export function HushWidget({ snap }: { snap: Snap | null }) {
     buttons.push({ ...n, ...link("noise") });
   }
   if (snap.showSleep) buttons.push({ label: snap.asleep ? L.woke : L.asleep, icon: snap.asleep ? I.sun : I.moon, on: false, ...link(snap.asleep ? "woke" : "asleep") });
+  const busy = snap.busy && Date.now() - snap.busy.at < 25000 ? snap.busy.action : null;
+  for (const b of buttons) if (busy && b.action === busy) b.busy = L.working;
 
   return (
     <FlexWidget style={{ height: "match_parent", width: "match_parent", backgroundColor: C.card, borderRadius: 24, padding: 14, flexDirection: "column", flexGap: 10 }}>
