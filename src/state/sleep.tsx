@@ -86,19 +86,70 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const [lastStop, setLastStop] = useState<Stop | null>(null);
   useEffect(() => { loadStops().then((st) => setLastStop(st.sound ?? null)); }, []);
   const stop = useCallback((why: StopWhy, who?: string) => {
+    if (endPending(why, who)) return;
     if (!player.playing) return;
     stopWhy.current = { why, who };
     player.pause();
   }, [player]);
+
+  // A stop nobody asked for (the system, a notification, the mic starting, another app):
+  // start again by itself, so the room never goes silent. Only a person, the sleep timer or a
+  // remote "stop" turn the white noise off.
+  const resume = useRef<{ tries: number; timer?: ReturnType<typeof setTimeout> }>({ tries: 0 });
+  const cancelResume = useCallback(() => {
+    if (resume.current.timer) clearTimeout(resume.current.timer);
+    resume.current = { tries: 0 };
+  }, []);
+  /** Turned off on purpose while it was coming back from an interruption. */
+  const endPending = useCallback((why: StopWhy, who?: string) => {
+    if (!resume.current.timer) return false;
+    cancelResume();
+    const st: Stop = { at: Date.now(), why, who };
+    setLastStop(st);
+    saveStops({ sound: st });
+    addEvent({ type: "noise_stop", t: Date.now() });
+    return true;
+  }, [cancelResume]);
+  const RESUME_MS = [800, 2000, 5000, 10000, 20000, 30000, 60000, 60000, 60000];
 
   // Note when white noise plays, for the Nights timeline.
   const wasPlaying = useRef(false);
   useEffect(() => {
     if (playing === wasPlaying.current) return;
     if (wasPlaying.current && !playing) {
-      const st: Stop = { at: Date.now(), ...(stopWhy.current ?? { why: "interrupted" as StopWhy }) };
+      if (!stopWhy.current) {
+        // Interrupted: try again, and only report it if it can't come back.
+        const attempt = () => {
+          const r = resume.current;
+          if (player.playing) return cancelResume();
+          if (r.tries >= RESUME_MS.length) {
+            const st: Stop = { at: Date.now(), why: "interrupted" };
+            setLastStop(st);
+            saveStops({ sound: st });
+            return cancelResume();
+          }
+          r.timer = setTimeout(() => {
+            r.tries += 1;
+            try { player.play(); } catch {}
+            attempt();
+          }, RESUME_MS[r.tries]);
+        };
+        if (!resume.current.timer) attempt();
+        stopWhy.current = null;
+        wasPlaying.current = false;
+        return; // the Nights timeline only records real stops
+      }
+      cancelResume();
+      const st: Stop = { at: Date.now(), ...stopWhy.current };
       setLastStop(st);
       saveStops({ sound: st });
+    }
+    if (playing && resume.current.timer) {
+      // Came back after an interruption: carry on as if nothing happened.
+      cancelResume();
+      stopWhy.current = null;
+      wasPlaying.current = true;
+      return;
     }
     stopWhy.current = null;
     wasPlaying.current = playing;
@@ -171,7 +222,11 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const micOn = mon.micOn;
   useEffect(() => {
     const rec = Platform.OS === "ios" && micOn;
-    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: rec ? "mixWithOthers" : "doNotMix", allowsRecording: rec }).catch(() => {});
+    // Android: don't take part in audio focus at all. Otherwise a notification, the mic
+    // starting, or any other app's sound pauses the white noise (and a full focus loss never
+    // gives it back). The room must never go silent by itself.
+    const mix = rec || Platform.OS === "android";
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: mix ? "mixWithOthers" : "doNotMix", allowsRecording: rec }).catch(() => {});
   }, [micOn]);
 
   /* ---------- sleep timer ---------- */
@@ -187,7 +242,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     let fade = 1;
     if (stopAt.current) {
       const left = stopAt.current - Date.now();
-      if (left <= 0) { stopAt.current = 0; stopWhy.current = { why: "timer" }; player.pause(); }
+      if (left <= 0) { stopAt.current = 0; if (!endPending("timer")) { stopWhy.current = { why: "timer" }; player.pause(); } }
       else if (left < 60000) fade = left / 60000; // gentle fade over the last minute
     }
     // Smart mode only ever lowers the volume; never let a bad number silence or crash playback.
@@ -220,6 +275,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   const [starts, setStarts] = useState(0);
   const toggle = useCallback(() => {
+    // Quiet for a moment after an interruption (the screen shows it stopped): a tap means play.
+    if (resume.current.timer && !player.playing) { cancelResume(); try { player.play(); } catch {} return; }
     if (player.playing) { stopWhy.current = { why: "you" }; return player.pause(); }
     setStarts((n) => n + 1);
     player.volume = gainRef.current;
@@ -245,6 +302,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
       if (!["play", "stop", "sound", "status"].includes(d.cmd ?? "")) return; // "woke" and "clip" are handled elsewhere
       if (d.cmd === "play" && !player.playing) r.toggle();
+      else if (d.cmd === "stop" && endPending("remote", r.parents.find((p) => p.token === d.from)?.name)) { /* was already quiet */ }
       else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.parents.find((p) => p.token === d.from)?.name }; player.pause(); }
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });
       // Answer after the change has taken effect.
