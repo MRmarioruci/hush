@@ -27,6 +27,8 @@ type CryNative = {
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   setRoom?(playing: boolean, sound: string): void;
   setListen?(allow: boolean, bucket: string, notice: string, cryClip: number): void;
+  diagMark?(what: string): void;
+  diagReport?(): string;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
   addListener(event: "onData", cb: (d: Record<string, unknown>) => void): Subscription;
@@ -76,3 +78,9 @@ export const cryDetector = cry
       requestMic: () => cry.requestMic?.() ?? Promise.resolve(false),
     }
   : null;
+
+/** Android diagnostics (no personal data): marks from JS and a report to share. */
+export const diag = {
+  mark: (what: string) => { try { cry?.diagMark?.(what); } catch {} },
+  report: (): string => { try { return cry?.diagReport?.() ?? ""; } catch { return ""; } },
+};

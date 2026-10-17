@@ -1,7 +1,7 @@
 import { Children, useCallback, useState, type ReactNode } from "react";
-import { AppState, Linking, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { AppState, Linking, Platform, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { cryDetector } from "../../modules/hush-native/src";
+import { cryDetector, diag } from "../../modules/hush-native/src";
 import { useT } from "../i18n";
 import { IS_STORE_BUILD, TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
@@ -167,7 +167,10 @@ export function SettingsScreen() {
             </Text>
           </Row>
         )}
-        <Row label={t("settings.version")}><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
+        {/* Long-press shares a diagnostics report (no personal data) for bug reports. */}
+        <Pressable onLongPress={() => { const r = diag.report(); if (r) Share.share({ message: `hush ${Constants.expoConfig?.version}\n${r}` }).catch(() => {}); }} delayLongPress={600}>
+          <Row label={t("settings.version")}><Text style={styles.value}>{Constants.expoConfig?.version ?? "1.0"}</Text></Row>
+        </Pressable>
         <Row label={t("settings.privacy")} onPress={() => Linking.openURL(PRIVACY)} />
         <Row label={t("settings.setup")} onPress={() => set({ onboarded: false })} />
       </Group>

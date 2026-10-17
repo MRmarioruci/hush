@@ -3,6 +3,7 @@ import { AccessibilityInfo, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { diag } from "./modules/hush-native/src";
 import { DarkTheme, NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { QuickActionsHub } from "./src/actions";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -52,9 +53,12 @@ export default function App() {
   useEffect(() => { const id = setTimeout(() => setWaited(true), 4000); return () => clearTimeout(id); }, []);
   const ready = (fontsLoaded || waited) && settings != null && choice != null;
   const pickLang = (c: Lang | "auto") => { applyLang(c); setChoice(c); setLang(getLang()); };
+  useEffect(() => { diag.mark("app mounted"); }, []);
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => {});
-  }, [ready]);
+    if (!ready) return;
+    diag.mark(`ready${fontsLoaded ? "" : " (fonts timed out)"}`);
+    SplashScreen.hideAsync().catch(() => {});
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <SafeAreaProvider>

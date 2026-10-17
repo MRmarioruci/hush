@@ -121,6 +121,10 @@ class HushCryModule : Module() {
     Function("isListening") { CryEngine.running }
 
     // Hands the app everything logged since last time, one JSON object per line.
+    // Diagnostics (no personal data): a mark from JS, and the full report to share.
+    Function("diagMark") { what: String -> appContext.reactContext?.let { Diag.init(it) }; Diag.add("js $what") }
+    Function("diagReport") { appContext.reactContext?.let { Diag.init(it); Diag.report(it) } ?: "" }
+
     Function("takeEvents") {
       appContext.reactContext?.let { EventLog.init(it) }
       EventLog.take()
