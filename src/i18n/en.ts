@@ -540,6 +540,8 @@ export const en = {
   "qa.monitorOffShort": "Stop",
   "qa.asleepSince": "Asleep since {time}",
   "qa.empty": "Open hush to set up",
+  "qa.openApp": "Open hush to do this",
+  "qa.sent": "Done ✓",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

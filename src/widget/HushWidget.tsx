@@ -30,7 +30,8 @@ function Button({ b }: { b: Btn }) {
   );
 }
 
-const link = (what: string, extra = "") => ({ action: "OPEN_URI", data: { uri: `hush://do/${what}${extra}` } });
+// Every button is handled by the widget itself (src/widget/handler.tsx), without opening hush.
+const link = (what: string) => ({ action: what });
 
 export function HushWidget({ snap }: { snap: Snap | null }) {
   if (!snap) {
@@ -42,13 +43,12 @@ export function HushWidget({ snap }: { snap: Snap | null }) {
   }
   const L = snap.labels;
   const dot = snap.tone === "cry" ? C.rose : snap.tone === "warn" ? C.peach : snap.tone === "on" ? C.sage : C.muted;
-  const remoteNoise = snap.role === "parent" && !!snap.pairedToken && !!snap.myToken;
   const buttons: Btn[] = [];
   if (snap.showListen) buttons.push({ label: L.listen, icon: I.ear, ...link("listen") });
   if (snap.showMonitor) buttons.push({ label: snap.monitorOn ? L.monitorOff : L.monitorOn, icon: I.mic, on: snap.monitorOn, ...link("monitor") });
   if (snap.showNoise) {
     const n = { label: snap.playing ? L.noiseOff : L.noiseOn, icon: snap.playing ? I.pause : I.play, on: snap.playing };
-    buttons.push(remoteNoise ? { ...n, action: "noise" } : { ...n, ...link("noise") });
+    buttons.push({ ...n, ...link("noise") });
   }
   if (snap.showSleep) buttons.push({ label: snap.asleep ? L.woke : L.asleep, icon: snap.asleep ? I.sun : I.moon, on: false, ...link(snap.asleep ? "woke" : "asleep") });
 
@@ -58,7 +58,7 @@ export function HushWidget({ snap }: { snap: Snap | null }) {
         <FlexWidget style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
         <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
           <TextWidget text={snap.title} maxLines={1} style={{ fontSize: 16, fontWeight: "700", color: C.cream }} />
-          <TextWidget text={snap.pending && Date.now() - snap.pending < 20000 ? "…" : snap.status} maxLines={1} style={{ fontSize: 13, color: dot }} />
+          <TextWidget text={snap.note && Date.now() - snap.note.at < 60000 ? snap.note.text : snap.status} maxLines={1} style={{ fontSize: 13, color: dot }} />
           {snap.line ? <TextWidget text={snap.line} maxLines={1} style={{ fontSize: 12, color: C.muted }} /> : <FlexWidget />}
         </FlexWidget>
       </FlexWidget>

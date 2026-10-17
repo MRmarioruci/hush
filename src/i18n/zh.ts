@@ -540,6 +540,8 @@ export const zh: Record<Key, string> = {
   "qa.monitorOffShort": "停止",
   "qa.asleepSince": "{time} 起入睡",
   "qa.empty": "打开 hush 进行设置",
+  "qa.openApp": "请打开 hush 执行此操作",
+  "qa.sent": "已完成 ✓",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

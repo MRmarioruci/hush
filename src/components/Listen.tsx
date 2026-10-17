@@ -18,6 +18,13 @@ const SLACK_MS = 45_000;
 /* "Listen" from a widget, shortcut or notification: the Monitor card picks it up. */
 let pendingOutside: { s: number; at: number } | null = null;
 const outsideListeners = new Set<(s: number) => void>();
+let pendingPlay: { url: string; at: number } | null = null;
+const playListeners = new Set<(url: string) => void>();
+/** Play a clip that arrived as a notification (tapped). */
+export function playFromOutside(url: string) {
+  if (playListeners.size) playListeners.forEach((l) => l(url));
+  else pendingPlay = { url, at: Date.now() };
+}
 export function listenFromOutside(seconds: number) {
   if (outsideListeners.size) outsideListeners.forEach((l) => l(seconds));
   else pendingOutside = { s: seconds, at: Date.now() };
@@ -66,7 +73,10 @@ function useClip(outside = false) {
     if (pendingOutside && Date.now() - pendingOutside.at < 30_000) { ask(pendingOutside.s); pendingOutside = null; }
     const l = (s: number) => ask(s);
     outsideListeners.add(l);
-    return () => { outsideListeners.delete(l); };
+    if (pendingPlay && Date.now() - pendingPlay.at < 30_000) { play(pendingPlay.url); pendingPlay = null; }
+    const p = (url: string) => play(url);
+    playListeners.add(p);
+    return () => { outsideListeners.delete(l); playListeners.delete(p); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const elapsed = asked ? Date.now() - asked : 0;

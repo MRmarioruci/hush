@@ -540,6 +540,8 @@ export const fr: Record<Key, string> = {
   "qa.monitorOffShort": "Arrêter",
   "qa.asleepSince": "Dort depuis {time}",
   "qa.empty": "Ouvrez hush pour configurer",
+  "qa.openApp": "Ouvrez hush pour ça",
+  "qa.sent": "C'est fait ✓",
   "settings.title": "Réglages",
   "settings.babyName": "Prénom de bébé",
   "settings.prefs": "Préférences",

@@ -1,6 +1,6 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
 import type { NavigationContainerRefWithCurrent } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
@@ -8,16 +8,17 @@ import * as QuickActions from "expo-quick-actions";
 import { requestWidgetUpdate } from "react-native-android-widget";
 import { HushWidget } from "./widget/HushWidget";
 import { writeSnap, type Snap } from "./widget/snap";
+import { onWidgetAction } from "./widget/bus";
 import { useSleep } from "./state/sleep";
 import { useMonitor } from "./state/monitor";
 import { useNaps } from "./state/naps";
-import { listenFromOutside } from "./components/Listen";
+import { listenFromOutside, playFromOutside } from "./components/Listen";
 import { roomCmd } from "./screens/MonitorScreen";
 import { getMyToken, CLIP_SECONDS } from "./monitor";
 import { fmtClock } from "./nights";
-import { babyLabel, t, useLang } from "./i18n";
+import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
 
-export type Action = "listen" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle";
+export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle";
 
 export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurrent<Record<string, object | undefined>> }) {
   const sleep = useSleep();
@@ -36,6 +37,9 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "listen":
         go("Monitor");
         listenFromOutside(mon.m.clipSeconds ?? CLIP_SECONDS);
+        break;
+      case "listenBg":
+        if (role === "parent" && mon.m.pairedToken) mon.requestClip(mon.m.clipSeconds ?? CLIP_SECONDS);
         break;
       case "noise":
         if (role === "parent" && mon.m.pairedToken) roomCmd(mon.m.pairedToken, mon.m.room?.playing ? "stop" : "play");
@@ -58,12 +62,23 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     // Long-press shortcuts on the app icon.
     if (QuickActions.initial?.id) fromUrl(`hush://do/${QuickActions.initial.id}`);
     const b = QuickActions.addListener((act) => fromUrl(`hush://do/${act.id}`));
-    // Buttons on notifications.
-    const c = Notifications.addNotificationResponseReceivedListener((r) => {
-      if (r.actionIdentifier && r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) fromUrl(`hush://do/${r.actionIdentifier}`);
-    });
-    return () => { a.remove(); b.remove(); c.remove(); };
-  }, [fromUrl]);
+    // Buttons on notifications; tapping a "listen in" clip plays it.
+    const onResponse = (r: Notifications.NotificationResponse) => {
+      if (r.actionIdentifier && r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) { fromUrl(`hush://do/${r.actionIdentifier}`); return; }
+      const d = r.notification.request.content.data as { type?: string; url?: string; at?: number; seconds?: number } | undefined;
+      if (d?.type === "clip" && d.url) {
+        mon.update({ clip: { url: d.url, at: d.at ?? Date.now(), seconds: d.seconds, got: Date.now() } });
+        setTimeout(() => { go("Monitor"); playFromOutside(d.url!); }, 400);
+      }
+    };
+    const c = Notifications.addNotificationResponseReceivedListener(onResponse);
+    const last = Notifications.getLastNotificationResponse();
+    if (last && Date.now() - (last.notification.date ?? 0) < 60_000) onResponse(last);
+    // Widget buttons, while hush is running.
+    // ("listen" from the widget asks for a clip without opening hush; it arrives as a notification.)
+    const w = onWidgetAction((act) => run.current(act === "listen" ? "listenBg" : act));
+    return () => { a.remove(); b.remove(); c.remove(); w.remove(); };
+  }, [fromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- notification buttons ---------- */
   useEffect(() => {
@@ -89,8 +104,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   }, [role, mon.m.pairedToken, mon.listening, f.sounds, f.naps, naps.state.asleep, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- the home-screen widget (Android) ---------- */
-  const myToken = useRef<string | undefined>(undefined);
-  useEffect(() => { if (role === "parent") getMyToken().then((x) => { myToken.current = x; }).catch(() => {}); }, [role]);
+  const [myToken, setMyToken] = useState<string | undefined>(undefined);
+  useEffect(() => { if (role) getMyToken().then(setMyToken).catch(() => {}); }, [role]);
   const room = mon.m.room;
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -120,18 +135,23 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       showNoise: role === "parent" ? !!mon.m.pairedToken : f.sounds,
       showSleep: f.naps,
       showListen: role === "parent" && !!mon.m.pairedToken,
-      myToken: myToken.current, pairedToken: mon.m.pairedToken ?? undefined,
+      myToken, pairedToken: mon.m.pairedToken ?? undefined,
+      // So the widget can tell the other phones about sleep on its own.
+      peers: !f.monitor ? [] : role === "nursery"
+        ? mon.m.parents.map((p) => { const L = p.lang ?? getLang(); const name = babyLabelIn(L, mon.m.babyName); return { token: p.token, asleep: tIn(L, "push.asleep", { name, time: "{time}" }), awake: tIn(L, "push.awake", { name, dur: "{dur}" }) }; })
+        : role === "parent" && mon.m.pairedToken ? [{ token: mon.m.pairedToken, asleep: t("push.asleep", { name: baby, time: "{time}" }), awake: t("push.awake", { name: baby, dur: "{dur}" }) }] : [],
+      roomAsleep: asleep && !naps.fromSound && role === "parent",
       labels: {
         listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"),
         asleep: t("qa.asleepShort"), woke: t("qa.wokeShort"), monitorOn: t("qa.monitorOnShort"), monitorOff: t("qa.monitorOffShort"),
-        empty: t("qa.empty"),
+        empty: t("qa.empty"), fetching: t("listen.sending"), openApp: t("qa.openApp"), sent: t("qa.sent"),
       },
     };
     const id = setTimeout(() => {
       writeSnap(snap).then(() => requestWidgetUpdate({ widgetName: "Hush", renderWidget: () => <HushWidget snap={snap} /> })).catch(() => {});
     }, 300);
     return () => clearTimeout(id);
-  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.m.pairedToken, mon.m.pairedWith, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.m.pairedToken, mon.m.pairedWith, mon.m.parents, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

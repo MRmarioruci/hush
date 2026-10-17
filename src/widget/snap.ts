@@ -20,7 +20,12 @@ export type Snap = {
   myToken?: string;
   pairedToken?: string;
   pending?: number; // a widget command sent at this time, waiting for the baby's phone
-  labels: { listen: string; noiseOn: string; noiseOff: string; asleep: string; woke: string; monitorOn: string; monitorOff: string; empty: string };
+  /** Shown instead of the status for a few seconds after a button ("Listening in…", "Open hush first"). */
+  note?: { text: string; at: number };
+  /** Paired phones to tell about sleep, with ready texts ({time}, {dur} filled in by the widget). */
+  peers?: { token: string; asleep: string; awake: string }[];
+  roomAsleep?: boolean; // asleep only because the other phone says so
+  labels: { listen: string; noiseOn: string; noiseOff: string; asleep: string; woke: string; monitorOn: string; monitorOff: string; empty: string; fetching: string; openApp: string; sent: string };
 };
 
 export async function readSnap(): Promise<Snap | null> {

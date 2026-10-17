@@ -540,6 +540,8 @@ export const el: Record<Key, string> = {
   "qa.monitorOffShort": "Διακοπή",
   "qa.asleepSince": "Κοιμάται από τις {time}",
   "qa.empty": "Άνοιξε το hush για ρύθμιση",
+  "qa.openApp": "Άνοιξε το hush γι' αυτό",
+  "qa.sent": "Έγινε ✓",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",
