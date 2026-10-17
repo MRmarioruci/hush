@@ -47,7 +47,10 @@ export default function App() {
     AccessibilityInfo.isReduceMotionEnabled().then(setStill).catch(() => {});
   }, []);
 
-  const ready = fontsLoaded && settings != null && choice != null;
+  // Never wait on the splash screen for long: fonts fall back to the system font after 4 s.
+  const [waited, setWaited] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setWaited(true), 4000); return () => clearTimeout(id); }, []);
+  const ready = (fontsLoaded || waited) && settings != null && choice != null;
   const pickLang = (c: Lang | "auto") => { applyLang(c); setChoice(c); setLang(getLang()); };
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
