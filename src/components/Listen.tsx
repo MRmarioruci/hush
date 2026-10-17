@@ -24,7 +24,8 @@ function useClip() {
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
   const clip = m.clip;
-  const fresh = !!clip && clip.at >= asked;
+  // Compare with when it arrived here, not the baby's phone's clock.
+  const fresh = !!clip && (clip.got ?? clip.at) >= asked;
   const waiting = asked > 0 && !fresh && Date.now() - asked < askedFor * 1000 + SLACK_MS;
   const timedOut = asked > 0 && !fresh && !waiting;
 
@@ -44,7 +45,7 @@ function useClip() {
   };
 
   // The clip I just asked for plays as soon as it arrives.
-  useEffect(() => { if (asked && clip?.url && clip.at >= asked) play(clip.url); }, [clip?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (asked && clip?.url && (clip.got ?? clip.at) >= asked) play(clip.url); }, [clip?.got, clip?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!waiting) return;
     const id = setInterval(() => tick((x) => x + 1), 500);

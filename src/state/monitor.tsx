@@ -295,7 +295,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const prev = mRef.current.room;
       const at = d.at ?? Date.now();
       if (prev && prev.at > at) return; // an older report arriving late
-      update({ room: { playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at, listenSince: d.listenSince, battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging } });
+      update({ room: { playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at, listenSince: d.listenSince, battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging, got: Date.now() } });
     });
     return () => sub.remove();
   }, [update]);
@@ -350,7 +350,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (d?.type !== "clip" || mRef.current.role !== "parent") return;
       const at = d.at ?? n.date ?? Date.now();
       if ((mRef.current.clip?.at ?? 0) >= at) return;
-      update({ clip: { url: d.url, at, error: d.error, detail: d.detail, seconds: d.seconds } });
+      update({ clip: { url: d.url, at, error: d.error, detail: d.detail, seconds: d.seconds, got: Date.now() } });
     };
     const sub = addPushListener(take);
     const catchUp = () => Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {});

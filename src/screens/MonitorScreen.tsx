@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -9,6 +9,7 @@ import { ALERT_AFTER, CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loa
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSleep } from "../state/sleep";
 import { stopLine } from "../stops";
 import { EAR, ListenCard } from "../components/Listen";
@@ -438,22 +439,33 @@ export async function roomCmd(to: string, cmd: string, sound?: string) {
 function useRemote() {
   const { m } = useMonitor();
   const room = m.room;
-  const [sentAt, setSentAt] = useState(0);
-  const [lastCmd, setLastCmd] = useState("");
+  const heard = room?.got ?? 0; // when the last report arrived here
+  const [asks, setAsks] = useState<{ cmd: string; at: number }[]>([]);
   const [, tick] = useState(0);
-  const pending = sentAt > 0 && (!room || room.at < sentAt);
-  const waiting = pending && Date.now() - sentAt < 15000;
-  const noReply = pending && Date.now() - sentAt >= 15000;
-  const send = async (cmd: string, sound?: string) => {
+  // Requests sent since the last report arrived.
+  const open = asks.filter((a) => a.at > heard);
+  const firstOpen = open.length ? open[0].at : 0;
+  const cmdOpen = open.find((a) => a.cmd !== "status");
+  const lastCmd = open.length ? open[open.length - 1].cmd : "";
+  const waiting = !!firstOpen && Date.now() - firstOpen < 15000;
+  // Only "no answer" when nothing came back for a while, polls included.
+  const noReply = !!firstOpen && Date.now() - firstOpen >= 25000;
+  const send = useCallback(async (cmd: string, sound?: string) => {
     if (!m.pairedToken) return;
-    setSentAt(Date.now());
-    setLastCmd(cmd);
+    const at = Date.now();
+    setAsks((xs) => [...xs.filter((x) => at - x.at < 120_000), { cmd, at }]);
     setTimeout(() => tick((x) => x + 1), 15500);
+    setTimeout(() => tick((x) => x + 1), 25500);
     await roomCmd(m.pairedToken, cmd, sound);
-  };
-  // Ask for the current state when the page opens.
-  useEffect(() => { if (m.pairedToken) send("status"); }, [m.pairedToken]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { room, send, waiting, noReply, lastCmd };
+  }, [m.pairedToken]);
+  // While this page is open, keep both phones in step: ask every 10 seconds.
+  useFocusEffect(useCallback(() => {
+    if (!m.pairedToken) return;
+    send("status");
+    const id = setInterval(() => send("status"), 10_000);
+    return () => clearInterval(id);
+  }, [m.pairedToken, send]));
+  return { room, send, waiting, noReply, lastCmd, cmdOpen: cmdOpen && Date.now() - cmdOpen.at < 15000 ? cmdOpen.cmd : null };
 }
 type Remote = ReturnType<typeof useRemote>;
 
@@ -470,9 +482,10 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
   const room = r.room;
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
-  const checking = r.waiting && r.lastCmd === "status";
+  const checking = !room && r.waiting;
   // It reports every 10 minutes while listening; much longer than that means something's wrong.
-  const stale = !!room?.listening && Date.now() - room.at > 25 * 60_000;
+  const heard = room?.got ?? room?.at ?? 0;
+  const stale = !!room && (r.noReply || (room.listening && Date.now() - heard > 25 * 60_000));
   const recentCry = lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
   const on = !!room?.listening && !stale;
   const tone = recentCry ? colors.rose : stale ? colors.peach : on ? colors.sage : colors.muted;
@@ -487,7 +500,7 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
           <Text style={[styles.heroStatus, { color: tone }]} numberOfLines={2}>
             {recentCry ? lastAlert!.body
               : !room ? (checking ? t("remote.waiting") : t("remote.noState"))
-              : stale ? t("remote.stale", { time: fmtTime(room.at) })
+              : stale ? t("remote.stale", { time: fmtTime(heard) })
               : on ? t("remote.listening") : t("remote.notListening")}
           </Text>
         </View>
@@ -508,7 +521,7 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
             </View>
           )}
           <View style={styles.fact}>
-            <Text style={[styles.factText, { color: colors.muted }]}>{r.noReply ? t("remote.noReplyShort") : t("remote.checked", { when: ago(room.at) })}</Text>
+            <Text style={[styles.factText, { color: colors.muted }]}>{t("remote.checked", { when: ago(heard) })}</Text>
           </View>
         </View>
       )}
@@ -520,7 +533,7 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
 function NoiseCard({ r }: { r: Remote }) {
   const room = r.room;
   const playing = !!room?.playing;
-  const busy = r.waiting && r.lastCmd !== "status";
+  const busy = !!r.cmdOpen;
   return (
     <Card style={{ gap: 14 }}>
       <Label>{t("remote.noise")}</Label>
@@ -533,7 +546,6 @@ function NoiseCard({ r }: { r: Remote }) {
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.roleTitle}>{busy ? t("remote.waiting") : playing ? t("remote.playing", { sound: t(`sound.${room!.sound}`) }) : t("remote.off")}</Text>
           <Text style={styles.roleSub}>{busy ? " " : playing ? t("remote.tapStop") : t("remote.tapPlay")}</Text>
-          {r.noReply && r.lastCmd !== "status" && <Text style={[styles.roleSub, { color: colors.rose }]}>{t("remote.noReply")}</Text>}
         </View>
       </View>
       <View style={styles.soundGrid}>

@@ -9,7 +9,11 @@ import { getLang, t, type Lang } from "./i18n";
 
 export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
 /** What the parent sees about the baby's room, reported by the baby's phone. */
-export type Room = { playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number; battery?: number; charging?: boolean };
+export type Room = {
+  playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number; battery?: number; charging?: boolean;
+  /** When this phone received it (this phone's clock; the baby's phone's clock can differ). */
+  got?: number;
+};
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";
 export type MonitorSettings = {
@@ -30,7 +34,7 @@ export type MonitorSettings = {
   /** Baby's phone: parents may ask for a few seconds of the room's sound. */
   allowListen?: boolean;
   /** Parent phone: the last clip from the baby's room, or why there isn't one. */
-  clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number } | null;
+  clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number; got?: number } | null;
   /** Parent phone: preferred clip length (5, 10 or 15 s). */
   clipSeconds?: number;
 };
