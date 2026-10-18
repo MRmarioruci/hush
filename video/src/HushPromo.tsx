@@ -21,9 +21,9 @@ export const HushPromo: React.FC = () => (
       <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
       <TransitionSeries.Sequence name="Nap times" durationInFrames={160}><NapsScene /></TransitionSeries.Sequence>
       <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
-      <TransitionSeries.Sequence name="Monitor" durationInFrames={180}><MonitorScene /></TransitionSeries.Sequence>
+      <TransitionSeries.Sequence name="Monitor" durationInFrames={210}><MonitorScene /></TransitionSeries.Sequence>
       <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
-      <TransitionSeries.Sequence name="From your phone" durationInFrames={170}><RemoteScene /></TransitionSeries.Sequence>
+      <TransitionSeries.Sequence name="From your phone" durationInFrames={200}><RemoteScene /></TransitionSeries.Sequence>
       <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
       <TransitionSeries.Sequence name="Nights" durationInFrames={130}><NightsScene /></TransitionSeries.Sequence>
       <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />

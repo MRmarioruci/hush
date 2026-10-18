@@ -579,6 +579,8 @@ export const en = {
   "rooms.none": "No phone is listening right now. Start listening on the phone by the crib.",
   "home.noRoom": "No phone is listening right now",
   "here.startShort": "Start",
+  "nights.lessSleep": "Less sleep",
+  "nights.moreSleep": "More sleep",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

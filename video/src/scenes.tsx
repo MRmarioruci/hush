@@ -195,7 +195,7 @@ export const SmartScene: React.FC = () => {
       <Sky />
       <Sfx at={20} name="whoosh" volume={0.25} />
       <Sfx at={97} name="pop" volume={0.5} />
-      <Words title="Smart volume" sub="Eases down as your baby settles. Turns back up if they cry." align="center" style={{ left: 160, right: 160, top: 120 }} />
+      <Words title="Smart volume" sub="Eases down as your baby settles, never to silence. Back up if they cry." align="center" style={{ left: 160, right: 160, top: 120 }} />
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
         {[50, 44].map((v) => (
           <g key={v} opacity={prog(f, 6, 26)}>
@@ -203,12 +203,15 @@ export const SmartScene: React.FC = () => {
             <text x={x0 - 30} y={y(v) + 14} textAnchor="end" fill={C.muted} style={{ fontFamily: BODY, fontSize: 36, fontWeight: 700 }}>{v} dB</text>
           </g>
         ))}
-        <path d={`${d} L ${hx} ${y0 + H} L ${x0} ${y0 + H} Z`} fill="rgba(246,199,176,.10)" />
+        <path d={`${d} L ${hx} ${y0 + H} L ${x0} ${y0 + H} Z`} fill="rgba(255,214,140,.10)" />
         <path d={d} stroke={C.peach} strokeWidth={9} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         <circle cx={hx} cy={hy} r={16 + 3 * Math.sin(f / 6)} fill={C.peach} />
       </svg>
       {label("Falling asleep", x0, 40)}
       {label("Sound asleep", x0 + W * 0.42, 72)}
+      <div style={{ position: "absolute", left: x0 + W - 330, top: y(44) + 26, fontFamily: BODY, fontWeight: 700, fontSize: 34, color: C.sage, border: `3px solid ${C.sage}`, borderRadius: 99, padding: "8px 26px", opacity: prog(f, 120, 140) }}>
+        Never silent
+      </div>
       <div style={{ position: "absolute", left: x0 + W * 0.7 + 50, top: y(55.5) - 30, fontFamily: BODY, fontWeight: 700, fontSize: 38, color: C.bg, background: C.rose, borderRadius: 99, padding: "12px 30px", opacity: Math.min(1, cry * 1.4), scale: `${0.7 + 0.3 * cry}` }}>
         Crying
       </div>
@@ -244,13 +247,15 @@ export const MonitorScene: React.FC = () => {
   const a = springIn(f, 0, 36);
   const b = springIn(f, 10, 46);
   const alert = springIn(f, 100, 124);
+  const clip = springIn(f, 140, 162);
   return (
     <Scene>
       <Sky glowY="60%" />
+      <Sfx at={140} name="pop" volume={0.45} />
       <Sfx at={0} name="whoosh" volume={0.3} />
       {[36, 60, 84].map((t) => <Sfx key={t} at={t} name="ripple" volume={0.35} />)}
       <Sfx at={100} name="chime" volume={0.5} />
-      <Words title="Any phone is a baby monitor" sub="Leave one by the crib. Get an alert on yours, over Wi-Fi or mobile data." align="center" style={{ left: 140, right: 140, top: 70 }} />
+      <Words title="Any phone is a baby monitor" sub="Start listening on any phone. The others get the alert, with a few seconds of the cry." align="center" style={{ left: 140, right: 140, top: 70 }} />
       {[0, 1, 2, 3].map((i) => {
         const t = ((f - 30 - i * 16) % 64) / 64;
         const on = f > 30 + i * 16 && f < 150;
@@ -265,6 +270,22 @@ export const MonitorScene: React.FC = () => {
           <div>
             <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 18, color: "#6f6680" }}>hush · now</div>
             <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 23, color: C.bg, whiteSpace: "nowrap" }}>Leo is crying</div>
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 14, right: 14, top: 112 + (1 - clip) * 30, opacity: Math.min(1, clip * 1.5), background: "rgba(245,238,227,.97)", borderRadius: 26, padding: "16px 20px", display: "flex", gap: 14, alignItems: "center", boxShadow: "0 12px 40px rgba(0,0,0,.4)" }}>
+          <div style={{ width: 46, height: 46, borderRadius: 23, background: C.sage, display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <svg width={22} height={22} viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill={C.bg} /></svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 19, color: C.bg, whiteSpace: "nowrap" }}>Tap to hear Leo</div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center", height: 26, marginTop: 4 }}>
+              {Array.from({ length: 13 }, (_, i) => {
+                const h = 6 + 18 * Math.abs(Math.sin(i * 1.7 + 0.4)) * (0.5 + 0.5 * Math.sin(i / 3));
+                const lit = clip > 0.9 && i < ((f - 160) / 2) % 18;
+                return <div key={i} style={{ width: 4, height: h, borderRadius: 3, background: lit ? C.peach : "#b9b0c6" }} />;
+              })}
+              <div style={{ marginLeft: 8, fontFamily: BODY, fontWeight: 700, fontSize: 16, color: "#6f6680", whiteSpace: "nowrap" }}>10 s</div>
+            </div>
           </div>
         </div>
       </Phone>
@@ -290,6 +311,28 @@ const Banner: React.FC<{ text: string; at: number; top: number }> = ({ text, at,
     </div>
   );
 };
+/** The home-screen widget, as drawn on Android. */
+const Widget: React.FC<{ at: number; top: number }> = ({ at, top }) => {
+  const f = useCurrentFrame();
+  const q = springIn(f, at, at + 22);
+  const press = prog(f, at + 30, at + 36) * (1 - prog(f, at + 40, at + 46));
+  const btn = (label: string, on: boolean, i: number) => (
+    <div key={label} style={{ flex: 1, height: 70, borderRadius: 22, background: on ? C.sage : "rgba(245,238,227,.1)", display: "grid", placeItems: "center", fontFamily: BODY, fontWeight: 700, fontSize: 26, color: on ? C.bg : C.cream, scale: i === 0 ? `${1 - 0.06 * press}` : "1" }}>{label}</div>
+  );
+  return (
+    <div style={{ position: "absolute", left: 120, top, width: 720, opacity: Math.min(1, q * 1.5), translate: `0px ${(1 - q) * 60}px`, background: "#2e2558", borderRadius: 34, padding: "22px 24px", boxShadow: "0 16px 50px rgba(0,0,0,.45)", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 30, color: C.cream }}>hush</div>
+        <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 24, color: C.sage }}>Leo asleep · 42 min</div>
+      </div>
+      <div style={{ display: "flex", gap: 12 }}>
+        {btn(prog(f, at + 40, at + 44) > 0.5 && f < at + 75 ? "Fetching…" : "Listen", true, 0)}
+        {btn("White noise", false, 1)}
+        {btn("Woke up", false, 2)}
+      </div>
+    </div>
+  );
+};
 export const RemoteScene: React.FC = () => {
   const f = useCurrentFrame();
   const a = springIn(f, 0, 36);
@@ -299,9 +342,11 @@ export const RemoteScene: React.FC = () => {
       <Sfx at={0} name="whoosh" volume={0.3} />
       <Sfx at={60} name="pop" volume={0.45} />
       <Sfx at={100} name="pop" volume={0.45} />
-      <Words title="Check in from your phone" sub="Hear the room for a few seconds, turn the white noise on or off, and know when they fall asleep." style={{ left: 120, top: 150, width: 800 }} />
-      <Banner text="Leo fell asleep at 20:35" at={60} top={600} />
-      <Banner text="10 seconds from Leo's room. Tap to listen." at={100} top={760} />
+      <Sfx at={135} name="pop" volume={0.45} />
+      <Words title="Check in from your phone" sub="Hear the room in seconds, control the white noise, and know when they fall asleep." style={{ left: 120, top: 90, width: 900 }} />
+      <Banner text="Leo fell asleep at 20:35" at={60} top={530} />
+      <Banner text="10 seconds from Leo's room. Tap to listen." at={100} top={680} />
+      <Widget at={135} top={840} />
       <Phone src="remote.png" width={400} style={{ left: 1180, top: 130 + (1 - a) * 140 + float(f, 0, 6), opacity: Math.min(1, a * 1.4), rotate: `${3 + float(f, 1, 0.5)}deg` }} />
     </Scene>
   );

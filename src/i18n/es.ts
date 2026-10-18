@@ -579,6 +579,8 @@ export const es: Record<Key, string> = {
   "rooms.none": "Ningún teléfono está escuchando ahora. Empieza a escuchar en el teléfono junto a la cuna.",
   "home.noRoom": "Ningún teléfono está escuchando ahora",
   "here.startShort": "Empezar",
+  "nights.lessSleep": "Menos sueño",
+  "nights.moreSleep": "Más sueño",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

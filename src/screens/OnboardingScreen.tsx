@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { MoonFace } from "../components/MoonFace";
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Notifications from "expo-notifications";
@@ -64,7 +65,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         {id === "welcome" && (
           <View style={styles.welcome}>
             <View style={styles.moonGlow}>
-              <SvgXml width={92} height={92} xml={MOON} />
+              <MoonFace size={128} />
             </View>
             <Text style={styles.brand}>hush</Text>
             <Text style={styles.title}>{t("ob.welcome")}</Text>
@@ -101,7 +102,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             <Text style={styles.sub}>{t("ob.featSub")}</Text>
             <View style={{ gap: 10, marginTop: 8 }}>
               <JobCard multi on={feats.sounds} icon={ICONS.sounds} tone={colors.moon} title={t("feat.sounds")} sub={t("feat.soundsSub")} onPress={() => flip("sounds")} />
-              <JobCard multi on={feats.naps} icon={ICONS.nights} tone={colors.peach} title={t("feat.naps")} sub={t("feat.napsSub")} onPress={() => flip("naps")} />
+              <JobCard multi on={feats.naps} icon={ICONS.nights} tone={colors.peach} title={t("feat.naps")} sub={t("feat.napsSub", { name: baby })} onPress={() => flip("naps")} />
               <JobCard multi on={feats.monitor} icon={ICONS.monitor} tone={colors.sage} title={t("feat.monitor")} sub={t("feat.monitorSub")} onPress={() => flip("monitor")} />
             </View>
             <Text style={[styles.sub, { fontSize: 13, marginTop: 6 }]}>{t("ob.featHint")}</Text>
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
   body: { flexGrow: 1, justifyContent: "center", paddingVertical: 20 },
 
   welcome: { alignItems: "center", gap: 10 },
-  moonGlow: { width: 150, height: 150, borderRadius: 75, backgroundColor: "rgba(255,227,163,0.08)", alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  moonGlow: { width: 176, height: 176, borderRadius: 88, backgroundColor: "#2e2558", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   brand: { fontFamily: fonts.displayBold, fontSize: 44, color: colors.moon, lineHeight: 50 },
   langBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 10, marginTop: 18, maxWidth: "100%" },
   langText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, flexShrink: 1 },
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   } as object,
 
   job: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 22, padding: 16, borderWidth: 2, borderColor: "transparent" },
-  jobOn: { borderColor: colors.peach },
+  jobOn: { borderColor: "rgba(255,214,140,0.45)", backgroundColor: "#352c66" },
   jobIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   jobTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream },
   jobSub: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: colors.muted },

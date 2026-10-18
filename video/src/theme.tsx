@@ -12,25 +12,25 @@ import {
 } from "remotion";
 
 export const C = {
-  bg: "#1b1727",
-  bg2: "#2f2747",
-  card: "#241f33",
-  cream: "#f5eee3",
-  muted: "#a79fb8",
-  peach: "#f6c7b0",
-  rose: "#f2a597",
-  sage: "#a9d6bd",
-  moon: "#f6e2b0",
-  moonDeep: "#e4c483",
+  bg: "#221b45",
+  bg2: "#2e2558",
+  card: "#2e2558",
+  cream: "#f7f1ff",
+  muted: "#b7aee0",
+  peach: "#ffd68c",
+  rose: "#ff9db0",
+  sage: "#9ee6c4",
+  moon: "#ffd68c",
+  moonDeep: "#f2be5c",
 };
 
 export const DISPLAY = "Fredoka";
-export const BODY = "Nunito";
+export const BODY = "Quicksand";
 
 loadFont({ family: DISPLAY, url: staticFile("Fredoka_500Medium.ttf"), weight: "500" });
 loadFont({ family: DISPLAY, url: staticFile("Fredoka_600SemiBold.ttf"), weight: "600" });
-loadFont({ family: BODY, url: staticFile("Nunito_600SemiBold.ttf"), weight: "600" });
-loadFont({ family: BODY, url: staticFile("Nunito_700Bold.ttf"), weight: "700" });
+loadFont({ family: BODY, url: staticFile("Quicksand_600SemiBold.ttf"), weight: "600" });
+loadFont({ family: BODY, url: staticFile("Quicksand_700Bold.ttf"), weight: "700" });
 
 export const ease = Easing.bezier(0.16, 1, 0.3, 1);
 export const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -146,38 +146,22 @@ export const Words: React.FC<{
   );
 };
 
-/** The hush moon: a soft glowing disc with a few craters. */
+/** The hush moon: the sleepy crescent mascot from the app, softly glowing. */
 export const Moon: React.FC<{ size: number; style?: React.CSSProperties }> = ({ size, style }) => (
-  <div
-    style={{
-      position: "absolute",
-      width: size,
-      height: size,
-      borderRadius: "50%",
-      background: `radial-gradient(circle at 38% 32%, #fbf0d2, ${C.moon} 45%, ${C.moonDeep})`,
-      boxShadow: `0 0 ${size * 0.5}px rgba(246,226,176,.35), 0 0 0 ${size * 0.14}px rgba(255,255,255,.03)`,
-      ...style,
-    }}
-  >
-    {[
-      [0.22, 0.2, 0.24],
-      [0.62, 0.58, 0.1],
-      [0.28, 0.66, 0.14],
-    ].map(([x, y, s], i) => (
-      <div
-        key={i}
-        style={{
-          position: "absolute",
-          left: x * size,
-          top: y * size,
-          width: s * size,
-          height: s * size,
-          borderRadius: "50%",
-          background: "rgba(200,170,110,.32)",
-        }}
-      />
-    ))}
+  <div style={{ position: "absolute", width: size, height: size, ...style }}>
+    <MoonFaceSvg size={size} />
   </div>
+);
+
+export const MoonFaceSvg: React.FC<{ size: number }> = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 150 150" style={{ overflow: "visible", filter: `drop-shadow(0 0 ${size * 0.08}px rgba(255,214,140,.4))` }}>
+    <path d="M98 22a58 58 0 1 0 30 78A48 48 0 0 1 98 22z" fill={C.moon} />
+    <path d="M50 78q7 6 14 0" stroke="#5b4320" strokeWidth={4} fill="none" strokeLinecap="round" />
+    <path d="M78 86q7 6 14 0" stroke="#5b4320" strokeWidth={4} fill="none" strokeLinecap="round" />
+    <ellipse cx="48" cy="94" rx="7" ry="4.5" fill="#ff9db0" opacity={0.85} />
+    <ellipse cx="96" cy="102" rx="7" ry="4.5" fill="#ff9db0" opacity={0.85} />
+    <path d="M66 104q5 4 10 1" stroke="#5b4320" strokeWidth={3.5} fill="none" strokeLinecap="round" />
+  </svg>
 );
 
 /** Entrance with a soft overshoot, for things that pop in. */
@@ -198,13 +182,13 @@ export const Scene: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return <AbsoluteFill style={{ scale: `${1 + frame * 0.00028}` }}>{children}</AbsoluteFill>;
 };
 
-/** The hush logo: the app icon's crescent with two small stars, softly glowing. */
+/** The hush logo: the app icon's sleepy crescent with two small stars. */
 export const Logo: React.FC<{ size: number; stars?: number; style?: React.CSSProperties }> = ({ size, stars = 1, style }) => (
   <div style={{ position: "absolute", width: size, height: size, ...style }}>
-    <svg width={size} height={size} viewBox="0 0 1024 1024" style={{ position: "absolute", inset: 0, overflow: "visible", filter: `drop-shadow(0 0 ${size * 0.08}px rgba(246,226,176,.45))` }}>
-      <path fill={C.moon} d="M600 210a330 330 0 1 0 214 520A270 270 0 0 1 600 210z" />
-      <circle cx={760} cy={300} r={22} fill={C.peach} opacity={stars} />
-      <circle cx={830} cy={420} r={12} fill={C.peach} opacity={0.8 * stars} />
+    <MoonFaceSvg size={size} />
+    <svg width={size} height={size} viewBox="0 0 150 150" style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+      <circle cx="122" cy="34" r="4.5" fill="#c9bfff" opacity={stars} />
+      <circle cx="134" cy="52" r="2.6" fill="#c9bfff" opacity={0.85 * stars} />
     </svg>
   </div>
 );

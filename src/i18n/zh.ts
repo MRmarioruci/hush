@@ -579,6 +579,8 @@ export const zh: Record<Key, string> = {
   "rooms.none": "现在没有手机在收听。请在婴儿床旁的手机上开始收听。",
   "home.noRoom": "现在没有手机在收听",
   "here.startShort": "开始",
+  "nights.lessSleep": "睡得少",
+  "nights.moreSleep": "睡得多",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

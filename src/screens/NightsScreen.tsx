@@ -58,7 +58,8 @@ export function NightsScreen() {
   const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
   const [mine, setMine] = useState<Set<string>>(new Set());
   const f = s.features;
-  const sleepMode = !f.monitor;
+  // Sleep charts unless the baby monitor has actually heard something (then crying charts).
+  const sleepMode = !f.monitor || !(nights ?? []).some((n) => n.listening.length > 0);
   const [mode, setMode] = useState<Mode>("day");
   const [key, setKey] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(today()));
@@ -275,9 +276,9 @@ function MonthView({ byKey, month, setMonth, onOpen, baby, sleepMode }: { byKey:
           })}
         </View>
         <View style={styles.legendRow}>
-          <Text style={styles.axisText}>{t("nights.less")}</Text>
+          <Text style={styles.axisText}>{t(sleepMode ? "nights.lessSleep" : "nights.less")}</Text>
           {[0.18, 0.4, 0.6, 0.8, 1].map((a) => <View key={a} style={[styles.legendCell, { backgroundColor: `rgba(${tint},${a})` }]} />)}
-          <Text style={styles.axisText}>{t("nights.more")}</Text>
+          <Text style={styles.axisText}>{t(sleepMode ? "nights.moreSleep" : "nights.more")}</Text>
         </View>
         <Text style={styles.hintText}>{inMonth.length ? t("nights.tapDay") : t("nights.noMonth")}</Text>
       </Card>
@@ -495,8 +496,8 @@ const styles = StyleSheet.create({
   calWd: { width: `${100 / 7}%`, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
   cal: { flexDirection: "row", flexWrap: "wrap" },
   calCell: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
-  calDay: { flex: 1, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  calNone: { borderWidth: 1, borderColor: colors.card2 },
+  calDay: { flex: 1, borderRadius: 99, alignItems: "center", justifyContent: "center" },
+  calNone: { opacity: 0.6 },
   calNum: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, fontVariant: ["tabular-nums"] },
   legendRow: { flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "center" },
   legendCell: { width: 16, height: 10, borderRadius: 3 },
