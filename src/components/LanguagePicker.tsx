@@ -47,10 +47,10 @@ export function LanguagePicker({ visible, onClose }: { visible: boolean; onClose
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(10,8,18,0.6)" },
+  backdrop: { flex: 1, backgroundColor: "rgba(14,10,36,0.6)" },
   sheet: { backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 36, paddingTop: 10 },
-  handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: "#463d63", marginBottom: 14 },
+  handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: "#4a3f86", marginBottom: 14 },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.cream, marginBottom: 8 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 52, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3a3352" },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 52, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3e3378" },
   name: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.cream },
 });

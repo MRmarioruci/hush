@@ -2,7 +2,7 @@
 import { FlexWidget, SvgWidget, TextWidget } from "react-native-android-widget";
 import type { Snap } from "./snap";
 
-const C = { bg: "#1b1727", card: "#241f33", card2: "#2f2943", cream: "#f5eee3", muted: "#a79fb8", peach: "#f6c7b0", sage: "#a9d6bd", rose: "#f2a597", moon: "#f6e2b0" } as const;
+const C = { bg: "#221b45", card: "#2e2558", card2: "#3a3070", cream: "#f7f1ff", muted: "#b7aee0", peach: "#ffd68c", sage: "#9ee6c4", rose: "#ff9db0", moon: "#ffe3a3" } as const;
 const svg = (path: string, color: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 const I = {
   ear: '<path d="M6 8.5a6 6 0 1 1 12 0c0 2.5-1.5 3.6-2.7 4.6-1 .8-1.3 1.6-1.3 2.9a3 3 0 0 1-5.6 1.5"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.2-.8 1.8-1.5 2.4"/>',

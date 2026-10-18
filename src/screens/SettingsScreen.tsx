@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   groupTitle: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, letterSpacing: 0.6, textTransform: "uppercase", marginLeft: 6 },
   group: { backgroundColor: colors.card, borderRadius: 20, paddingHorizontal: 16 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 54, gap: 12 },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3e3378" },
   rowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   note: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, color: colors.muted, marginHorizontal: 6 },
   rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },

@@ -59,10 +59,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 8, backgroundColor: "rgba(27,23,39,0.94)" },
+  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 8, backgroundColor: "rgba(34,27,69,0.94)" },
   bar: {
     flexDirection: "row",
-    backgroundColor: "#221d31",
+    backgroundColor: "#261f4d",
     borderRadius: 28,
     paddingVertical: 8,
     paddingHorizontal: 6,
@@ -70,13 +70,13 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
     borderWidth: 1,
-    borderColor: "#2f2943",
+    borderColor: "#3a3070",
   },
   item: { flex: 1, alignItems: "center", gap: 2, paddingTop: 2 },
   iconBox: { width: 40, height: 28, alignItems: "center", justifyContent: "center" },
   mark: { width: 4, height: 4, borderRadius: 2, marginTop: 1, backgroundColor: "transparent" },
   markOn: { backgroundColor: colors.peach },
-  dot: { position: "absolute", top: 1, right: 4, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#221d31" },
+  dot: { position: "absolute", top: 1, right: 4, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#261f4d" },
   text: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
   textOn: { fontFamily: fonts.bodyBold, color: colors.peach },
 });

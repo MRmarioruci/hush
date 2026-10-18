@@ -192,7 +192,7 @@ function WeekView({ byKey, start, setStart, onOpen, baby, sleepMode }: { byKey: 
               <Pressable key={k} onPress={() => onOpen(k)} disabled={!n} style={styles.barCol} accessibilityLabel={n ? `${dayName(k)}: ${fmtDur(val(n))}` : dayName(k)}>
                 <Text style={styles.barVal}>{n ? (sleepMode ? fmt1(val(n) / 60) : Math.round(n.cryMin)) : ""}</Text>
                 {n ? (
-                  <View style={[styles.bar, { height: Math.max(3, (val(n) / max) * BAR_H), backgroundColor: calmest?.key === k || sleepMode ? colors.sage : "#463d63" }]} />
+                  <View style={[styles.bar, { height: Math.max(3, (val(n) / max) * BAR_H), backgroundColor: calmest?.key === k || sleepMode ? colors.sage : "#4a3f86" }]} />
                 ) : (
                   <View style={styles.barEmpty} />
                 )}
@@ -302,7 +302,7 @@ function MonthView({ byKey, month, setMonth, onOpen, baby, sleepMode }: { byKey:
               {weeks.map((w, i) => (
                 <View key={i} style={styles.barCol}>
                   <Text style={styles.barVal}>{w.count ? (sleepMode ? fmt1(w.avg / 60) : Math.round(w.avg)) : ""}</Text>
-                  {w.count ? <View style={[styles.bar, { height: Math.max(3, (w.avg / wMax) * BAR_H), backgroundColor: sleepMode ? colors.sage : "#463d63" }]} /> : <View style={styles.barEmpty} />}
+                  {w.count ? <View style={[styles.bar, { height: Math.max(3, (w.avg / wMax) * BAR_H), backgroundColor: sleepMode ? colors.sage : "#4a3f86" }]} /> : <View style={styles.barEmpty} />}
                   <Text style={styles.axisText} numberOfLines={1}>{w.label}</Text>
                 </View>
               ))}
@@ -388,7 +388,7 @@ function Timeline({ n }: { n: Night }) {
       <View style={styles.legend}>
         {(n.logged ?? []).length > 0 && <Key color="rgba(198,184,255,0.55)" label={t("nights.asleep")} />}
         {n.listening.length > 0 && <Key color={colors.rose} label={t("nights.crying")} />}
-        {n.listening.length > 0 && <Key color="rgba(169,214,189,0.45)" label={t("nights.listening")} />}
+        {n.listening.length > 0 && <Key color="rgba(158,230,196,0.45)" label={t("nights.listening")} />}
         {n.noise.length > 0 && <Key color={colors.moon} label={t("nights.noise")} thin />}
       </View>
     </Card>
@@ -428,7 +428,7 @@ function WhenChart({ nights, baby }: { nights: Night[]; baby: string }) {
       <Label right={<Text style={styles.axisText}>{t("nights.count", { count: nights.length })}</Text>}>{t("nights.when", { name: baby })}</Label>
       <View style={styles.heat}>
         {totals.map((v, k) => (
-          <View key={k} style={[styles.heatCell, { backgroundColor: v > 0 ? `rgba(242,165,151,${0.18 + 0.82 * (v / max)})` : colors.card2 }]} />
+          <View key={k} style={[styles.heatCell, { backgroundColor: v > 0 ? `rgba(255,157,176,${0.18 + 0.82 * (v / max)})` : colors.card2 }]} />
         ))}
       </View>
       <View style={styles.axis}>
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
   pickSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
 
   strip: { height: 36, borderRadius: 10, backgroundColor: colors.card2, overflow: "hidden" },
-  nightTint: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(10,8,20,0.35)" },
+  nightTint: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(14,10,36,0.35)" },
   sleepRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   sleepIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
   sleepTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
   addLink: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
   addBtn: { backgroundColor: colors.peach, borderRadius: 99, paddingHorizontal: 22, paddingVertical: 12, marginTop: 6 },
   addText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.bg },
-  listen: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(169,214,189,0.3)" },
+  listen: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(158,230,196,0.3)" },
   noise: { position: "absolute", bottom: 0, height: 4, backgroundColor: colors.moon, opacity: 0.6 },
   spell: { position: "absolute", top: 7, bottom: 7, borderRadius: 4, backgroundColor: colors.rose },
   axis: { flexDirection: "row", justifyContent: "space-between" },

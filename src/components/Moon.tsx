@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
-import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
-import { colors } from "../theme";
+import Svg, { Ellipse, Path } from "react-native-svg";
+import { colors, fonts } from "../theme";
 import { t } from "../i18n";
 
 const SIZE = 176;
@@ -79,31 +79,31 @@ export function Moon({
         android_disableSound
       >
         <Animated.View style={{ transform: [{ scale: press }] }}>
-          <Svg width={SIZE} height={SIZE} viewBox="0 0 176 176">
-            <Defs>
-              <RadialGradient id="m" cx="36%" cy="32%" r="75%">
-                <Stop offset="0" stopColor="#fff7dc" />
-                <Stop offset="0.46" stopColor={colors.moon} />
-                <Stop offset="1" stopColor={colors.moonDeep} />
-              </RadialGradient>
-            </Defs>
-            <Circle cx="88" cy="88" r="88" fill="url(#m)" />
-            <Circle cx="56" cy="46" r="14" fill="#aa8246" opacity="0.16" />
-            <Circle cx="128" cy="126" r="8" fill="#aa8246" opacity="0.16" />
-            <Circle cx="120" cy="58" r="5" fill="#aa8246" opacity="0.12" />
-          </Svg>
-          <View style={styles.iconBox} pointerEvents="none">
+          {/* A sleepy crescent moon with a face; z's drift up while the sound plays. */}
+          <View style={styles.disc}>
+            <Svg width={SIZE * 0.86} height={SIZE * 0.86} viewBox="0 0 150 150">
+              <Path d="M98 22a58 58 0 1 0 30 78A48 48 0 0 1 98 22z" fill={colors.moon} />
+              <Path d="M50 78q7 6 14 0" stroke="#5b4320" strokeWidth={4} fill="none" strokeLinecap="round" />
+              <Path d="M78 86q7 6 14 0" stroke="#5b4320" strokeWidth={4} fill="none" strokeLinecap="round" />
+              <Ellipse cx="48" cy="94" rx="7" ry="4.5" fill="#ff9db0" opacity={0.85} />
+              <Ellipse cx="96" cy="102" rx="7" ry="4.5" fill="#ff9db0" opacity={0.85} />
+              <Path d="M66 104q5 4 10 1" stroke="#5b4320" strokeWidth={3.5} fill="none" strokeLinecap="round" />
+            </Svg>
+            <Animated.Text style={[styles.z, { opacity: glow }]}>z</Animated.Text>
+            <Animated.Text style={[styles.z2, { opacity: glow }]}>z</Animated.Text>
+          </View>
+          <View style={styles.badge} pointerEvents="none">
             <Animated.View style={[StyleSheet.absoluteFill, styles.center, {
               opacity: icon.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
               transform: [{ scale: icon.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) }],
             }]}>
-              <Svg width={52} height={52} viewBox="0 0 24 24"><Path d="M8.5 5.5v13l10.5-6.5z" fill={colors.bg} /></Svg>
+              <Svg width={22} height={22} viewBox="0 0 24 24"><Path d="M8.5 5.5v13l10.5-6.5z" fill={colors.bg} /></Svg>
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.center, {
               opacity: icon,
               transform: [{ scale: icon.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
             }]}>
-              <Svg width={52} height={52} viewBox="0 0 24 24"><Path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" fill={colors.bg} /></Svg>
+              <Svg width={22} height={22} viewBox="0 0 24 24"><Path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" fill={colors.bg} /></Svg>
             </Animated.View>
           </View>
         </Animated.View>
@@ -128,8 +128,11 @@ const styles = StyleSheet.create({
     width: SIZE + 40,
     height: SIZE + 40,
     borderRadius: (SIZE + 40) / 2,
-    backgroundColor: "rgba(246,226,176,0.10)",
+    backgroundColor: "rgba(255,227,163,0.10)",
   },
-  iconBox: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  disc: { width: SIZE, height: SIZE, borderRadius: SIZE / 2, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  z: { position: "absolute", right: 30, top: 26, fontFamily: fonts.displayBold, fontSize: 22, color: "#c9bfff" },
+  z2: { position: "absolute", right: 16, top: 8, fontFamily: fonts.displayBold, fontSize: 15, color: "#c9bfff" },
+  badge: { position: "absolute", right: 6, bottom: 6, width: 48, height: 48, borderRadius: 24, backgroundColor: colors.peach, borderWidth: 4, borderColor: colors.card },
   center: { alignItems: "center", justifyContent: "center" },
 });

@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopRightRadius: 99,
     borderBottomRightRadius: 99,
-    backgroundColor: "rgba(242,165,151,0.22)",
+    backgroundColor: "rgba(255,157,176,0.22)",
   },
   limitMark: {
     position: "absolute",

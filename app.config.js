@@ -23,7 +23,7 @@ module.exports = ({ config }) => ({
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
-  backgroundColor: "#1b1727",
+  backgroundColor: "#221b45",
   scheme: "hush",
   ios: {
     // iPhone only: an iPad isn't a baby monitor, and it saves the iPad screenshots in App Store Connect.
@@ -42,7 +42,7 @@ module.exports = ({ config }) => ({
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#1b1727",
+      backgroundColor: "#221b45",
       foregroundImage: "./assets/android-icon-foreground.png",
       backgroundImage: "./assets/android-icon-background.png",
       monochromeImage: "./assets/android-icon-monochrome.png",
@@ -131,7 +131,7 @@ module.exports = ({ config }) => ({
       "expo-notifications",
       {
         icon: "./assets/notification-icon.png",
-        color: "#f6c7b0",
+        color: "#ffd68c",
         // Crying-alert chime (Android res/raw, iOS app bundle).
         sounds: ["./assets/alert.wav"],
         // iOS: silent pushes (sync, remote control) reach the app; release builds use production APNs.
@@ -153,7 +153,7 @@ module.exports = ({ config }) => ({
       {
         image: "./assets/splash-icon.png",
         imageWidth: 160,
-        backgroundColor: "#1b1727",
+        backgroundColor: "#221b45",
       },
     ],
   ],

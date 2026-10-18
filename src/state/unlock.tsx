@@ -237,9 +237,9 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(10,8,18,0.6)" },
+  backdrop: { flex: 1, backgroundColor: "rgba(14,10,36,0.6)" },
   sheet: { backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingBottom: 36, paddingTop: 10, alignItems: "center", gap: 12 },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#463d63", marginBottom: 8 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#4a3f86", marginBottom: 8 },
   badge: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
   title: { fontFamily: fonts.display, fontSize: 24, color: colors.cream, textAlign: "center" },
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.muted, textAlign: "center" },

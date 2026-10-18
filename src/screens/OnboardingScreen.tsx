@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   body: { flexGrow: 1, justifyContent: "center", paddingVertical: 20 },
 
   welcome: { alignItems: "center", gap: 10 },
-  moonGlow: { width: 150, height: 150, borderRadius: 75, backgroundColor: "rgba(246,226,176,0.08)", alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  moonGlow: { width: 150, height: 150, borderRadius: 75, backgroundColor: "rgba(255,227,163,0.08)", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   brand: { fontFamily: fonts.displayBold, fontSize: 44, color: colors.moon, lineHeight: 50 },
   langBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 10, marginTop: 18, maxWidth: "100%" },
   langText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream, flexShrink: 1 },
@@ -308,9 +308,9 @@ const styles = StyleSheet.create({
   jobIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   jobTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream },
   jobSub: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: colors.muted },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#463d63", alignItems: "center", justifyContent: "center" },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#4a3f86", alignItems: "center", justifyContent: "center" },
   radioOn: { borderColor: colors.peach },
-  check: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: "#463d63", alignItems: "center", justifyContent: "center" },
+  check: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: "#4a3f86", alignItems: "center", justifyContent: "center" },
   checkOn: { borderColor: colors.peach, backgroundColor: colors.peach },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.peach },
 
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   unitText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
 
   permList: { backgroundColor: colors.card, borderRadius: 22, paddingHorizontal: 16, marginTop: 14 },
-  perm: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3a3352" },
+  perm: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3e3378" },
   allow: { backgroundColor: colors.peach, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 9 },
   allowText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.bg },
   allowed: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.sage, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 },

@@ -8,7 +8,7 @@ import { DarkTheme, NavigationContainer, createNavigationContainerRef } from "@r
 import { QuickActionsHub } from "./src/actions";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useFonts, Fredoka_500Medium, Fredoka_600SemiBold } from "@expo-google-fonts/fredoka";
-import { Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
+import { Quicksand_600SemiBold, Quicksand_700Bold } from "@expo-google-fonts/quicksand";
 
 import { colors } from "./src/theme";
 import { loadSettings, type Settings } from "./src/storage";
@@ -36,7 +36,7 @@ const theme = {
 };
 
 export default function App() {
-  const [fontsLoaded] = useFonts({ Fredoka_500Medium, Fredoka_600SemiBold, Nunito_600SemiBold, Nunito_700Bold });
+  const [fontsLoaded] = useFonts({ Fredoka_500Medium, Fredoka_600SemiBold, Quicksand_600SemiBold, Quicksand_700Bold });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [still, setStill] = useState(false);
   const [choice, setChoice] = useState<Lang | "auto" | null>(null);
