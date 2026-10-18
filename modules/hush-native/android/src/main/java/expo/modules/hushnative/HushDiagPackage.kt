@@ -25,7 +25,7 @@ import java.util.Locale
  */
 object Diag {
   private const val NAME = "hush-diag.txt"
-  private const val MAX = 120
+  private const val MAX = 200
   private var file: File? = null
   private val fmt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US)
 
@@ -109,6 +109,12 @@ class HushDiagPackage : BasePackage() {
         application ?: return
         Diag.init(application)
         Diag.add("process start")
+        // A crash writes its stack to the log first (then Android handles it as usual).
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, e ->
+          try { Diag.add("CRASH on ${thread.name}: ${android.util.Log.getStackTraceString(e).take(6000)}") } catch (_: Throwable) {}
+          previous?.uncaughtException(thread, e)
+        }
       }
     })
 
