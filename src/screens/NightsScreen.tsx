@@ -150,7 +150,7 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd
       {((n.sleeps ?? []).length > 0 || napsOn) && <Sleeps n={n} edit={edit} onAdd={napsOn ? onAdd : undefined} />}
       {napsOn && <TypicalCard n={n} />}
 
-      <View style={styles.tiles}>
+      {(heard || !napsOn) && <View style={styles.tiles}>
         {heard ? (
           <>
             <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
@@ -161,7 +161,7 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd
           <Tile value={fmtDur(n.sleptMin ?? 0)} label={t("typ.total")} />
         )}
         <Tile value={String(naps(n))} label={t("nights.naps", { count: naps(n) })} />
-      </View>
+      </View>}
       <WhenChart nights={nights.slice(0, 14)} baby={n.baby || baby} />
     </>
   );
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   modeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
 
   dayStrip: { gap: 6, paddingHorizontal: 20 },
-  day: { width: 50, alignItems: "center", gap: 2, paddingVertical: 9, borderRadius: 16, backgroundColor: colors.card },
+  day: { width: 46, alignItems: "center", gap: 2, paddingVertical: 9, borderRadius: 16 },
   dayOn: { backgroundColor: colors.peach },
   dayName: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
   dayNum: { fontFamily: fonts.display, fontSize: 18, color: colors.cream, fontVariant: ["tabular-nums"] },
@@ -474,8 +474,8 @@ const styles = StyleSheet.create({
   axisText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted, fontVariant: ["tabular-nums"] },
   legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
 
-  tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { flexBasis: "48%", flexGrow: 1, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 13, paddingHorizontal: 14, gap: 2 },
+  tiles: { flexDirection: "row", gap: 8, paddingHorizontal: 6 },
+  tile: { flexBasis: 0, flexGrow: 1, paddingVertical: 4, paddingHorizontal: 4, gap: 2 },
   tileValue: { fontFamily: fonts.display, fontSize: 24, color: colors.cream, fontVariant: ["tabular-nums"] },
   tileLabel: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted },
 

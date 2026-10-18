@@ -114,11 +114,12 @@ export function HomeScreen() {
       {f.monitor && <Pressable onPress={() => nav.navigate("Monitor")}>
         <Card>
           <View style={styles.monHead}>
-            <View style={[styles.monIcon, mon.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
+            <View style={styles.monIcon}>
               <Icon
                 d={mon.role === "parent" ? ICONS.bell : mon.role === "nursery" ? ICONS.crib : ICONS.monitor}
-                size={22}
-                color={mon.listening || mon.role === "parent" ? colors.bg : colors.muted}
+                size={24}
+                color={mon.listening ? monState.color : mon.role === "parent" ? colors.peach : colors.muted}
+                width={2}
               />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
@@ -181,14 +182,14 @@ const styles = StyleSheet.create({
   soundScroll: { alignSelf: "stretch", marginHorizontal: -18, flexGrow: 0 },
   soundRow: { flexDirection: "row", gap: 6, paddingTop: 6, paddingHorizontal: 14 },
   soundItem: { alignItems: "center", gap: 5, width: 56 },
-  soundIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  soundIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(245,238,227,0.06)", alignItems: "center", justifyContent: "center" },
   soundName: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
   quickRow: { flexDirection: "row", gap: 8, alignSelf: "stretch" },
-  quick: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.card2, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 8 },
+  quick: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 8 },
   quickText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.cream, fontVariant: ["tabular-nums"] },
   levelDot: { width: 8, height: 8, borderRadius: 4 },
   monHead: { flexDirection: "row", alignItems: "center", gap: 12 },
-  monIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  monIcon: { width: 32, height: 44, alignItems: "flex-start", justifyContent: "center" },
   remote: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3a3352" },
   remoteBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   remoteText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
