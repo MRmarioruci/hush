@@ -40,14 +40,13 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   // Steps depend on what this phone does: only ask about the parts that are turned on.
   const steps: string[] = ["welcome", "name", "features"];
   if (feats.naps) steps.push("birthday");
-  if (feats.monitor) steps.push("job");
-  if ((feats.monitor && job) || feats.naps) steps.push("perms");
+  // No "which phone is this" step any more: every phone can listen or get alerts.
+  if (feats.monitor || feats.naps) steps.push("perms");
   const id = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;
 
   const next = () => (last ? finish() : setStep((s) => s + 1));
   const finish = () => {
-    if (feats.monitor) mon.update({ role: job });
     sleep.set({ features: feats });
     onDone();
   };
@@ -157,7 +156,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {id === "perms" && <Permissions job={feats.monitor ? job : null} />}
+        {id === "perms" && <Permissions job={feats.monitor ? "nursery" : null} />}
       </ScrollView>
 
       <View style={styles.footer}>

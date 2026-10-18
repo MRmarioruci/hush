@@ -46,7 +46,7 @@ object RoomCommands {
   private fun clip(context: Context, to: String, parent: Map<String, String>, secs: Int) {
     fun text(key: String) = (parent[key] ?: key).replace("{s}", secs.toString())
     fun reply(key: String, extra: Map<String, Any>) =
-      AlertSender.sendEach(listOf(to to text(key)), mapOf("type" to "clip", "at" to System.currentTimeMillis(), "seconds" to secs) + extra)
+      AlertSender.sendEach(listOf(to to text(key)), mapOf("type" to "clip", "at" to System.currentTimeMillis(), "seconds" to secs, "from" to CryEngine.myToken) + extra)
     if (!CryEngine.allowListen) return reply("listenOff", mapOf("error" to "off"))
     if (!CryEngine.running) return reply("listenNotListening", mapOf("error" to "notListening"))
     val (upload, download) = CryEngine.clipUrls() ?: return reply("listenFailed", mapOf("error" to "setup"))

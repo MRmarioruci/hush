@@ -85,6 +85,7 @@ public class HushCryModule: Module, NotificationDelegate {
 
     // Android answers room/listen requests natively; on iOS the app does it.
     Function("setRoom") { (_: Bool, _: String) in }
+    Function("setMe") { (_: String, _: String) in }
     // Crying alerts can carry a clip, sent from here even while hush is in the background.
     Function("setListen") { (allow: Bool, bucket: String, _: String, cryClip: Int) in
       let e = CryEngine.shared

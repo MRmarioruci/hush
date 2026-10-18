@@ -89,27 +89,25 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { setListenStart(mon.listening ? Date.now() : 0); setAwakeAt(0); }, [mon.listening]);
 
   // Asleep: logged on this phone, or this baby's phone is listening, or the baby's phone says so.
-  const monitorAsleep = s.features.monitor && mon.m.role === "nursery" && mon.listening && !(awakeAt > listenStart);
-  const room = mon.m.room;
-  const roomAsleep = s.features.monitor && mon.m.role === "parent" && !!room?.listening && now - (room?.at ?? 0) < 45 * 60_000
+  const monitorAsleep = s.features.monitor && mon.listening && !(awakeAt > listenStart);
+  const room = mon.room;
+  const roomAsleep = s.features.monitor && !mon.listening && !!room?.listening && now - (room?.at ?? 0) < 45 * 60_000
     // …unless the baby's phone said "woke up" after it started listening
     && !(peer && !peer.asleep && peer.at > (room?.listenSince ?? 0));
   // A paired phone said the baby fell asleep (and hasn't said awake since).
   const peerAsleep = !!peer?.asleep && now - peer.at < 16 * 3600_000;
   const since = openFrom
-    ?? (monitorAsleep || roomAsleep ? (sleeps.filter((x) => x.to >= now - 3 * 60_000).at(-1)?.from ?? mon.m.room?.at ?? now) : null)
+    ?? (monitorAsleep || roomAsleep ? (sleeps.filter((x) => x.to >= now - 3 * 60_000).at(-1)?.from ?? mon.room?.at ?? now) : null)
     ?? (peerAsleep ? peer!.since : null);
   const state = useMemo(() => napState(sleeps, s.birthday, since, now), [sleeps, s.birthday, since, now]);
 
   /* ---------- telling the paired phones ---------- */
 
-  // The other phones in this family: the parents (from the baby's phone) or the baby's phone.
+  // The other phones in the family.
   const peers = useCallback((): { token: string; lang: Lang }[] => {
-    const m = mon.m;
     if (!s.features.monitor) return [];
-    if (m.role === "nursery") return m.parents.map((p) => ({ token: p.token, lang: p.lang ?? getLang() }));
-    return m.role === "parent" && m.pairedToken ? [{ token: m.pairedToken, lang: getLang() }] : [];
-  }, [mon.m, s.features.monitor]);
+    return mon.members.map((p) => ({ token: p.token, lang: p.lang ?? getLang() }));
+  }, [mon.members, s.features.monitor]);
 
   /** A visible notification on each paired phone, in that phone's language. */
   const notify = useCallback(async (kind: "asleep" | "asleepSound" | "awake" | "soundOn", at: number, extra: { dur?: number; skip?: string } = {}) => {
@@ -136,26 +134,19 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     }
   }, [peers, s.notifyOthers, mon.m.babyName, soundId]);
 
-  const useMonitorForSleep = s.features.monitor && mon.m.role === "nursery" && mon.m.parents.length > 0;
   const fellAsleep = useCallback(async () => {
     const at = Date.now();
-    if (useMonitorForSleep && !mon.listening) {
-      const note = await mon.toggleListening();
-      reload();
-      if (!note) notify("asleep", at);
-      return note;
-    }
     await startSleep(at);
     reload();
     notify("asleep", at);
     return null;
-  }, [useMonitorForSleep, mon, reload, notify]);
+  }, [reload, notify]);
 
   /** `skip`: the phone that asked (it already knows). Never turns the baby monitor off. */
   const wakeUp = useCallback(async (skip?: string) => {
     const at = Date.now();
     const slept = state.asleep ? (at - state.since) / 60_000 : 0;
-    const who = skip ? (mon.m.parents.find((p) => p.token === skip)?.name ?? t("stop.babyPhone")) : undefined;
+    const who = skip ? (mon.members.find((p) => p.token === skip)?.name || t("stop.otherPhone")) : undefined;
     // White noise is for sleeping; stop it when the baby is up.
     if (playing) stop("woke", who);
     // Asleep only because another phone said so: ask that phone to end its sleep.
@@ -171,7 +162,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     reload();
     if (state.asleep) notify("awake", at, { dur: slept, skip });
     if (peer?.asleep) savePeer({ ...peer, asleep: false, at });
-    return mon.listening && mon.m.role === "nursery" ? t("nap.stillListening") : null;
+    return mon.listening ? t("nap.stillListening") : null;
   }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, savePeer, state, notify]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
 
@@ -198,7 +189,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     const at = Date.now();
     if (!s.features.naps || !s.soundStartsSleep || state.asleep) {
       // Just the sound: worth telling the parents when it's the baby's phone.
-      if (mon.m.role === "nursery") notify("soundOn", at);
+      if (mon.listening) notify("soundOn", at);
       return;
     }
     (async () => {

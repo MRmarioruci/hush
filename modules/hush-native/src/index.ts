@@ -26,6 +26,7 @@ type CryNative = {
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   setRoom?(playing: boolean, sound: string): void;
+  setMe?(token: string, name: string): void;
   setListen?(allow: boolean, bucket: string, notice: string, cryClip: number): void;
   diagMark?(what: string): void;
   diagReport?(): string;
@@ -68,6 +69,8 @@ export const cryDetector = cry
       recordClip: (seconds: number, uploadUrl: string) => cry.recordClip(seconds, uploadUrl),
       /** Android: the native listener reports the room and answers "status"/"clip" itself. */
       setRoom: (playing: boolean, sound: string) => { try { cry.setRoom?.(playing, sound); } catch {} },
+      /** Who this phone is, for the room reports the native listener sends. */
+      setMe: (token: string, name: string) => { try { cry.setMe?.(token, name); } catch {} },
       /** cryClip: seconds of sound sent after each crying alert (0 = none). */
       setListen: (allow: boolean, bucket: string, notice: string, cryClip = 0) => { try { cry.setListen?.(allow, bucket, notice, cryClip); } catch {} },
       onStatus: (cb: (s: CryStatus) => void) => cry.addListener("onStatus", cb),

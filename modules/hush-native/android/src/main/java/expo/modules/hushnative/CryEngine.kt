@@ -90,7 +90,8 @@ object CryEngine {
   @Volatile var targets: List<Map<String, String>> = emptyList()
 
   /** Send one kind of alert, in each parent's language when known. */
-  private fun alert(kind: String, fallback: String, data: Map<String, Any>, pct: Int = 0) {
+  private fun alert(kind: String, fallback: String, data0: Map<String, Any>, pct: Int = 0) {
+    val data = data0 + ("from" to myToken)
     val list = targets.filter { !it["token"].isNullOrEmpty() }
     if (list.isEmpty()) { AlertSender.send(tokens, fill(fallback, pct), data); return }
     AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct) }, data)
@@ -102,7 +103,10 @@ object CryEngine {
   @Volatile var running = false
     private set
 
-  /* ---------- the room's state, reported to the parents ---------- */
+  /* ---------- the room's state, reported to the other phones in the family ---------- */
+  /** This phone's push address and name, so the others know which room a report is from. */
+  @Volatile var myToken = ""
+  @Volatile var myName = ""
   @Volatile var roomPlaying = false
   @Volatile var roomSound = "womb"
   @Volatile var listenSince = 0L
@@ -112,7 +116,7 @@ object CryEngine {
   fun reportRoom(context: Context, to: List<String> = targets.mapNotNull { it["token"] }.ifEmpty { tokens }) {
     val (pct, plugged) = battery(context)
     AlertSender.sendData(to, mapOf(
-      "type" to "room", "listening" to running, "playing" to roomPlaying, "sound" to roomSound,
+      "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to running, "playing" to roomPlaying, "sound" to roomSound,
       "listenSince" to listenSince, "battery" to pct, "charging" to plugged, "at" to System.currentTimeMillis(),
     ))
   }
@@ -217,7 +221,7 @@ object CryEngine {
           if (!ok) return@recordClip
           val list = targets.filter { !it["token"].isNullOrEmpty() }
             .map { it["token"]!! to fill(it["cryClip"] ?: "{name}: {s} s", 0).replace("{s}", secs.toString()) }
-          AlertSender.sendEach(list, mapOf("type" to "clip", "auto" to true, "url" to urls.second, "seconds" to secs, "at" to at))
+          AlertSender.sendEach(list, mapOf("type" to "clip", "auto" to true, "url" to urls.second, "seconds" to secs, "at" to at, "from" to myToken))
         }
       } catch (_: Exception) {}
     }.start()

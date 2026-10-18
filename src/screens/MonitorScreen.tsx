@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Animated, AppState, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
+import { Alert, Animated, AppState, Easing, Modal, Pressable, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
-import { ALERT_AFTER, CLIP_SECONDS, CRY_CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, makePairCode, pairedBaby, readPairCode, recordAlert, sendData, sendPush, type AlertRecord, type Role, type Sensitivity } from "../monitor";
+import { ALERT_AFTER, CRY_CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, recordAlert, sendData, type AlertRecord, type Sensitivity } from "../monitor";
+import { inviteLink } from "../family";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { useMonitor } from "../state/monitor";
@@ -23,22 +24,25 @@ const X = '<path d="M6 6l12 12M18 6 6 18"/>';
 const SEND = '<path d="M4 12 20 4l-6 16-3-7z"/>';
 
 export function MonitorScreen() {
-  const { m, update, listening, toggleListening, baby } = useMonitor();
+  const { members, listening } = useMonitor();
   useT();
-
-  const setRole = async (role: Role | null) => {
-    if (role !== "nursery" && listening) await toggleListening(); // this phone stops listening if it's no longer the nursery phone
-    update({ role });
-  };
-
+  const alerts = useAlerts();
   return (
     <Screen title={t("monitor.title")}>
-      {m.role == null ? (
-        <ChooseRole baby={baby} onPick={setRole} />
+      {members.length === 0 ? (
+        <FamilyStart />
+      ) : listening ? (
+        <>
+          <ThisPhone />
+          <OtherRooms alerts={alerts} onlyListening />
+          <FamilyCard />
+        </>
       ) : (
         <>
-          <RoleBar role={m.role} baby={baby} onChange={() => setRole(null)} />
-          {m.role === "nursery" ? <NurseryPhone /> : <ParentPhone />}
+          <OtherRooms alerts={alerts} />
+          <ThisPhone />
+          <AlertsCard alerts={alerts} />
+          <FamilyCard />
         </>
       )}
       <Text style={styles.foot}>{t("monitor.helper")}</Text>
@@ -46,60 +50,152 @@ export function MonitorScreen() {
   );
 }
 
-/* ---------------- first visit: which phone is this? ---------------- */
+/* ---------------- no family yet: join the phones ---------------- */
 
-function ChooseRole({ baby, onPick }: { baby: string; onPick: (r: Role) => void }) {
+function FamilyStart() {
+  const { m, update, baby, join, joining } = useMonitor();
+  const [showCode, setShowCode] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const onCode = async (raw: string) => { setScanning(false); setErr(await join(raw)); };
   return (
     <>
       <MonitorHero baby={baby} />
       <View style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
-        <Text style={styles.lead}>{t("role.lead", { name: baby })}</Text>
-        <Text style={styles.leadSub}>{t("role.leadSub", { name: baby })}</Text>
+        <Text style={styles.lead}>{t("fam.startTitle")}</Text>
+        <Text style={styles.leadSub}>{t("fam.startSub")}</Text>
       </View>
-      <Text style={styles.ask}>{t("role.ask")}</Text>
-      <RoleCard
-        art={ICONS.crib}
-        tone={colors.sage}
-        title={t("role.nursery", { name: baby })}
-        sub={t("role.nurserySub")}
-        onPress={() => onPick("nursery")}
-      />
-      <RoleCard art={ICONS.bell} tone={colors.peach} title={t("role.parent")} sub={t("role.parentSub")} onPress={() => onPick("parent")} />
+      <Card style={{ gap: 12 }}>
+        <TextInput value={m.myName} onChangeText={(myName) => update({ myName })} placeholder={t("fam.myName")} placeholderTextColor={colors.muted} style={styles.input} maxLength={30} />
+        {showCode ? (
+          <CodeCard onClose={() => setShowCode(false)} bare />
+        ) : (
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable onPress={() => setShowCode(true)} style={[styles.primary, { flex: 1 }]}><Text style={styles.primaryText}>{t("fam.showCode")}</Text></Pressable>
+            <Pressable onPress={() => setScanning(true)} style={[styles.secondary, { flex: 1 }]}><Text style={styles.secondaryText}>{t("fam.scan")}</Text></Pressable>
+          </View>
+        )}
+        <JoinStatus err={err} joining={joining} />
+      </Card>
+      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onCode} />
     </>
   );
 }
 
-function RoleCard({ art, tone, title, sub, onPress }: { art: string; tone: string; title: string; sub: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.roleCard, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <View style={[styles.roleIcon, { backgroundColor: tone }]}>
-        <Icon d={art} size={26} color={colors.bg} width={2} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.roleTitle}>{title}</Text>
-        <Text style={styles.roleSub}>{sub}</Text>
-      </View>
-      <Icon d={ICONS.chevron} size={20} />
-    </Pressable>
+function JoinStatus({ err, joining }: { err: string | null; joining: string | null }) {
+  if (err) return <Text style={[styles.msg, { color: colors.rose }]}>{err}</Text>;
+  if (joining === "failed") return <Text style={[styles.msg, { color: colors.rose }]}>{t("fam.joinFailed")}</Text>;
+  if (joining) return (
+    <View style={{ flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator color={colors.cream} size="small" />
+      <Text style={styles.msg}>{t("fam.joining")}</Text>
+    </View>
   );
+  return null;
 }
 
-/** Always-visible reminder of what this phone is doing in the monitor. */
-function RoleBar({ role, baby, onChange }: { role: Role; baby: string; onChange: () => void }) {
-  const nursery = role === "nursery";
-  return (
-    <View style={styles.roleBar}>
-      <View style={[styles.roleBarIcon, { backgroundColor: nursery ? colors.sage : colors.peach }]}>
-        <Icon d={nursery ? ICONS.crib : ICONS.bell} size={18} color={colors.bg} width={2} />
+/** The code other phones scan (or the same thing as a link to send). */
+function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
+  const { invite, members } = useMonitor();
+  const [code, setCode] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { invite().then(setCode, (e) => setErr((e as Error).message)); }, [invite]);
+  // Close once a new phone has joined.
+  const count = useRef(members.length);
+  useEffect(() => { if (members.length > count.current) onClose?.(); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const body = (
+    <View style={{ alignItems: "center", gap: 14 }}>
+      <Text style={styles.stepTitle}>{t("fam.codeTitle")}</Text>
+      <View style={styles.qr}>
+        {code ? <QRCode value={code} size={188} backgroundColor={colors.cream} color={colors.bg} /> : <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>}
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.roleBarKicker}>{t("role.thisPhone")}</Text>
-        <Text style={styles.roleBarTitle}>{nursery ? t("role.staysIn", { name: baby }) : t("role.gets")}</Text>
+      <View style={{ gap: 10, alignSelf: "stretch" }}>
+        <Step n={1} text={t("fam.codeStep1")} />
+        <Step n={2} text={t("fam.codeStep2")} />
       </View>
-      <Pressable onPress={onChange} hitSlop={10}>
-        <Text style={styles.change}>{t("common.change")}</Text>
-      </Pressable>
+      {code && (
+        <Pressable onPress={() => Share.share({ message: t("fam.shareMsg", { link: inviteLink(code) }) }).catch(() => {})} style={styles.inline} hitSlop={8}>
+          <Icon d={SEND} size={15} color={colors.peach} />
+          <Text style={styles.inlineText}>{t("fam.shareLink")}</Text>
+        </Pressable>
+      )}
+      {onClose && <Pressable onPress={onClose} hitSlop={10}><Text style={styles.change}>{t("common.cancel")}</Text></Pressable>}
     </View>
+  );
+  return bare ? body : <Card>{body}</Card>;
+}
+
+/* ---------------- the family: every phone that joined ---------------- */
+
+function FamilyCard() {
+  const { m, update, members, removeMember, leaveFamily, join, joining, baby } = useMonitor();
+  const [showCode, setShowCode] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const onCode = async (raw: string) => { setScanning(false); setErr(await join(raw)); };
+  const nameOf = (name: string, i: number) => name.trim() || t("fam.unnamed", { n: i + 2 });
+  const test = async () => {
+    if (!cryDetector || !members.length) return;
+    setMsg(t("nursery.sending"));
+    let ok = true;
+    for (const L of [...new Set(members.map((p) => p.lang ?? getLang()))]) {
+      const to = members.filter((p) => (p.lang ?? getLang()) === L).map((p) => p.token);
+      const r = await cryDetector.sendAlert(to, tIn(L, "nursery.testBody", { name: babyLabelIn(L, m.babyName) }), "test");
+      ok = ok && r.ok;
+    }
+    setMsg(ok ? t("nursery.testSent") : t("nursery.testFail"));
+  };
+  return (
+    <>
+      <Card style={{ gap: 4 }}>
+        <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>{t("fam.test")}</Text></Pressable>}>
+          {t("fam.title")}
+        </Label>
+        <Pressable onPress={() => setEditing(true)} style={styles.person}>
+          <View style={[styles.avatar, { backgroundColor: colors.sage }]}><Icon d={ICONS.mic} size={16} color={colors.bg} width={2} /></View>
+          {editing ? (
+            <TextInput autoFocus value={m.myName} onChangeText={(myName) => update({ myName })} onBlur={() => setEditing(false)} placeholder={t("fam.myName")} placeholderTextColor={colors.muted} style={[styles.input, { flex: 1, textAlign: "left", paddingVertical: 7 }]} maxLength={30} />
+          ) : (
+            <Text style={styles.personName} numberOfLines={1}>{m.myName.trim() || t("fam.thisPhone")}</Text>
+          )}
+          <Text style={styles.youTag}>{t("fam.thisPhone")}</Text>
+        </Pressable>
+        {members.map((p, i) => (
+          <View key={p.token} style={styles.person}>
+            <View style={styles.avatar}><Text style={styles.avatarText}>{nameOf(p.name, i).slice(0, 1).toUpperCase()}</Text></View>
+            <Text style={styles.personName} numberOfLines={1}>{nameOf(p.name, i)}</Text>
+            <Pressable
+              onPress={() => Alert.alert(nameOf(p.name, i), t("fam.removeAsk", { name: nameOf(p.name, i) }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.remove"), style: "destructive", onPress: () => removeMember(p.token) }])}
+              hitSlop={12}
+              accessibilityLabel={t("nursery.remove", { name: nameOf(p.name, i) })}
+            >
+              <Icon d={X} size={18} />
+            </Pressable>
+          </View>
+        ))}
+        {!showCode && (
+          <Pressable onPress={() => setShowCode(true)} style={styles.person}>
+            <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
+            <Text style={[styles.personName, { color: colors.peach }]}>{t("fam.add")}</Text>
+          </Pressable>
+        )}
+        {showCode && <View style={{ paddingTop: 10 }}><CodeCard onClose={() => setShowCode(false)} bare /></View>}
+        <View style={styles.famLinks}>
+          <Pressable onPress={() => setScanning(true)} hitSlop={8}><Text style={styles.change}>{t("fam.scan")}</Text></Pressable>
+          <Pressable
+            onPress={() => Alert.alert(t("fam.leave"), t("fam.leaveAsk", { name: baby }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.leave"), style: "destructive", onPress: leaveFamily }])}
+            hitSlop={8}
+          >
+            <Text style={[styles.change, { color: colors.muted }]}>{t("fam.leave")}</Text>
+          </Pressable>
+        </View>
+        <JoinStatus err={err} joining={joining} />
+        {msg && <Text style={styles.msg}>{msg}</Text>}
+      </Card>
+      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onCode} />
+    </>
   );
 }
 
@@ -121,176 +217,99 @@ function TrialNote() {
   );
 }
 
-function NurseryPhone() {
-  const { m, update, listening, lastStop, status, lastCry, toggleListening, baby } = useMonitor();
+/** This phone as the baby monitor: a card to start, or everything about it while it listens. */
+function ThisPhone() {
+  const { m, update, listening, lastStop, status, lastCry, toggleListening, baby, members } = useMonitor();
   const sleep = useSleep();
   const [msg, setMsg] = useState<string | null>(null);
-  const [showCode, setShowCode] = useState(false);
-  const tokens = m.parents.map((p) => p.token);
   const crying = !!status.crying;
-  const paired = m.parents.length > 0;
+  const toggle = async () => setMsg(await toggleListening());
 
-  // Close the code once a new parent connects.
-  const count = useRef(m.parents.length);
-  useEffect(() => {
-    if (m.parents.length > count.current) {
-      setShowCode(false);
-      setMsg(t("nursery.connected", { name: m.parents[m.parents.length - 1].name }));
-    }
-    count.current = m.parents.length;
-  }, [m.parents]);
-
-  const test = async () => {
-    if (!cryDetector || !tokens.length) return;
-    setMsg(t("nursery.sending"));
-    // In each parent's own language.
-    let ok = true;
-    for (const L of [...new Set(m.parents.map((p) => p.lang ?? getLang()))]) {
-      const to = m.parents.filter((p) => (p.lang ?? getLang()) === L).map((p) => p.token);
-      const r = await cryDetector.sendAlert(to, tIn(L, "nursery.testBody", { name: babyLabelIn(L, m.babyName) }), "test");
-      ok = ok && r.ok;
-    }
-    setMsg(ok ? t("nursery.testSent") : t("nursery.testFail"));
-  };
+  if (!listening) return (
+    <Card style={{ gap: 14 }}>
+      <View style={styles.hero}>
+        <View style={styles.heroIcon}><Icon d={ICONS.crib} size={28} color={colors.muted} width={2} /></View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={styles.listenTitle}>{t("here.title")}</Text>
+          <Text style={styles.roleSub}>{stopLine(lastStop, t, fmtTime) ?? t("here.sub")}</Text>
+        </View>
+      </View>
+      <Pressable onPress={toggle} style={({ pressed }) => [styles.startBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
+        <Icon d={ICONS.mic} size={20} color={colors.bg} width={2} />
+        <Text style={styles.primaryText}>{t("here.start")}</Text>
+      </Pressable>
+      <TrialNote />
+      {msg && <Text style={styles.msg}>{msg}</Text>}
+    </Card>
+  );
 
   return (
     <>
-      {!paired || showCode ? (
-        <PairCodeCard baby={baby} onCancel={paired ? () => setShowCode(false) : undefined} />
-      ) : (
-        <View style={styles.orbWrap}>
-          <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={async () => setMsg(await toggleListening())} baby={baby} />
-          <Text style={styles.orbMeta}>
-            {listening ? (lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")) : stopLine(lastStop, t, fmtTime) ?? t("nursery.keepNear")}
-          </Text>
-          <View style={[styles.facts, { justifyContent: "center" }]}>
-            <View style={styles.fact}>
-              <Icon d={ICONS.bell} size={15} color={colors.peach} width={2} />
-              <Text style={styles.factText} numberOfLines={1}>{t("nursery.alertsTo", { names: m.parents.map((p) => p.name).join(", ") })}</Text>
-            </View>
-            <View style={styles.fact}>
-              <Icon d={NOISE} size={15} color={sleep.playing ? colors.peach : colors.muted} width={2} />
-              <Text style={styles.factText}>{sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff")}</Text>
-            </View>
-            <View style={styles.fact}>
-              <Icon d={EAR} size={15} color={m.allowListen ? colors.sage : colors.muted} width={2} />
-              <Text style={styles.factText}>{m.allowListen ? t("listen.chipOn") : t("listen.chipOff")}</Text>
-            </View>
+      <View style={styles.orbWrap}>
+        <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={toggle} baby={baby} />
+        <Text style={styles.orbMeta}>{lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")}</Text>
+        <View style={[styles.facts, { justifyContent: "center" }]}>
+          <View style={styles.fact}>
+            <Icon d={ICONS.bell} size={15} color={colors.peach} width={2} />
+            <Text style={styles.factText} numberOfLines={1}>{t("nursery.alertsTo", { names: members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ") })}</Text>
+          </View>
+          <View style={styles.fact}>
+            <Icon d={NOISE} size={15} color={sleep.playing ? colors.peach : colors.muted} width={2} />
+            <Text style={styles.factText}>{sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff")}</Text>
+          </View>
+          <View style={styles.fact}>
+            <Icon d={EAR} size={15} color={m.allowListen ? colors.sage : colors.muted} width={2} />
+            <Text style={styles.factText}>{m.allowListen ? t("listen.chipOn") : t("listen.chipOff")}</Text>
           </View>
         </View>
-      )}
+      </View>
 
-      {paired && !showCode && <TrialNote />}
-      {paired && listening && !showCode && <Hearing />}
-      {paired && !showCode && <KeepAwake />}
+      <TrialNote />
+      <Hearing />
+      <KeepAwake />
 
-      {paired && !showCode && (
-        <Card style={[{ gap: 16 }, styles.listenBorder, m.allowListen && styles.listenCardOn]}>
-          <View style={styles.listenCard}>
-            <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
-              <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
-            </View>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
-              <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
-            </View>
-            <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
+      <Card style={[{ gap: 16 }, styles.listenBorder, m.allowListen && styles.listenCardOn]}>
+        <View style={styles.listenCard}>
+          <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
+            <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
           </View>
-          {m.allowListen && (
-            <View style={{ gap: 10 }}>
-              <Label>{t("listen.withCry")}</Label>
-              <Segmented
-                options={[0, 5, 10].map((v) => ({ value: v, label: v ? t("listen.secs", { s: v }) : t("listen.none") }))}
-                value={m.cryClip ?? CRY_CLIP_SECONDS}
-                onChange={(cryClip) => update({ cryClip })}
-              />
-              <Text style={styles.roleSub}>
-                {(m.cryClip ?? CRY_CLIP_SECONDS) ? t("listen.withCryOn", { s: m.cryClip ?? CRY_CLIP_SECONDS }) : t("listen.withCryOff")}
-              </Text>
-            </View>
-          )}
-        </Card>
-      )}
-
-      {paired && (
-        <Card style={{ gap: 4 }}>
-          <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>{t("nursery.test")}</Text></Pressable>}>
-            {t("nursery.parents", { count: m.parents.length })}
-          </Label>
-          {m.parents.map((p) => (
-            <View key={p.token} style={styles.person}>
-              <View style={styles.avatar}><Text style={styles.avatarText}>{p.name.slice(0, 1).toUpperCase()}</Text></View>
-              <Text style={styles.personName}>{p.name}</Text>
-              <Pressable onPress={() => update({ parents: m.parents.filter((x) => x.token !== p.token) })} hitSlop={12} accessibilityLabel={t("nursery.remove", { name: p.name })}>
-                <Icon d={X} size={18} />
-              </Pressable>
-            </View>
-          ))}
-          {!showCode && (
-            <Pressable onPress={() => setShowCode(true)} style={styles.person}>
-              <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
-              <Text style={[styles.personName, { color: colors.peach }]}>{t("nursery.addAnother")}</Text>
-            </Pressable>
-          )}
-        </Card>
-      )}
-
-      {paired && (
-        <Card style={{ gap: 16 }}>
-          <Text style={styles.cardTitle}>{t("nursery.alertSettings")}</Text>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
+            <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
+          </View>
+          <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
+        </View>
+        {m.allowListen && (
           <View style={{ gap: 10 }}>
-            <Label>{t("nursery.alertAfter")}</Label>
+            <Label>{t("listen.withCry")}</Label>
             <Segmented
-              options={ALERT_AFTER.map(([v]) => ({ value: v, label: t(`after.${v}`) }))}
-              value={m.alertAfter}
-              onChange={(alertAfter) => update({ alertAfter })}
+              options={[0, 5, 10].map((v) => ({ value: v, label: v ? t("listen.secs", { s: v }) : t("listen.none") }))}
+              value={m.cryClip ?? CRY_CLIP_SECONDS}
+              onChange={(cryClip) => update({ cryClip })}
             />
             <Text style={styles.roleSub}>
-              {m.alertAfter === 0 ? t("nursery.afterNow") : t(m.alertAfter === 60 ? "nursery.after60" : "nursery.after10", { name: baby })}
+              {(m.cryClip ?? CRY_CLIP_SECONDS) ? t("listen.withCryOn", { s: m.cryClip ?? CRY_CLIP_SECONDS }) : t("listen.withCryOff")}
             </Text>
           </View>
-          <View style={{ gap: 10 }}>
-            <Label>{t("nursery.sensitivity")}</Label>
-            <Segmented
-              options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: t(`sens.${v}`) }))}
-              value={m.sensitivity}
-              onChange={(sensitivity) => update({ sensitivity })}
-            />
-          </View>
-        </Card>
-      )}
+        )}
+      </Card>
 
+      <Card style={{ gap: 16 }}>
+        <Text style={styles.cardTitle}>{t("nursery.alertSettings")}</Text>
+        <View style={{ gap: 10 }}>
+          <Label>{t("nursery.alertAfter")}</Label>
+          <Segmented options={ALERT_AFTER.map(([v]) => ({ value: v, label: t(`after.${v}`) }))} value={m.alertAfter} onChange={(alertAfter) => update({ alertAfter })} />
+          <Text style={styles.roleSub}>
+            {m.alertAfter === 0 ? t("nursery.afterNow") : t(m.alertAfter === 60 ? "nursery.after60" : "nursery.after10", { name: baby })}
+          </Text>
+        </View>
+        <View style={{ gap: 10 }}>
+          <Label>{t("nursery.sensitivity")}</Label>
+          <Segmented options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: t(`sens.${v}`) }))} value={m.sensitivity} onChange={(sensitivity) => update({ sensitivity })} />
+        </View>
+      </Card>
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </>
-  );
-}
-
-/** The baby's phone shows this; the parent's phone scans it. */
-function PairCodeCard({ baby, onCancel }: { baby: string; onCancel?: () => void }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { getMyToken().then(setToken, (e) => setErr(e.message)); }, []);
-  return (
-    <Card style={{ alignItems: "center", gap: 14 }}>
-      <Text style={styles.stepTitle}>{t("pair.scanThis")}</Text>
-      <View style={styles.qr}>
-        {token ? (
-          <QRCode value={makePairCode(token, baby)} size={188} backgroundColor={colors.cream} color={colors.bg} />
-        ) : (
-          <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>
-        )}
-      </View>
-      <View style={{ gap: 10, alignSelf: "stretch" }}>
-        <Step n={1} text={t("pair.step1")} />
-        <Step n={2} text={t("pair.step2")} />
-      </View>
-      <Text style={styles.roleSub}>{t("pair.keepOpen")}</Text>
-      {onCancel && (
-        <Pressable onPress={onCancel} hitSlop={10}>
-          <Text style={styles.change}>{t("common.cancel")}</Text>
-        </Pressable>
-      )}
-    </Card>
   );
 }
 
@@ -452,8 +471,7 @@ export async function roomCmd(to: string, cmd: string, sound?: string) {
 /** The baby's room as last reported, with play/stop and the sounds. */
 /** Parent's phone: talk to the baby's phone (play, stop, sound, status) and track the reply. */
 function useRemote() {
-  const { m } = useMonitor();
-  const room = m.room;
+  const { target, room, members } = useMonitor();
   const heard = room?.got ?? 0; // when the last report arrived here
   const [asks, setAsks] = useState<{ cmd: string; at: number }[]>([]);
   const [, tick] = useState(0);
@@ -466,20 +484,25 @@ function useRemote() {
   // Only "no answer" when nothing came back for a while, polls included.
   const noReply = !!firstOpen && Date.now() - firstOpen >= 25000;
   const send = useCallback(async (cmd: string, sound?: string) => {
-    if (!m.pairedToken) return;
+    if (!target) return;
     const at = Date.now();
     setAsks((xs) => [...xs.filter((x) => at - x.at < 120_000), { cmd, at }]);
     setTimeout(() => tick((x) => x + 1), 15500);
     setTimeout(() => tick((x) => x + 1), 25500);
-    await roomCmd(m.pairedToken, cmd, sound);
-  }, [m.pairedToken]);
-  // While this page is open, keep both phones in step: ask every 10 seconds.
+    await roomCmd(target, cmd, sound);
+  }, [target]);
+  // Opening the page: ask every phone in the family, to find the ones listening.
+  const tokens = members.map((p) => p.token).join(",");
   useFocusEffect(useCallback(() => {
-    if (!m.pairedToken) return;
-    send("status");
+    if (!tokens) return;
+    myToken().then((me) => sendData(tokens.split(","), { type: "cmd", cmd: "status", from: me })).catch(() => {});
+  }, [tokens]));
+  // While this page is open, keep in step with the room shown: ask every 10 seconds.
+  useFocusEffect(useCallback(() => {
+    if (!target) return;
     const id = setInterval(() => send("status"), 10_000);
     return () => clearInterval(id);
-  }, [m.pairedToken, send]));
+  }, [target, send]));
   return { room, send, waiting, noReply, lastCmd, cmdOpen: cmdOpen && Date.now() - cmdOpen.at < 15000 ? cmdOpen.cmd : null };
 }
 type Remote = ReturnType<typeof useRemote>;
@@ -493,7 +516,7 @@ const NOISE = '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>';
 
 /** The baby's phone at a glance: listening or not, white noise, battery, and how fresh that is. */
 function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }) {
-  const { m } = useMonitor();
+  const { targetName, targetBaby } = useMonitor();
   const room = r.room;
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
@@ -511,7 +534,7 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
           <Icon d={ICONS.crib} size={28} color={on || recentCry || stale ? colors.bg : colors.muted} width={2} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.heroTitle} numberOfLines={1}>{t("remote.phoneOf", { name: babyLabel(m.pairedWith) })}</Text>
+          <Text style={styles.heroTitle} numberOfLines={1}>{targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("fam.unnamed", { n: 2 })}</Text>
           <Text style={[styles.heroStatus, { color: tone }]} numberOfLines={2}>
             {recentCry ? lastAlert!.body
               : !room ? (checking ? t("remote.waiting") : t("remote.noState"))
@@ -578,26 +601,13 @@ function NoiseCard({ r }: { r: Remote }) {
   );
 }
 
-/* ---------------- this phone gets the alerts ---------------- */
+/* ---------------- the other phones' rooms ---------------- */
 
-function ParentPhone() {
-  const { m, update } = useMonitor();
+/** Crying alerts received on this phone (newest first). */
+function useAlerts() {
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
-  const [scanning, setScanning] = useState(false);
-  const [state, setState] = useState<"idle" | "connecting" | "failed">("idle");
-  const [err, setErr] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
     const handle = async (n: Notifications.Notification) => {
-      const data = n.request.content.data as { type?: string; nursery?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number } | undefined;
-      if (data?.type === "room") return; // handled by the monitor state
-      const who = pairedBaby(n);
-      if (who != null) {
-        update({ pairedWith: who, ...(data?.nursery ? { pairedToken: data.nursery } : {}) });
-        setState("idle");
-        if (timer.current) clearTimeout(timer.current);
-      }
       const next = await recordAlert(n);
       if (next) setAlerts(next);
     };
@@ -607,97 +617,60 @@ function ParentPhone() {
       setAlerts(await loadAlerts());
     })();
     const sub = addPushListener(handle);
-    return () => { sub.remove(); if (timer.current) clearTimeout(timer.current); };
-  }, [update]);
+    return () => sub.remove();
+  }, []);
+  return alerts;
+}
 
-  const onScanned = async (raw: string) => {
-    setScanning(false);
-    setErr(null);
-    const code = readPairCode(raw);
-    if (!code) return setErr(t("parent.notCode"));
-    let mine: string;
-    try {
-      mine = await getMyToken();
-    } catch (e) {
-      return setErr((e as Error).message);
-    }
-    setState("connecting");
-    update({ pairedToken: code.token, room: null });
-    const ok = await sendPush([code.token], t("parent.connectedBody", { name: m.myName.trim() || t("parent.someone") }), { type: "pair-request", token: mine, name: m.myName.trim(), lang: getLang() });
-    if (!ok) { setState("failed"); return; }
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setState((s) => (s === "connecting" ? "failed" : s)), 20000);
-  };
-
-  const connected = m.pairedWith != null && state === "idle";
-
+/** The room the remote acts on (pick one when several phones listen), with listen-in and white noise. */
+function OtherRooms({ alerts, onlyListening }: { alerts: AlertRecord[]; onlyListening?: boolean }) {
+  const { rooms, target, setFocus } = useMonitor();
   const remote = useRemote();
-  const rescan = !m.pairedToken; // paired before remote control existed
-
+  if (onlyListening && !rooms.length) return null;
+  if (!target) return (
+    <Card style={{ gap: 6 }}>
+      <Label>{t("rooms.title")}</Label>
+      <Text style={styles.roleSub}>{t("rooms.none")}</Text>
+    </Card>
+  );
   return (
     <>
-      {connected ? (
-        rescan ? (
-          <Card style={{ gap: 10 }}>
-            <Label>{t("hero.room", { name: babyLabel(m.pairedWith) })}</Label>
-            <Text style={styles.roleSub}>{t("remote.rescan")}</Text>
-            <Pressable onPress={() => setScanning(true)} style={styles.primary}><Text style={styles.primaryText}>{t("parent.scan")}</Text></Pressable>
-          </Card>
-        ) : (
-          <>
-            <Pressable onPress={() => setScanning(true)} style={styles.another} hitSlop={8}>
-              <Icon d={PLUS} size={16} color={colors.peach} width={2.2} />
-              <Text style={styles.change}>{t("parent.another")}</Text>
-            </Pressable>
-            <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
-            <ListenCard />
-            <NoiseCard r={remote} />
-          </>
-        )
-      ) : (
-        <Card style={{ gap: 14 }}>
-          <Text style={styles.stepTitle}>
-            {state === "connecting" ? t("parent.connecting") : state === "failed" ? t("parent.failed") : t("parent.connectTitle")}
-          </Text>
-          {state === "failed" ? (
-            <Text style={[styles.roleSub, { textAlign: "center" }]}>{t("parent.failedHint")}</Text>
-          ) : (
-            <>
-              <Step n={1} text={t("parent.step1")} />
-              <Step n={2} text={t("parent.step2")} />
-            </>
-          )}
-          <TextInput
-            value={m.myName}
-            onChangeText={(myName) => update({ myName })}
-            placeholder={t("parent.yourName")}
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            maxLength={30}
-          />
-          <Pressable onPress={() => setScanning(true)} style={[styles.primary, state === "connecting" && { opacity: 0.5 }]} disabled={state === "connecting"}>
-            <Text style={styles.primaryText}>{t("parent.scan")}</Text>
-          </Pressable>
-        </Card>
+      {rooms.length > 1 && (
+        <View style={styles.roomPicker}>
+          {rooms.map((r) => {
+            const on = r.token === target;
+            const label = r.room?.baby ? t("hero.room", { name: babyLabel(r.room.baby) }) : r.name || r.room?.name || "hush";
+            return (
+              <Pressable key={r.token} onPress={() => setFocus(r.token)} style={[styles.roomChip, on && { backgroundColor: colors.cream }]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
+                <Text style={[styles.roomChipText, on && { color: colors.bg }]} numberOfLines={1}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       )}
-      {err && <Text style={styles.msg}>{err}</Text>}
-
-      <Card style={{ gap: 4 }}>
-        <Label>{t("parent.alerts")}</Label>
-        {alerts.length === 0 ? (
-          <Text style={styles.empty}>{t("parent.none")}</Text>
-        ) : (
-          alerts.slice(0, 8).map((a) => (
-            <View key={a.id} style={styles.alertRow}>
-              <View style={styles.alertDot} />
-              <Text style={styles.personName}>{a.body}</Text>
-              <Text style={styles.time}>{fmtTime(a.at)}</Text>
-            </View>
-          ))
-        )}
-      </Card>
-      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onScanned} />
+      <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
+      <ListenCard />
+      <NoiseCard r={remote} />
     </>
+  );
+}
+
+function AlertsCard({ alerts }: { alerts: AlertRecord[] }) {
+  return (
+    <Card style={{ gap: 4 }}>
+      <Label>{t("parent.alerts")}</Label>
+      {alerts.length === 0 ? (
+        <Text style={styles.empty}>{t("parent.none")}</Text>
+      ) : (
+        alerts.slice(0, 8).map((a) => (
+          <View key={a.id} style={styles.alertRow}>
+            <View style={styles.alertDot} />
+            <Text style={styles.personName}>{a.body}</Text>
+            <Text style={styles.time}>{fmtTime(a.at)}</Text>
+          </View>
+        ))
+      )}
+    </Card>
   );
 }
 
@@ -727,6 +700,14 @@ const styles = StyleSheet.create({
   roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   soundChip: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9 },
   soundChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
+  secondary: { backgroundColor: colors.card2, borderRadius: 99, paddingVertical: 13, alignItems: "center" },
+  secondaryText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  startBtn: { flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.sage, borderRadius: 99, minHeight: 52 },
+  youTag: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.muted, backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" },
+  famLinks: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, paddingHorizontal: 2 },
+  roomPicker: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 99, padding: 4, gap: 4 },
+  roomChip: { flex: 1, alignItems: "center", paddingVertical: 10, paddingHorizontal: 8, borderRadius: 99 },
+  roomChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.muted },
   trial: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14 },
   trialDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.sage },
   trialText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: colors.muted },

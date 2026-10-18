@@ -34,7 +34,7 @@ export function listenFromOutside(seconds: number) {
 
 /** Asking for a clip, waiting for it, and playing it: shared by the card and the Home button. */
 function useClip(outside = false) {
-  const { m, update, requestClip } = useMonitor();
+  const { m, update, requestClip, target } = useMonitor();
   const [asked, setAsked] = useState(0);
   const [askedFor, setAskedFor] = useState(CLIP_SECONDS);
   const [, tick] = useState(0);
@@ -82,7 +82,7 @@ function useClip(outside = false) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const elapsed = asked ? Date.now() - asked : 0;
-  return { m, clip, fresh, waiting, timedOut, elapsed, askedFor, status, toggle, ask };
+  return { m, target, clip, fresh, waiting, timedOut, elapsed, askedFor, status, toggle, ask };
 }
 
 function fmtWhen(ms: number) {
@@ -113,7 +113,7 @@ export function ListenCard() {
       </View>
       <Pressable
         onPress={() => c.ask(len)}
-        disabled={c.waiting || !c.m.pairedToken}
+        disabled={c.waiting || !c.target}
         style={({ pressed }) => [styles.big, c.waiting && styles.bigBusy, pressed && { transform: [{ scale: 0.98 }] }]}
         accessibilityRole="button"
       >
@@ -160,7 +160,7 @@ export function ListenButton() {
     : null;
   return (
     <View style={styles.row}>
-      <Pressable onPress={() => c.ask(len)} disabled={c.waiting || !c.m.pairedToken} style={({ pressed }) => [styles.small, (c.waiting || pressed) && { opacity: 0.75 }]} accessibilityRole="button">
+      <Pressable onPress={() => c.ask(len)} disabled={c.waiting || !c.target} style={({ pressed }) => [styles.small, (c.waiting || pressed) && { opacity: 0.75 }]} accessibilityRole="button">
         {c.waiting ? <ActivityIndicator color={colors.bg} size="small" /> : <Icon d={EAR} size={18} color={colors.bg} width={2} />}
         <Text style={styles.smallText}>{label}</Text>
       </Pressable>

@@ -27,7 +27,7 @@ export function HomeScreen() {
   const [note, setNote] = useState<string | null>(null);
   const [asked, setAsked] = useState(0);
   // Parent's phone: ask the baby's phone how the room is when Home opens.
-  useEffect(() => { if (mon.m.role === "parent" && mon.m.pairedToken) roomCmd(mon.m.pairedToken, "status"); }, [mon.m.role, mon.m.pairedToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (mon.role === "parent" && mon.target) roomCmd(mon.target, "status"); }, [mon.role, mon.target]); // eslint-disable-line react-hooks/exhaustive-deps
   const soundScroll = useRef<ScrollView>(null);
   const t = useT();
   const f = sleep.s.features;
@@ -44,7 +44,7 @@ export function HomeScreen() {
     : crying
       ? { color: colors.rose }
       : { color: colors.sage };
-  const parents = mon.m.parents.length;
+  const parents = mon.members.length;
 
   return (
     <Screen
@@ -114,28 +114,28 @@ export function HomeScreen() {
       {f.monitor && <Pressable onPress={() => nav.navigate("Monitor")}>
         <Card>
           <View style={styles.monHead}>
-            <View style={[styles.monIcon, mon.m.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
+            <View style={[styles.monIcon, mon.role === "parent" && { backgroundColor: colors.peach }, mon.listening && { backgroundColor: monState.color }]}>
               <Icon
-                d={mon.m.role === "parent" ? ICONS.bell : mon.m.role === "nursery" ? ICONS.crib : ICONS.monitor}
+                d={mon.role === "parent" ? ICONS.bell : mon.role === "nursery" ? ICONS.crib : ICONS.monitor}
                 size={22}
-                color={mon.listening || mon.m.role === "parent" ? colors.bg : colors.muted}
+                color={mon.listening || mon.role === "parent" ? colors.bg : colors.muted}
               />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.monTitle}>
-                {mon.m.role === "nursery" ? (mon.listening ? t("home.listeningFor", { name: mon.baby }) : t("home.babyMonitor")) : mon.m.role === "parent" ? t("home.cryAlerts") : t("home.babyMonitor")}
+                {mon.role === "nursery" ? (mon.listening ? t("home.listeningFor", { name: mon.baby }) : t("home.babyMonitor")) : mon.role === "parent" ? t("home.cryAlerts") : t("home.babyMonitor")}
               </Text>
               <Text style={styles.sub}>
-                {mon.m.role == null
-                  ? t("home.useSecond")
-                  : mon.m.role === "parent"
-                    ? mon.m.pairedWith != null ? t("home.onConnected", { name: babyLabel(mon.m.pairedWith) }) : t("home.notConnected")
+                {mon.role == null
+                  ? (mon.members.length ? t("home.noRoom") : t("home.useSecond"))
+                  : mon.role === "parent"
+                    ? mon.target ? t("home.onConnected", { name: mon.targetBaby ? babyLabel(mon.targetBaby) : mon.targetName }) : t("home.notConnected")
                     : !parents ? t("home.connectFirst")
                     : mon.listening ? (crying ? t("orb.crying", { name: mon.baby }) : mon.lastCry ? t("nursery.lastAlert", { time: fmtTime(mon.lastCry) }) : t("nursery.quiet"))
                     : t("home.off")}
               </Text>
             </View>
-            {mon.m.role === "nursery" && parents > 0 ? (
+            {mon.role === "nursery" && parents > 0 ? (
               <Switch
                 value={mon.listening}
                 onValueChange={async () => setNote(await mon.toggleListening())}
@@ -147,25 +147,25 @@ export function HomeScreen() {
               <Icon d={ICONS.chevron} size={20} />
             )}
           </View>
-          {mon.m.role === "parent" && mon.m.pairedToken && (
+          {mon.role === "parent" && mon.target && (
             <View style={styles.remote}>
               <Pressable
-                onPress={() => { setAsked(Date.now()); roomCmd(mon.m.pairedToken!, mon.m.room?.playing ? "stop" : "play"); }}
-                style={[styles.remoteBtn, mon.m.room?.playing && { backgroundColor: colors.peach }]}
+                onPress={() => { setAsked(Date.now()); roomCmd(mon.target!, mon.room?.playing ? "stop" : "play"); }}
+                style={[styles.remoteBtn, mon.room?.playing && { backgroundColor: colors.peach }]}
                 accessibilityRole="button"
-                accessibilityLabel={mon.m.room?.playing ? t("remote.stop") : t("remote.play")}
+                accessibilityLabel={mon.room?.playing ? t("remote.stop") : t("remote.play")}
               >
-                <Icon d={mon.m.room?.playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={20} color={mon.m.room?.playing ? colors.bg : colors.cream} width={2} />
+                <Icon d={mon.room?.playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={20} color={mon.room?.playing ? colors.bg : colors.cream} width={2} />
               </Pressable>
               <Text style={styles.remoteText} numberOfLines={1}>
-                {asked && (!mon.m.room || mon.m.room.at < asked) && Date.now() - asked < 15000
+                {asked && (!mon.room || (mon.room.got ?? mon.room.at) < asked) && Date.now() - asked < 15000
                   ? t("remote.waiting")
-                  : !mon.m.room ? t("remote.unknown")
-                  : mon.m.room.playing ? t("remote.playing", { sound: t(`sound.${mon.m.room.sound}`) }) : t("remote.off")}
+                  : !mon.room ? t("remote.unknown")
+                  : mon.room.playing ? t("remote.playing", { sound: t(`sound.${mon.room.sound}`) }) : t("remote.off")}
               </Text>
             </View>
           )}
-          {mon.m.role === "parent" && mon.m.pairedToken && <View style={{ marginTop: 10 }}><ListenButton /></View>}
+          {mon.role === "parent" && mon.target && <View style={{ marginTop: 10 }}><ListenButton /></View>}
           {note && <Text style={styles.note}>{note}</Text>}
         </Card>
       </Pressable>}

@@ -1,7 +1,7 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Platform } from "react-native";
+import { Alert, Linking, Platform } from "react-native";
 import type { NavigationContainerRefWithCurrent } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import * as QuickActions from "expo-quick-actions";
@@ -26,7 +26,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   const naps = useNaps();
   const lang = useLang();
   const f = sleep.s.features;
-  const role = f.monitor ? mon.m.role : null;
+  const role = f.monitor ? mon.role : null;
   const baby = babyLabel(mon.m.babyName);
 
   /* ---------- doing things ---------- */
@@ -39,10 +39,10 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
         listenFromOutside(mon.m.clipSeconds ?? CLIP_SECONDS);
         break;
       case "listenBg":
-        if (role === "parent" && mon.m.pairedToken) mon.requestClip(mon.m.clipSeconds ?? CLIP_SECONDS);
+        if (role === "parent" && mon.target) mon.requestClip(mon.m.clipSeconds ?? CLIP_SECONDS);
         break;
       case "noise":
-        if (role === "parent" && mon.m.pairedToken) roomCmd(mon.m.pairedToken, mon.m.room?.playing ? "stop" : "play");
+        if (role === "parent" && mon.target) roomCmd(mon.target, mon.room?.playing ? "stop" : "play");
         else sleep.toggle();
         break;
       case "asleep": if (!naps.state.asleep) naps.fellAsleep(); break;
@@ -51,10 +51,18 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "monitor": go("Monitor"); mon.toggleListening(); break;
     }
   };
+  const joinRef = useRef(mon.join);
+  joinRef.current = mon.join;
   const fromUrl = useCallback((url: string | null) => {
     const m = url?.match(/^hush:\/\/do\/(\w+)/);
     if (m) setTimeout(() => run.current(m[1]), 400); // let the app settle first
-  }, []);
+    // An invite link from another phone in the family.
+    if (url?.startsWith("hush://join")) setTimeout(async () => {
+      go("Monitor");
+      const err = await joinRef.current(url);
+      if (err) Alert.alert("hush", err);
+    }, 400);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     Linking.getInitialURL().then(fromUrl).catch(() => {});
@@ -72,7 +80,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       }
     };
     const c = Notifications.addNotificationResponseReceivedListener(onResponse);
-    const last = Notifications.getLastNotificationResponse();
+    let last: Notifications.NotificationResponse | null = null;
+    try { if (Platform.OS !== "web") last = Notifications.getLastNotificationResponse(); } catch {}
     if (last && Date.now() - (last.notification.date ?? 0) < 60_000) onResponse(last);
     // Widget buttons, while hush is running.
     // ("listen" from the widget asks for a clip without opening hush; it arrives as a notification.)
@@ -96,24 +105,24 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   useEffect(() => {
     if (Platform.OS === "web") return;
     const items: QuickActions.Action[] = [];
-    if (role === "parent" && mon.m.pairedToken) items.push({ id: "listen", title: t("qa.listenLong", { name: baby }), icon: Platform.OS === "ios" ? "symbol:ear" : "qa_listen" });
+    if (role === "parent" && mon.target) items.push({ id: "listen", title: t("qa.listenLong", { name: baby }), icon: Platform.OS === "ios" ? "symbol:ear" : "qa_listen" });
     if (role === "nursery") items.push({ id: "monitor", title: mon.listening ? t("qa.monitorOff") : t("qa.monitorOn"), icon: Platform.OS === "ios" ? "symbol:mic" : "qa_monitor" });
-    if (f.sounds || (role === "parent" && mon.m.pairedToken)) items.push({ id: "noise", title: t("qa.noiseToggle"), icon: Platform.OS === "ios" ? "symbol:waveform" : "qa_noise" });
+    if (f.sounds || (role === "parent" && mon.target)) items.push({ id: "noise", title: t("qa.noiseToggle"), icon: Platform.OS === "ios" ? "symbol:waveform" : "qa_noise" });
     if (f.naps) items.push({ id: "sleepToggle", title: naps.state.asleep ? t("qa.woke", { name: baby }) : t("qa.asleep", { name: baby }), icon: Platform.OS === "ios" ? (naps.state.asleep ? "symbol:sun.max" : "symbol:moon") : "qa_sleep" });
     QuickActions.setItems(items).catch(() => {});
-  }, [role, mon.m.pairedToken, mon.listening, f.sounds, f.naps, naps.state.asleep, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role, mon.target, mon.listening, f.sounds, f.naps, naps.state.asleep, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- the home-screen widget (Android) ---------- */
   const [myToken, setMyToken] = useState<string | undefined>(undefined);
-  useEffect(() => { if (role) getMyToken().then(setMyToken).catch(() => {}); }, [role]);
-  const room = mon.m.room;
+  useEffect(() => { if (mon.members.length) getMyToken().then(setMyToken).catch(() => {}); }, [mon.members.length]);
+  const room = mon.room;
   useEffect(() => {
     if (Platform.OS !== "android") return;
     const st = naps.state;
     const asleep = st.asleep;
     let status: string, tone: Snap["tone"], line: string | null = null, title: string;
     if (role === "parent") {
-      title = t("remote.phoneOf", { name: babyLabel(mon.m.pairedWith ?? mon.m.babyName) });
+      title = t("remote.phoneOf", { name: mon.targetBaby ? babyLabel(mon.targetBaby) : mon.targetName });
       const fresh = room && Date.now() - (room.got ?? room.at) < 25 * 60_000;
       tone = !room ? "off" : !fresh && room.listening ? "warn" : room.listening ? "on" : "off";
       status = asleep ? t("qa.asleepSince", { time: fmtClock(st.since) }) : !room ? t("remote.noState") : room.listening ? t("remote.listening") : t("remote.notListening");
@@ -132,14 +141,12 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       asleep,
       monitorOn: mon.listening,
       showMonitor: role === "nursery",
-      showNoise: role === "parent" ? !!mon.m.pairedToken : f.sounds,
+      showNoise: role === "parent" ? !!mon.target : f.sounds,
       showSleep: f.naps,
-      showListen: role === "parent" && !!mon.m.pairedToken,
-      myToken, pairedToken: mon.m.pairedToken ?? undefined,
+      showListen: role === "parent" && !!mon.target,
+      myToken, pairedToken: mon.target ?? undefined,
       // So the widget can tell the other phones about sleep on its own.
-      peers: !f.monitor ? [] : role === "nursery"
-        ? mon.m.parents.map((p) => { const L = p.lang ?? getLang(); const name = babyLabelIn(L, mon.m.babyName); return { token: p.token, asleep: tIn(L, "push.asleep", { name, time: "{time}" }), awake: tIn(L, "push.awake", { name, dur: "{dur}" }) }; })
-        : role === "parent" && mon.m.pairedToken ? [{ token: mon.m.pairedToken, asleep: t("push.asleep", { name: baby, time: "{time}" }), awake: t("push.awake", { name: baby, dur: "{dur}" }) }] : [],
+      peers: !f.monitor ? [] : mon.members.map((p) => { const L = p.lang ?? getLang(); const name = babyLabelIn(L, mon.m.babyName); return { token: p.token, asleep: tIn(L, "push.asleep", { name, time: "{time}" }), awake: tIn(L, "push.awake", { name, dur: "{dur}" }) }; }),
       roomAsleep: asleep && !naps.fromSound && role === "parent",
       labels: {
         listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"),
@@ -152,7 +159,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       writeSnap(snap).then(() => requestWidgetUpdate({ widgetName: "Hush", renderWidget: () => <HushWidget snap={snap} /> })).catch(() => {});
     }, 300);
     return () => clearTimeout(id);
-  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.m.pairedToken, mon.m.pairedWith, mon.m.parents, mon.m.clip?.got, room?.got, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.target, mon.targetBaby, mon.members, mon.m.clip?.got, room?.got, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

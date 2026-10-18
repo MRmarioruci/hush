@@ -47,10 +47,10 @@ https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md
 ### App access
 **All functionality is available without any access restrictions.** Add this note:
 
-> No account or login. The baby monitor needs two Android phones: on phone A choose
-> Monitor → "Stays in the baby's room" and tap Start listening; on phone B choose
-> "Gets the alerts" and scan the code on phone A. Play a crying-baby sound near phone A
-> and phone B gets a notification. White noise and Nights work on a single phone.
+> No account or login. The baby monitor needs two Android phones: on phone A open
+> Monitor → Show code; on phone B open Monitor → Scan a code and scan it. Then tap
+> Start listening on either phone and play a crying-baby sound near it; the other phone
+> gets a notification. White noise and Nights work on a single phone.
 
 ### Ads
 **No, my app does not contain ads.**

@@ -6,31 +6,40 @@ import { PermissionsAndroid, Platform } from "react-native";
 import { cryDetector } from "../modules/hush-native/src";
 import { onBackgroundPush } from "./background";
 import { getLang, t, type Lang } from "./i18n";
+import type { Family } from "./family";
 
-export type Parent = { token: string; name: string; addedAt: number; lang?: Lang };
-/** What the parent sees about the baby's room, reported by the baby's phone. */
+export type { Member } from "./family";
+/** What the other phones see about a phone that's listening (a baby's room), as it reports it. */
 export type Room = {
   playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number; battery?: number; charging?: boolean;
-  /** When this phone received it (this phone's clock; the baby's phone's clock can differ). */
+  /** When this phone received it (this phone's clock; the other phone's clock can differ). */
   got?: number;
+  /** That phone's name and its baby's name. */
+  name?: string; baby?: string;
+  /** Last time it reported listening (this phone's clock). */
+  lastListen?: number;
 };
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";
 export type MonitorSettings = {
   babyName: string;
   sensitivity: Sensitivity;
-  parents: Parent[];
+  /** The phones that joined together (this one included), see family.ts. */
+  family: Family | null;
+  /** This phone's push address, once known (to tell it apart in the family list). */
+  me?: string;
+  /** What each listening phone last reported, by its push address. */
+  rooms?: Record<string, Room>;
+  /** This phone's name, as the other phones see it. */
   myName: string;
+  /** Before families: the parent phones paired with this baby's phone. */
+  parents?: { token: string; name: string; addedAt: number; lang?: Lang }[];
   /** Seconds of crying before the first alert. */
   alertAfter: number;
-  /** What this phone does in the monitor: stays with the baby, or gets the alerts. */
-  role: Role | null;
-  /** Parent phone only: name of the baby whose nursery phone paired with us. */
-  pairedWith: string | null;
-  /** Parent phone only: the baby's phone's push address, for remote control. */
+  /** Before families: what this phone did (nursery or parent), its paired baby's phone. */
+  role?: Role | null;
+  pairedWith?: string | null;
   pairedToken?: string | null;
-  /** Parent phone only: last reported state of the baby's room. */
-  room?: Room | null;
   /** Baby's phone: parents may ask for a few seconds of the room's sound. */
   allowListen?: boolean;
   /** Baby's phone: seconds of sound sent with each crying alert (0 = none; needs allowListen). */
@@ -47,7 +56,7 @@ export const THRESHOLDS: Record<Sensitivity, number> = { low: 0.45, medium: 0.25
 
 const KEY = "hush:monitor";
 const ALERTS_KEY = "hush:alerts";
-export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", parents: [], myName: "", role: null, pairedWith: null, alertAfter: 0 };
+export const MONITOR_DEFAULTS: MonitorSettings = { babyName: "", sensitivity: "medium", family: null, myName: "", alertAfter: 0 };
 
 export async function loadMonitor(): Promise<MonitorSettings> {
   try {
@@ -203,12 +212,6 @@ export async function loadAlerts(): Promise<AlertRecord[]> {
     return [];
   }
 }
-/** Name of the baby in a "paired" message, if this notification is one. */
-export function pairedBaby(n: Notifications.Notification): string | null {
-  const data = n.request.content.data as { type?: string; baby?: string } | undefined;
-  return data?.type === "paired" ? (data.baby ?? "") : null;
-}
-
 export async function recordAlert(n: Notifications.Notification) {
   const data = n.request.content.data as { type?: string } | undefined;
   if (!["cry", "battery", "stopped"].includes(data?.type ?? "")) return;
@@ -217,24 +220,6 @@ export async function recordAlert(n: Notifications.Notification) {
   const next = [{ id: n.request.identifier, body: n.request.content.body ?? t("nights.crying"), at: n.date }, ...list].slice(0, 30);
   await AsyncStorage.setItem(ALERTS_KEY, JSON.stringify(next)).catch(() => {});
   return next;
-}
-
-/* ---------- pairing ----------
-   The baby's phone shows a QR code with its own push address. The parent's phone scans it and
-   sends a "pair-request" push carrying the parent's address. The baby's phone saves that parent
-   and replies with "paired". */
-
-export type PairCode = { app: "hush"; v: 2; token: string; baby: string };
-
-export const makePairCode = (token: string, baby: string) =>
-  JSON.stringify({ app: "hush", v: 2, token, baby } satisfies PairCode);
-
-export function readPairCode(raw: string): PairCode | null {
-  try {
-    const c = JSON.parse(raw);
-    if (c?.app === "hush" && c.v === 2 && typeof c.token === "string" && c.token.startsWith("ExponentPushToken[")) return c;
-  } catch {}
-  return null;
 }
 
 /** A silent message between hush phones (no notification is shown). */
@@ -287,12 +272,6 @@ export async function sendPush(to: string[], body: string, data: Record<string, 
   } catch {
     return false;
   }
-}
-
-export type PairRequest = { token: string; name: string; lang?: Lang };
-export function pairRequest(n: Notifications.Notification): PairRequest | null {
-  const d = n.request.content.data as { type?: string; token?: string; name?: string; lang?: Lang } | undefined;
-  return d?.type === "pair-request" && typeof d.token === "string" ? { token: d.token, name: d.name || "", lang: d.lang } : null;
 }
 
 /* ---------- permissions on the baby phone ---------- */

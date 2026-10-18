@@ -291,19 +291,22 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const listenSince = useRef(0);
   useEffect(() => { listenSince.current = mon.listening ? Date.now() : 0; }, [mon.listening]);
 
-  /* ---------- remote control from a paired parent's phone ---------- */
-  const remote = useRef({ toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents });
-  remote.current = { toggle, set, soundId, listening: mon.listening, role: mon.m.role, parents: mon.m.parents };
-  const roomFor = useCallback(() => ({ type: "room", playing: player.playing, sound: remote.current.soundId, listening: remote.current.listening, listenSince: listenSince.current, at: Date.now() }), [player]);
+  /* ---------- remote control from another phone in the family ---------- */
+  const remote = useRef({ toggle, set, soundId, listening: mon.listening, members: mon.members, me: mon.me, name: mon.m.myName, baby: mon.m.babyName });
+  remote.current = { toggle, set, soundId, listening: mon.listening, members: mon.members, me: mon.me, name: mon.m.myName, baby: mon.m.babyName };
+  const roomFor = useCallback(() => {
+    const r = remote.current;
+    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening: r.listening, listenSince: listenSince.current, at: Date.now() };
+  }, [player]);
   useEffect(() => {
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; cmd?: string; sound?: string; from?: string } | undefined;
       const r = remote.current;
-      if (d?.type !== "cmd" || !d.from || r.role !== "nursery" || !r.parents.some((p) => p.token === d.from)) return;
+      if (d?.type !== "cmd" || !d.from || !r.members.some((p) => p.token === d.from)) return;
       if (!["play", "stop", "sound", "status"].includes(d.cmd ?? "")) return; // "woke" and "clip" are handled elsewhere
       if (d.cmd === "play" && !player.playing) r.toggle();
-      else if (d.cmd === "stop" && endPending("remote", r.parents.find((p) => p.token === d.from)?.name)) { /* was already quiet */ }
-      else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.parents.find((p) => p.token === d.from)?.name }; player.pause(); }
+      else if (d.cmd === "stop" && endPending("remote", r.members.find((p) => p.token === d.from)?.name)) { /* was already quiet */ }
+      else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.members.find((p) => p.token === d.from)?.name }; player.pause(); }
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });
       // Answer after the change has taken effect.
       setTimeout(() => sendData([d.from!], roomFor()), 900);
@@ -311,10 +314,14 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     });
     return () => sub.remove();
   }, [player, roomFor]);
-  // Tell the parents when the room changes here (someone pressed play, a timer ended…).
+  // Tell the other phones when this room changes (someone pressed play, a timer ended, listening
+  // started or stopped). Only while listening, or the moment it stops.
+  const wasListening = useRef(mon.listening);
   useEffect(() => {
-    if (mon.m.role !== "nursery" || !mon.m.parents.length) return;
-    const id = setTimeout(() => sendData(mon.m.parents.map((p) => p.token), roomFor()), 1500);
+    const changed = wasListening.current !== mon.listening;
+    wasListening.current = mon.listening;
+    if ((!mon.listening && !changed) || !mon.members.length) return;
+    const id = setTimeout(() => sendData(remote.current.members.map((p) => p.token), roomFor()), 1500);
     return () => clearTimeout(id);
   }, [playing, soundId, mon.listening]); // eslint-disable-line react-hooks/exhaustive-deps
 
