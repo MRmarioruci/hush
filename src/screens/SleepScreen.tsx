@@ -114,7 +114,7 @@ export function SleepScreen() {
 }
 
 const styles = StyleSheet.create({
-  place: { alignItems: "center", gap: 2, backgroundColor: colors.card2, borderRadius: 20, paddingVertical: 16 },
+  place: { alignItems: "center", gap: 2, paddingVertical: 6 },
   placeLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.muted },
   placeNum: { fontFamily: fonts.display, fontSize: 44, color: colors.cream, fontVariant: ["tabular-nums"] },
   warn: { backgroundColor: "rgba(242,165,151,0.14)", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   nowName: { fontFamily: fonts.display, fontSize: 19, color: colors.cream },
   nowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { flexBasis: "30%", flexGrow: 1, backgroundColor: colors.card2, borderRadius: 18, paddingTop: 14, paddingBottom: 11, alignItems: "center", gap: 6 },
+  tile: { flexBasis: "30%", flexGrow: 1, borderRadius: 18, paddingTop: 12, paddingBottom: 10, alignItems: "center", gap: 6 },
   tileOn: { backgroundColor: colors.peach },
   tileText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
   chips: { flexDirection: "row", gap: 6 },

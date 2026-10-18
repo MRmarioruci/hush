@@ -578,6 +578,7 @@ export const el: Record<Key, string> = {
   "rooms.title": "Δωμάτιο μωρού",
   "rooms.none": "Κανένα κινητό δεν ακούει τώρα. Ξεκίνα την ακρόαση στο κινητό δίπλα στην κούνια.",
   "home.noRoom": "Κανένα κινητό δεν ακούει τώρα",
+  "here.startShort": "Έναρξη",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

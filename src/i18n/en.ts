@@ -578,6 +578,7 @@ export const en = {
   "rooms.title": "Baby's room",
   "rooms.none": "No phone is listening right now. Start listening on the phone by the crib.",
   "home.noRoom": "No phone is listening right now",
+  "here.startShort": "Start",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

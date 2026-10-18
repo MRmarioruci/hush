@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Alert, Animated, AppState, Easing, Modal, Pressable, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
+import { Alert, Animated, AppState, Easing, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
@@ -226,18 +226,17 @@ function ThisPhone() {
   const toggle = async () => setMsg(await toggleListening());
 
   if (!listening) return (
-    <Card style={{ gap: 14 }}>
+    <Card style={{ gap: 10 }}>
       <View style={styles.hero}>
-        <View style={styles.heroIcon}><Icon d={ICONS.crib} size={28} color={colors.muted} width={2} /></View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={styles.listenTitle}>{t("here.title")}</Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.rowTitle}>{t("here.title")}</Text>
           <Text style={styles.roleSub}>{stopLine(lastStop, t, fmtTime) ?? t("here.sub")}</Text>
         </View>
+        <Pressable onPress={toggle} style={({ pressed }) => [styles.startBtn, pressed && { transform: [{ scale: 0.96 }] }]} accessibilityRole="button">
+          <Icon d={ICONS.mic} size={18} color={colors.bg} width={2} />
+          <Text style={styles.startText}>{t("here.startShort")}</Text>
+        </Pressable>
       </View>
-      <Pressable onPress={toggle} style={({ pressed }) => [styles.startBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
-        <Icon d={ICONS.mic} size={20} color={colors.bg} width={2} />
-        <Text style={styles.primaryText}>{t("here.start")}</Text>
-      </Pressable>
       <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </Card>
@@ -248,20 +247,13 @@ function ThisPhone() {
       <View style={styles.orbWrap}>
         <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={toggle} baby={baby} />
         <Text style={styles.orbMeta}>{lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")}</Text>
-        <View style={[styles.facts, { justifyContent: "center" }]}>
-          <View style={styles.fact}>
-            <Icon d={ICONS.bell} size={15} color={colors.peach} width={2} />
-            <Text style={styles.factText} numberOfLines={1}>{t("nursery.alertsTo", { names: members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ") })}</Text>
-          </View>
-          <View style={styles.fact}>
-            <Icon d={NOISE} size={15} color={sleep.playing ? colors.peach : colors.muted} width={2} />
-            <Text style={styles.factText}>{sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff")}</Text>
-          </View>
-          <View style={styles.fact}>
-            <Icon d={EAR} size={15} color={m.allowListen ? colors.sage : colors.muted} width={2} />
-            <Text style={styles.factText}>{m.allowListen ? t("listen.chipOn") : t("listen.chipOff")}</Text>
-          </View>
-        </View>
+        <Text style={styles.meta}>
+          {[
+            t("nursery.alertsTo", { names: members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ") }),
+            sleep.playing ? t(`sound.${sleep.soundId}`) : null,
+            m.allowListen ? t("listen.chipOn") : null,
+          ].filter(Boolean).join("  ·  ")}
+        </Text>
       </View>
 
       <TrialNote />
@@ -527,13 +519,16 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
   const recentCry = lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
   const on = !!room?.listening && !stale;
   const tone = recentCry ? colors.rose : stale ? colors.peach : on ? colors.sage : colors.muted;
+  const lowBattery = room?.battery != null && room.battery <= 20 && !room.charging;
+  const meta = room ? [
+    room.battery != null ? `${room.battery}%${room.charging ? ` · ${t("remote.charging")}` : ""}` : null,
+    t("remote.checked", { when: ago(heard) }),
+  ].filter(Boolean).join("  ·  ") : null;
   return (
-    <Card style={{ gap: 14 }}>
+    <View style={{ gap: 6 }}>
       <View style={styles.hero}>
-        <View style={[styles.heroIcon, (on || recentCry || stale) && { backgroundColor: tone }]}>
-          <Icon d={ICONS.crib} size={28} color={on || recentCry || stale ? colors.bg : colors.muted} width={2} />
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={[styles.heroDot, { backgroundColor: tone }]} />
+        <View style={{ flex: 1, gap: 1 }}>
           <Text style={styles.heroTitle} numberOfLines={1}>{targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("fam.unnamed", { n: 2 })}</Text>
           <Text style={[styles.heroStatus, { color: tone }]} numberOfLines={2}>
             {recentCry ? lastAlert!.body
@@ -542,28 +537,12 @@ function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }
               : on ? t("remote.listening") : t("remote.notListening")}
           </Text>
         </View>
-        <Pressable onPress={() => r.send("status")} hitSlop={10} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
-          {checking ? <ActivityIndicator color={colors.cream} size="small" /> : <Icon d={REFRESH} size={18} color={colors.cream} width={2} />}
+        <Pressable onPress={() => r.send("status")} hitSlop={12} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
+          {checking ? <ActivityIndicator color={colors.muted} size="small" /> : <Icon d={REFRESH} size={18} color={colors.muted} width={2} />}
         </Pressable>
       </View>
-      {room && (
-        <View style={styles.facts}>
-          <View style={styles.fact}>
-            <Icon d={NOISE} size={16} color={room.playing ? colors.peach : colors.muted} width={2} />
-            <Text style={styles.factText} numberOfLines={1}>{room.playing ? t(`sound.${room.sound}`) : t("remote.noiseOff")}</Text>
-          </View>
-          {room.battery != null && (
-            <View style={styles.fact}>
-              <Icon d={BATTERY} size={16} color={room.battery <= 20 && !room.charging ? colors.rose : colors.muted} width={2} />
-              <Text style={styles.factText}>{room.battery}%{room.charging ? ` · ${t("remote.charging")}` : ""}</Text>
-            </View>
-          )}
-          <View style={styles.fact}>
-            <Text style={[styles.factText, { color: colors.muted }]}>{t("remote.checked", { when: ago(heard) })}</Text>
-          </View>
-        </View>
-      )}
-    </Card>
+      {meta && <Text style={[styles.meta, lowBattery && { color: colors.rose }]}>{meta}</Text>}
+    </View>
   );
 }
 
@@ -572,32 +551,35 @@ function NoiseCard({ r }: { r: Remote }) {
   const room = r.room;
   const playing = !!room?.playing;
   const busy = !!r.cmdOpen;
+  const strip = useRef<ScrollView>(null);
   return (
-    <Card style={{ gap: 14 }}>
-      <Label>{t("remote.noise")}</Label>
+    <View style={{ gap: 12 }}>
       <View style={styles.roomRow}>
         <Pressable onPress={() => r.send(playing ? "stop" : "play")} disabled={busy} style={[styles.roomBtn, playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={playing ? t("remote.stop") : t("remote.play")}>
           {busy ? <ActivityIndicator color={playing ? colors.bg : colors.cream} /> : (
-            <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={26} color={playing ? colors.bg : colors.cream} width={2} />
+            <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={22} color={playing ? colors.bg : colors.cream} width={2} />
           )}
         </Pressable>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.roleTitle}>{busy ? t("remote.waiting") : playing ? t("remote.playing", { sound: t(`sound.${room!.sound}`) }) : t("remote.off")}</Text>
+        <View style={{ flex: 1, gap: 1 }}>
+          <Text style={styles.rowTitle}>{busy ? t("remote.waiting") : playing ? t("remote.playing", { sound: t(`sound.${room!.sound}`) }) : t("remote.noise")}</Text>
           <Text style={styles.roleSub}>{busy ? " " : playing ? t("remote.tapStop") : t("remote.tapPlay")}</Text>
         </View>
       </View>
-      <View style={styles.soundGrid}>
+      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}
+        onLayout={() => strip.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 2) * 62, animated: false })}>
         {SOUNDS.map((x) => {
           const on = room?.sound === x.id;
           return (
-            <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={({ pressed }) => [styles.soundTile, on && { backgroundColor: colors.peach }, pressed && { transform: [{ scale: 0.95 }] }]} accessibilityRole="button" accessibilityState={{ selected: on }}>
-              <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
-              <Text style={[styles.soundTileText, on && { color: colors.bg }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
+            <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={styles.stripItem} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
+              <View style={[styles.stripIcon, on && { backgroundColor: colors.peach }]}>
+                <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+              </View>
+              <Text style={[styles.stripText, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
             </Pressable>
           );
         })}
-      </View>
-    </Card>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -648,14 +630,19 @@ function OtherRooms({ alerts, onlyListening }: { alerts: AlertRecord[]; onlyList
           })}
         </View>
       )}
-      <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
-      <ListenCard />
-      <NoiseCard r={remote} />
+      <Card style={{ gap: 18 }}>
+        <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
+        <View style={styles.rule} />
+        <ListenCard bare />
+        <View style={styles.rule} />
+        <NoiseCard r={remote} />
+      </Card>
     </>
   );
 }
 
 function AlertsCard({ alerts }: { alerts: AlertRecord[] }) {
+  if (!alerts.length) return null;
   return (
     <Card style={{ gap: 4 }}>
       <Label>{t("parent.alerts")}</Label>
@@ -688,22 +675,32 @@ const styles = StyleSheet.create({
   factText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, fontVariant: ["tabular-nums"] },
   another: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end", marginTop: -4, marginBottom: -4, paddingHorizontal: 4 },
   heroIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
-  heroTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream },
+  heroTitle: { fontFamily: fonts.display, fontSize: 21, color: colors.cream },
   heroStatus: { fontFamily: fonts.bodyBold, fontSize: 14.5 },
   heroMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, fontVariant: ["tabular-nums"] },
-  refresh: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  refresh: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   soundGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   soundTile: { flexBasis: "22%", flexGrow: 1, alignItems: "center", gap: 5, backgroundColor: colors.card2, borderRadius: 16, paddingVertical: 11 },
   soundTileText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
   listenTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream },
   roomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  roomBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  roomBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   soundChip: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9 },
   soundChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
   secondary: { backgroundColor: colors.card2, borderRadius: 99, paddingVertical: 13, alignItems: "center" },
   secondaryText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
-  startBtn: { flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.sage, borderRadius: 99, minHeight: 52 },
-  youTag: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.muted, backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" },
+  startBtn: { flexDirection: "row", gap: 7, alignItems: "center", backgroundColor: colors.sage, borderRadius: 99, paddingHorizontal: 16, minHeight: 44 },
+  startText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.bg },
+  rowTitle: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
+  meta: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: "rgba(245,238,227,0.12)" },
+  heroDot: { width: 12, height: 12, borderRadius: 6 },
+  strip: { marginHorizontal: -18, flexGrow: 0 },
+  stripRow: { flexDirection: "row", gap: 4, paddingHorizontal: 12 },
+  stripItem: { alignItems: "center", gap: 5, width: 58 },
+  stripIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(245,238,227,0.06)" },
+  stripText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
+  youTag: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   famLinks: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, paddingHorizontal: 2 },
   roomPicker: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 99, padding: 4, gap: 4 },
   roomChip: { flex: 1, alignItems: "center", paddingVertical: 10, paddingHorizontal: 8, borderRadius: 99 },

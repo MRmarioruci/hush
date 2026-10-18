@@ -578,6 +578,7 @@ export const es: Record<Key, string> = {
   "rooms.title": "Cuarto del bebé",
   "rooms.none": "Ningún teléfono está escuchando ahora. Empieza a escuchar en el teléfono junto a la cuna.",
   "home.noRoom": "Ningún teléfono está escuchando ahora",
+  "here.startShort": "Empezar",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

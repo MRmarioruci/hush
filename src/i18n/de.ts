@@ -578,6 +578,7 @@ export const de: Record<Key, string> = {
   "rooms.title": "Babyzimmer",
   "rooms.none": "Gerade hört kein Handy zu. Starte das Zuhören auf dem Handy neben dem Bett.",
   "home.noRoom": "Gerade hört kein Handy zu",
+  "here.startShort": "Starten",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

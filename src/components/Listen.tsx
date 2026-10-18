@@ -92,7 +92,7 @@ function fmtWhen(ms: number) {
 }
 
 /** Monitor tab: choose 5/10/15 s, listen, and the latest clip with a player. */
-export function ListenCard() {
+export function ListenCard({ bare }: { bare?: boolean } = {}) {
   const t = useT();
   const c = useClip(true);
   const [len, setLen] = useState(c.m.clipSeconds ?? CLIP_SECONDS);
@@ -101,15 +101,18 @@ export function ListenCard() {
   const error = c.fresh && c.clip?.error ? c.clip.error : null;
   const playFrac = c.status.duration > 0 ? Math.min(1, c.status.currentTime / c.status.duration) : 0;
 
+  const Wrap = bare ? View : Card;
   return (
-    <Card style={{ gap: 14 }}>
-      <Label>{t("listen.title")}</Label>
-      <View style={styles.lengths}>
-        {LENGTHS.map((s) => (
-          <Pressable key={s} onPress={() => setLen(s)} disabled={c.waiting} style={[styles.len, len === s && styles.lenOn]} accessibilityRole="radio" accessibilityState={{ checked: len === s }}>
-            <Text style={[styles.lenText, len === s && { color: colors.bg }]}>{t("listen.secs", { s })}</Text>
-          </Pressable>
-        ))}
+    <Wrap style={{ gap: 12 }}>
+      <View style={styles.listenHead}>
+        <Text style={styles.headText}>{t("listen.title")}</Text>
+        <View style={styles.lengths}>
+          {LENGTHS.map((s) => (
+            <Pressable key={s} onPress={() => setLen(s)} disabled={c.waiting} hitSlop={6} style={[styles.len, len === s && styles.lenOn]} accessibilityRole="radio" accessibilityState={{ checked: len === s }}>
+              <Text style={[styles.lenText, len === s && { color: colors.bg }]}>{t("listen.secs", { s })}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
       <Pressable
         onPress={() => c.ask(len)}
@@ -140,10 +143,8 @@ export function ListenCard() {
             <View style={styles.track}><View style={[styles.trackFill, { width: `${playFrac * 100}%` }]} /></View>
           </View>
         </View>
-      ) : (
-        !c.waiting && <Text style={styles.hint}>{t("listen.hint")}</Text>
-      )}
-    </Card>
+      ) : null}
+    </Wrap>
   );
 }
 
@@ -174,19 +175,21 @@ export function ListenButton() {
 }
 
 const styles = StyleSheet.create({
-  lengths: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 4 },
-  len: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 99 },
+  listenHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headText: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
+  lengths: { flexDirection: "row", gap: 2 },
+  len: { alignItems: "center", paddingVertical: 5, paddingHorizontal: 11, borderRadius: 99 },
   lenOn: { backgroundColor: colors.cream },
   lenText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
-  big: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 56, borderRadius: 99, backgroundColor: colors.sage, overflow: "hidden" },
+  big: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 50, borderRadius: 99, backgroundColor: colors.sage, overflow: "hidden" },
   bigBusy: { backgroundColor: "rgba(169,214,189,0.45)" },
   bigFill: { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: colors.sage },
   bigText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.bg, fontVariant: ["tabular-nums"] },
   err: { fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.rose },
   detail: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
   hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted },
-  clip: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card2, borderRadius: 18, padding: 12 },
-  clipBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
+  clip: { flexDirection: "row", alignItems: "center", gap: 12 },
+  clipBtn: { width: 40, height: 40, borderRadius: 22, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
   clipHead: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   clipTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
   clipMeta: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted, fontVariant: ["tabular-nums"] },
