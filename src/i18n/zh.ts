@@ -728,6 +728,7 @@ export const zh: Record<Key, string> = {
   "pair.whichPhone": "今晚哪部手机放在婴儿床边？",
   "pair.tabType": "输入代码",
   "pair.tabScan": "扫描二维码",
+  "pair.slow": "耗时较长。请检查网络连接，并确认已允许 hush 发送通知。",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

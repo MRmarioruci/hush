@@ -728,6 +728,7 @@ export const pt: Record<Key, string> = {
   "pair.whichPhone": "Qual celular fica perto do berço esta noite?",
   "pair.tabType": "Digitar o código",
   "pair.tabScan": "Escanear o QR",
+  "pair.slow": "Está demorando. Verifique a internet e se as notificações do hush estão permitidas.",
   "settings.title": "Ajustes",
   "settings.babyName": "Nome do bebê",
   "settings.prefs": "Preferências",

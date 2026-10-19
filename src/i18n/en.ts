@@ -728,6 +728,7 @@ export const en = {
   "pair.whichPhone": "Which phone stays by the crib tonight?",
   "pair.tabType": "Type the code",
   "pair.tabScan": "Scan the QR",
+  "pair.slow": "This is taking a while. Check this phone's internet and that notifications are allowed for hush.",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

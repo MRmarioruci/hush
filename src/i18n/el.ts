@@ -728,6 +728,7 @@ export const el: Record<Key, string> = {
   "pair.whichPhone": "Ποιο κινητό μένει δίπλα στην κούνια απόψε;",
   "pair.tabType": "Γράψε τον κωδικό",
   "pair.tabScan": "Σκάναρε το QR",
+  "pair.slow": "Αργεί λίγο. Έλεγξε το ίντερνετ και ότι οι ειδοποιήσεις του hush επιτρέπονται.",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

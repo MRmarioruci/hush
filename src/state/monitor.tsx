@@ -75,8 +75,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // startup, say) used to write the defaults over the real settings and lose the pairing.
   const loaded = useRef(false);
   const pending = useRef<Partial<MonitorSettings>>({});
+  // Made once: useRef's argument runs on every render, and a new promise there replaced the resolver,
+  // so the first promise never resolved and anything waiting on it (the push address) hung.
   const readyResolve = useRef<() => void>(() => {});
-  const ready = useRef(new Promise<void>((res) => { readyResolve.current = res; }));
+  const ready = useRef<Promise<void> | null>(null);
+  if (!ready.current) ready.current = new Promise<void>((res) => { readyResolve.current = res; });
   useEffect(() => {
     loadMonitor().then((raw) => {
       let v = { ...migrate(raw), ...pending.current };
@@ -261,7 +264,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   /** This phone's push address (asks for notifications the first time). */
   const myToken = useCallback(async () => {
-    await ready.current;
+    await ready.current!;
     let tok: string;
     try { tok = await getMyToken(); } catch (e) {
       // Google's push service unreachable for a moment: the address we already have still works.
@@ -496,7 +499,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const check = () => drop(cryDetector?.takeDeadTokens() ?? []);
     const id = setInterval(check, 60_000);
     const app = AppState.addEventListener("change", (st) => st === "active" && check());
-    ready.current.then(check);
+    ready.current!.then(check);
     return () => { off(); clearInterval(id); app.remove(); };
   }, [removeMember]);
 

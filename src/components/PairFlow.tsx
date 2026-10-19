@@ -124,7 +124,9 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const make = useCallback(async () => {
     setErr(null);
     try {
-      const i = await invite();
+      const slow = setTimeout(() => setErr((e) => e ?? t("pair.slow")), 20_000);
+      const i = await invite().finally(() => clearTimeout(slow));
+      setErr(null);
       setInv(i);
       const r = await publishCode(i, m.myName.trim(), m.babyName.trim());
       if (r === "offline") setErr(t("pair.offline"));

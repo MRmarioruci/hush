@@ -32,6 +32,13 @@ const urls = (code: string) => {
   };
 };
 
+/** fetch that gives up after a while instead of hanging. */
+async function fetchT(url: string, init: RequestInit = {}, ms = 12_000) {
+  const c = new AbortController();
+  const id = setTimeout(() => c.abort(), ms);
+  try { return await fetch(url, { ...init, signal: c.signal }); } finally { clearTimeout(id); }
+}
+
 export const newCode = () => String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
 
 /** Leave the note for a fresh code. Tries a few codes (a name can only be written once). */
@@ -43,7 +50,7 @@ export async function publishCode(invite: string, name: string, baby: string): P
     const exp = Date.now() + CODE_MINUTES * 60_000;
     const note: CodeNote = { v: 1, invite, name, baby, exp };
     try {
-      const res = await fetch(u.put, { method: "POST", headers: { "Content-Type": "audio/wav" }, body: JSON.stringify(note) });
+      const res = await fetchT(u.put, { method: "POST", headers: { "Content-Type": "audio/wav" }, body: JSON.stringify(note) });
       if (res.ok) return { code, exp };
       if (res.status !== 403 && res.status !== 409) return "setup";
     } catch {
@@ -58,7 +65,7 @@ export async function readCode(code: string): Promise<CodeNote | "missing" | "ex
   const u = urls(code);
   if (!u) return "missing";
   try {
-    const res = await fetch(u.get);
+    const res = await fetchT(u.get);
     if (res.status === 404 || res.status === 403) return "missing";
     if (!res.ok) return "offline";
     const note = JSON.parse(await res.text()) as CodeNote;
