@@ -55,6 +55,18 @@ object AlertSender {
     }.start()
   }
 
+  /** Which notification a message replaces: one per baby's room, its clips, its sleep notes, and tests. */
+  fun topicOf(data: Map<String, Any>): String? {
+    val from = (data["from"] as? String).orEmpty().takeLast(12).ifEmpty { "room" }
+    return when (data["type"]) {
+      "cry", "stopped", "battery" -> "hush-room-$from"
+      "clip" -> "hush-clip-$from"
+      "sleep" -> "hush-sleep-$from"
+      "test" -> "hush-test"
+      else -> null
+    }
+  }
+
   fun send(tokens: List<String>, body: String, data: Map<String, Any>, onDone: ((Boolean, String) -> Unit)? = null) =
     sendEach(tokens.map { it to body }, data, onDone)
 
@@ -79,6 +91,8 @@ object AlertSender {
             // A "Listen" button on crying alerts (registered by the parent's app).
             if (data["type"] == "cry") put("categoryId", "hush-cry")
             put("data", JSONObject(data).put("_id", System.nanoTime().toString(36)))
+            // One notification per topic, replaced instead of stacking: "tag" on Android, "collapseId" on iPhones.
+            topicOf(data)?.let { put("tag", it); put("collapseId", it) }
           })
         }
         val conn = (URL(URL_PUSH).openConnection() as HttpURLConnection).apply {

@@ -14,6 +14,19 @@ enum AlertSender {
     }.resume()
   }
 
+  /// Which notification a message replaces: one per baby's room, its clips, its sleep notes, and tests.
+  static func topicOf(_ data: [String: Any]) -> String? {
+    let raw = (data["from"] as? String) ?? ""
+    let from = raw.isEmpty ? "room" : String(raw.suffix(12))
+    switch data["type"] as? String ?? "" {
+    case "cry", "stopped", "battery": return "hush-room-\(from)"
+    case "clip": return "hush-clip-\(from)"
+    case "sleep": return "hush-sleep-\(from)"
+    case "test": return "hush-test"
+    default: return nil
+    }
+  }
+
   private static let pushURL = URL(string: "https://exp.host/--/api/v2/push/send")!
 
   static func send(_ tokens: [String], _ body: String, _ data: [String: Any], wait: Bool = false, done: ((Bool, String) -> Void)? = nil) {
@@ -38,6 +51,8 @@ enum AlertSender {
         "data": data,
       ]
       if (data["type"] as? String) == "cry" { m["categoryId"] = "hush-cry" } // "Listen" button
+      // One notification per topic, replaced instead of stacking: "tag" on Android, "collapseId" on iPhones.
+      if let topic = topicOf(data) { m["tag"] = topic; m["collapseId"] = topic }
       return m
     }
     var req = URLRequest(url: pushURL, timeoutInterval: 10)

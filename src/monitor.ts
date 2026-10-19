@@ -272,13 +272,26 @@ export async function sendDataMany(messages: { to: string; data: Record<string, 
 export const myLang = () => getLang();
 
 /** Send a push through Expo's push service. Returns true when Expo accepted it. */
+/** Which notification a message replaces, so they update in place: one per baby's room, its clips, its sleep notes, and tests.
+ *  Sent as "tag" (Android) and "collapseId" (iPhones). Same rule as the Android side. */
+export function topicOf(data: Record<string, unknown>): string | null {
+  const from = String(data.from ?? "").slice(-12) || "room";
+  switch (data.type) {
+    case "cry": case "stopped": case "battery": return `hush-room-${from}`;
+    case "clip": return `hush-clip-${from}`;
+    case "sleep": return `hush-sleep-${from}`;
+    case "test": return "hush-test";
+    default: return null;
+  }
+}
+
 export async function sendPush(to: string[], body: string, data: Record<string, unknown>, title = "hush", channelId = INFO_CHANNEL, categoryId?: string): Promise<boolean> {
   if (!to.length) return false;
   try {
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active", ...(categoryId ? { categoryId } : {}) }))),
+      body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active", ...(categoryId ? { categoryId } : {}), ...(() => { const k = topicOf(data); return k ? { tag: k, collapseId: k } : {}; })() }))),
     });
     const json = await res.json().catch(() => null);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");

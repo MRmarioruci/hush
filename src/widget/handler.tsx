@@ -29,13 +29,13 @@ async function standalone(action: string, s: Snap): Promise<Snap> {
       const open = await openSleep();
       if (action === "asleep" && !open) {
         await startSleep(now);
-        if (s.peers?.length && s.myToken) await post(s.peers.map((p) => ({ to: p.token, title: "hush", body: p.asleep.replace("{time}", clock(now)), priority: "high", channelId: "cry-alerts", categoryId: "hush-sleep", data: { type: "sleep", asleep: true, since: now, from: s.myToken, _id: `w${now}${p.token.slice(-4)}` } })));
+        if (s.peers?.length && s.myToken) await post(s.peers.map((p) => ({ to: p.token, title: "hush", body: p.asleep.replace("{time}", clock(now)), priority: "high", channelId: "cry-alerts", categoryId: "hush-sleep", tag: `hush-sleep-${s.myToken!.slice(-12)}`, collapseId: `hush-sleep-${s.myToken!.slice(-12)}`, data: { type: "sleep", asleep: true, since: now, from: s.myToken, _id: `w${now}${p.token.slice(-4)}` } })));
         return { ...s, asleep: true, status: s.labels.asleep };
       }
       if (action === "woke") {
         if (open) {
           await endSleep(now);
-          if (s.peers?.length && s.myToken) await post(s.peers.map((p) => ({ to: p.token, title: "hush", body: p.awake.replace("{dur}", dur((now - open.from) / 60000)), priority: "high", channelId: "cry-alerts", data: { type: "sleep", asleep: false, since: now, from: s.myToken, _id: `w${now}${p.token.slice(-4)}` } })));
+          if (s.peers?.length && s.myToken) await post(s.peers.map((p) => ({ to: p.token, title: "hush", body: p.awake.replace("{dur}", dur((now - open.from) / 60000)), priority: "high", channelId: "cry-alerts", tag: `hush-sleep-${s.myToken!.slice(-12)}`, collapseId: `hush-sleep-${s.myToken!.slice(-12)}`, data: { type: "sleep", asleep: false, since: now, from: s.myToken, _id: `w${now}${p.token.slice(-4)}` } })));
         } else if (s.roomAsleep) {
           await cmd(s, { cmd: "woke" }); // the baby's phone ends its sleep
         }
