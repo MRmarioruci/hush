@@ -2,7 +2,7 @@
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, AppState, Platform } from "react-native";
-import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
+import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
@@ -69,17 +69,36 @@ export const useMonitor = () => useContext(Ctx)!;
 export function MonitorProvider({ children }: { children: ReactNode }) {
   const [m, setM] = useState<MonitorSettings>(MONITOR_DEFAULTS);
   const unlock = useUnlock();
+  // Nothing is saved until the stored settings have loaded: an early save (a notification handled at
+  // startup, say) used to write the defaults over the real settings and lose the pairing.
+  const loaded = useRef(false);
+  const pending = useRef<Partial<MonitorSettings>>({});
+  const readyResolve = useRef<() => void>(() => {});
+  const ready = useRef(new Promise<void>((res) => { readyResolve.current = res; }));
   useEffect(() => {
     loadMonitor().then((raw) => {
-      const v = migrate(raw);
+      let v = { ...migrate(raw), ...pending.current };
       // No name yet: start with the phone's own name (e.g. "Redmi Note 14"); it can be changed in the phones list.
       // Old placeholder names ("Parent 1", "Phone 2", in any language) count as no name.
       const placeholder = !v.myName?.trim() || /^[^\s\d]+\s*\d{1,2}$/u.test(v.myName.trim());
       const dn = placeholder ? cryDetector?.deviceName?.() : null;
-      if (dn) { const next = { ...v, myName: dn }; saveMonitor(next); setM(next); } else setM(v);
+      if (dn) v = { ...v, myName: dn };
+      if (dn || Object.keys(pending.current).length) saveMonitor(v);
+      pending.current = {};
+      loaded.current = true;
+      mRef.current = v; // before anything waiting on `ready` reads it
+      setM(v);
+      readyResolve.current();
     });
   }, []);
   const update = useCallback((patch: Partial<MonitorSettings>) => {
+    if (!loaded.current) {
+      // Before loading, anything about the family or rooms was worked out from empty defaults: drop it.
+      const { family: _f, rooms: _r, ...safe } = patch;
+      pending.current = { ...pending.current, ...safe };
+      setM((prev) => ({ ...prev, ...safe }));
+      return;
+    }
     setM((prev) => {
       const next = { ...prev, ...patch };
       saveMonitor(next);
@@ -240,6 +259,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   /** This phone's push address (asks for notifications the first time). */
   const myToken = useCallback(async () => {
+    await ready.current;
     let tok: string;
     try { tok = await getMyToken(); } catch (e) {
       // Google's push service unreachable for a moment: the address we already have still works.
@@ -303,6 +323,29 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [joining, setJoining] = useState<string | null>(null);
   const joinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // A phone that lost its pairing asks the phones that still talk to it; they send the family back
+  // if it's still listed there (see "take the family back" below).
+  const asked = useRef<Record<string, number>>({});
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string } | undefined;
+      const from = d?.from;
+      if (!from || !d?.type) return;
+      const cur = mRef.current;
+      const f = cur.family;
+      if (d.type === "family-ask") {
+        if (f && f.entries[from] && !f.entries[from].gone) broadcast(f, [from]);
+        return;
+      }
+      if (!loaded.current || !["cmd", "room", "clip", "sleep", "days", "sync-request"].includes(d.type)) return;
+      if (f && membersOf(f, cur.me ?? "").some((p) => p.token === from)) return; // we know them
+      if (Date.now() - (asked.current[from] ?? 0) < 60_000) return;
+      asked.current[from] = Date.now();
+      getMyToken().then((me) => { if (me !== from) sendData([from], { type: "family-ask", from: me }); }).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [broadcast]);
+
   // Family news from another phone.
   useEffect(() => {
     const sub = addPushListener((n) => {
@@ -311,7 +354,22 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const cur = mRef.current;
       const f = cur.family;
       const meTok = cur.me ?? "";
-      if (!f || !meTok || msg.from === meTok) return;
+      // This phone lost its pairing but the family still lists it: take the family back.
+      if (!f || !membersOf(f, meTok).length) {
+        getMyToken().then((tok) => {
+          const mine = msg.entries[tok];
+          if (!mine || mine.gone || msg.from === tok) return;
+          const entries = { ...msg.entries, [tok]: { ...mine, name: mRef.current.myName.trim() || mine.name, lang: getLang(), at: Date.now() } };
+          const back: Family = { id: msg.id, key: msg.key, entries };
+          update({ me: tok });
+          mRef.current = { ...mRef.current, me: tok };
+          setFamily(back);
+          broadcast(back);
+          diag.mark("family restored from another phone");
+        }).catch(() => {});
+        return;
+      }
+      if (!meTok || msg.from === meTok) return;
       const same = msg.id === f.id && msg.key === f.key;
       const known = !!f.entries[msg.from] && !f.entries[msg.from].gone;
       if (!same && !known) return; // not our family
