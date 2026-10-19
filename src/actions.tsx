@@ -1,7 +1,8 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
+import { dialog } from "./components/Dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { NavigationContainerRefWithCurrent } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import * as QuickActions from "expo-quick-actions";
@@ -68,7 +69,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     if (url?.startsWith("hush://join")) setTimeout(async () => {
       go("Monitor");
       const err = await joinRef.current(url);
-      if (err) Alert.alert("hush", err);
+      if (err) dialog("hush", err);
     }, 400);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

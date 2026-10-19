@@ -1,7 +1,8 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
+import { dialog } from "../components/Dialog";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
@@ -597,7 +598,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const askAllow = useCallback((who: string, from: string) => {
     if (mRef.current.allowListen || Date.now() - asking.current < 30_000) return;
     asking.current = Date.now();
-    Alert.alert(t("allow.title", { who: who || t("rt.otherPhone") }), t("allow.body"), [
+    dialog(t("allow.title", { who: who || t("rt.otherPhone") }), t("allow.body"), [
       { text: t("allow.no"), style: "cancel" },
       { text: t("allow.yes"), onPress: () => {
         update({ allowListen: true });

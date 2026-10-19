@@ -1,5 +1,6 @@
+import { dialog } from "../components/Dialog";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Alert, Animated, AppState, Easing, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
+import { Animated, AppState, Easing, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
 import * as Notifications from "expo-notifications";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
@@ -55,10 +56,10 @@ export function MonitorScreen() {
           <Rise key={listening ? "monitor" : "alerts"}>{listening ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
           {!listening && (
             <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
-              <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
+              <View style={styles.remoteIcon}><Icon d={EAR} size={22} color={colors.bg} width={2} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.remoteBtnTitle}>{t("rx.remote")}</Text>
-                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.remoteSub", { names: rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ") }) : t("rx.remoteNone")}</Text>
+                <Text style={styles.remoteBtnTitle}>{rooms[0]?.room?.baby ? t("hero.room", { name: babyLabel(rooms[0].room.baby) }) : t("rx.room")}</Text>
+                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.roomSub") : t("rx.remoteNone")}</Text>
               </View>
               <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
             </Pressable>
@@ -89,11 +90,11 @@ function PhonePicker() {
   return (
     <View style={{ flex: 1 }}>
       <Pressable onPress={() => many && setOpen((x) => !x)} style={styles.pick} accessibilityRole={many ? "button" : "text"} accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${t("rx.remote")}: ${nameOf(cur)}, ${monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}`}>
+        accessibilityLabel={`${nameOf(cur)}, ${monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}`}>
         {dot(cur)}
         <View style={{ flex: 1 }}>
           <Text style={styles.pickName} numberOfLines={1}>{nameOf(cur)}{targetBaby ? <Text style={styles.pickRoom}>{"  ·  "}{t("hero.room", { name: babyLabel(targetBaby) })}</Text> : null}</Text>
-          <Text style={styles.pickSub} numberOfLines={1}>{t("rx.remote")} · {monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
+          <Text style={styles.pickSub} numberOfLines={1}>{monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}{many ? ` · ${t("rx.switchPhone")}` : ""}</Text>
         </View>
         {many && <Icon d={open ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>'} size={18} color={colors.muted} width={2.2} />}
       </Pressable>
@@ -319,7 +320,7 @@ function FamilyCard({ adding }: { adding?: boolean } = {}) {
             <View style={styles.avatar}><Text style={styles.avatarText}>{nameOf(p.name, i).slice(0, 1).toUpperCase()}</Text></View>
             <Text style={styles.personName} numberOfLines={1}>{nameOf(p.name, i)}</Text>
             <Pressable
-              onPress={() => Alert.alert(nameOf(p.name, i), t("fam.removeAsk", { name: nameOf(p.name, i) }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.remove"), style: "destructive", onPress: () => removeMember(p.token) }])}
+              onPress={() => dialog(nameOf(p.name, i), t("fam.removeAsk", { name: nameOf(p.name, i) }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.remove"), style: "destructive", onPress: () => removeMember(p.token) }])}
               hitSlop={12}
               accessibilityLabel={t("nursery.remove", { name: nameOf(p.name, i) })}
             >
@@ -337,7 +338,7 @@ function FamilyCard({ adding }: { adding?: boolean } = {}) {
         <View style={styles.famLinks}>
           <Pressable onPress={() => setScanning(true)} hitSlop={8}><Text style={styles.change}>{t("fam.scan")}</Text></Pressable>
           <Pressable
-            onPress={() => Alert.alert(t("fam.leave"), t("fam.leaveAsk", { name: baby }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.leave"), style: "destructive", onPress: leaveFamily }])}
+            onPress={() => dialog(t("fam.leave"), t("fam.leaveAsk", { name: baby }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.leave"), style: "destructive", onPress: leaveFamily }])}
             hitSlop={8}
           >
             <Text style={[styles.change, { color: colors.muted }]}>{t("fam.leave")}</Text>

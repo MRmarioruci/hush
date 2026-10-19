@@ -6,6 +6,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { diag } from "./modules/hush-native/src";
 import { DarkTheme, NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { QuickActionsHub } from "./src/actions";
+import { DialogHost } from "./src/components/Dialog";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useFonts, Fredoka_500Medium, Fredoka_600SemiBold } from "@expo-google-fonts/fredoka";
 import { Quicksand_600SemiBold, Quicksand_700Bold } from "@expo-google-fonts/quicksand";
@@ -72,6 +73,7 @@ export default function App() {
                   <NapsProvider>
                     <Sky still={still} />
                     <Shell />
+                    <DialogHost />
                   </NapsProvider>
                 </SleepProvider>
               </MonitorProvider>
