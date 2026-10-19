@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
-import { cryDetector, deviceVolume, type VolumeState } from "../../modules/hush-native/src";
+import { cryDetector, deviceVolume, diag, type VolumeState } from "../../modules/hush-native/src";
 import { SOUNDS, beatIndex, soundById, type SoundId } from "../sounds";
 import { outputDb, safeDistance, stepDb } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
@@ -71,6 +71,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   }, [player]);
 
   const loaded = useRef<SoundId>(soundId);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
   useEffect(() => {
     if (loaded.current === soundId) return;
     loaded.current = soundId;
@@ -110,7 +112,9 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     addEvent({ type: "noise_stop", t: Date.now() });
     return true;
   }, [cancelResume]);
-  const RESUME_MS = [800, 2000, 5000, 10000, 20000, 30000, 60000, 60000, 60000];
+  // Quick at first, then every 30 s for as long as it takes (until someone turns it off).
+  const RESUME_MS = [800, 2000, 4000, 8000, 15000, 30000];
+  const RESUME_FOR_MS = 3 * 3600_000;
 
   // Note when white noise plays, for the Nights timeline.
   const wasPlaying = useRef(false);
@@ -119,10 +123,13 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     if (wasPlaying.current && !playing) {
       if (!stopWhy.current) {
         // Interrupted: try again, and only report it if it can't come back.
+        const since = Date.now();
+        diag.mark("sound stopped by itself");
         const attempt = () => {
           const r = resume.current;
           if (player.playing) return cancelResume();
-          if (r.tries >= RESUME_MS.length) {
+          if (Date.now() - since > RESUME_FOR_MS) {
+            diag.mark("sound: gave up resuming");
             const st: Stop = { at: Date.now(), why: "interrupted" };
             setLastStop(st);
             saveStops({ sound: st });
@@ -130,9 +137,15 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
           }
           r.timer = setTimeout(() => {
             r.tries += 1;
-            try { player.play(); } catch {}
+            try {
+              // A player that errored out won't play again: load the sound afresh.
+              if (r.tries >= 3) { player.replace(soundRef.current.file); player.loop = true; }
+              player.volume = Math.max(0.02, Math.min(1, gainRef.current || 1));
+              player.play();
+            } catch {}
+            setTimeout(() => { if (player.playing) diag.mark(`sound resumed (try ${r.tries})`); }, 600);
             attempt();
-          }, RESUME_MS[r.tries]);
+          }, RESUME_MS[Math.min(r.tries, RESUME_MS.length - 1)]);
         };
         if (!resume.current.timer) attempt();
         stopWhy.current = null;

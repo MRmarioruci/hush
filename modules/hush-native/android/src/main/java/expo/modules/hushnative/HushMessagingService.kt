@@ -32,6 +32,7 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
 
 /** Baby's phone: answers "status" and "clip" (listen in) natively, even when the app is asleep. */
 object RoomCommands {
+  private const val QUIET = "hush-quiet"
   private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
 
   fun handle(context: Context, body: JSONObject) {
@@ -68,7 +69,14 @@ object RoomCommands {
   private fun notice(context: Context, text: String) {
     try {
       val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-      val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, "cry-alerts")
+      // Silent: a sound in the nursery would wake the baby (and could interrupt the white noise).
+      if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(QUIET) == null) {
+        nm.createNotificationChannel(android.app.NotificationChannel(QUIET, "Quiet notices", android.app.NotificationManager.IMPORTANCE_LOW).apply {
+          setSound(null, null); enableVibration(false); setShowBadge(false)
+        })
+      }
+      Diag.add("listen-in notice: $text")
+      val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, QUIET)
         else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
       nm.notify(4343, builder.setSmallIcon(context.applicationInfo.icon).setContentTitle("hush").setContentText(text).setAutoCancel(true).build())
     } catch (_: Exception) {}

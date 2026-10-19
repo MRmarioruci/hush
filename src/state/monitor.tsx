@@ -525,7 +525,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       busy.current = true;
       // Nobody listens in unnoticed: say so on the baby's phone.
       Notifications.scheduleNotificationAsync({
-        content: { title: "hush", body: t("listen.nowHere", { who: parent.name, s: secs }), data: { type: "listen-notice" } },
+        content: { title: "hush", body: t("listen.nowHere", { who: parent.name, s: secs }), data: { type: "listen-notice" }, sound: false },
         trigger: null,
       }).catch(() => {});
       try {

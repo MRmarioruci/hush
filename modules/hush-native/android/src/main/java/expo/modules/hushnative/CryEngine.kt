@@ -92,8 +92,9 @@ object CryEngine {
   /** Send one kind of alert, in each parent's language when known. */
   private fun alert(kind: String, fallback: String, data0: Map<String, Any>, pct: Int = 0) {
     val data = data0 + ("from" to myToken)
-    val list = targets.filter { !it["token"].isNullOrEmpty() }
-    if (list.isEmpty()) { AlertSender.send(tokens, fill(fallback, pct), data); return }
+    Diag.add("alert sent: $kind")
+    val list = targets.filter { !it["token"].isNullOrEmpty() && it["token"] != myToken }
+    if (list.isEmpty()) { AlertSender.send(tokens.filter { it != myToken }, fill(fallback, pct), data); return }
     AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct) }, data)
   }
 

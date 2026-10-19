@@ -75,7 +75,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: true,
+    // A phone that's listening is next to the baby: show, but don't make a sound.
+    shouldPlaySound: !(cryDetector?.isListening() ?? false),
     shouldSetBadge: false,
   }),
 });

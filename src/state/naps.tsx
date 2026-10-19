@@ -121,7 +121,11 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       if (kind !== "soundOn") sendData(list.map((p) => p.token), data).catch(() => {});
       return;
     }
-    for (const p of list) {
+    // A phone that's listening is in the baby's room: no notification sound there, just the update.
+    const inRoom = (tok: string) => mon.rooms.some((r) => r.token === tok);
+    const quiet = list.filter((p) => inRoom(p.token));
+    if (quiet.length && kind !== "soundOn") sendData(quiet.map((p) => p.token), data).catch(() => {});
+    for (const p of list.filter((x) => !inRoom(x.token))) {
       const L = p.lang;
       const body = tIn(L, `push.${kind}`, {
         name: babyLabelIn(L, mon.m.babyName),
@@ -132,7 +136,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       // Parents get buttons on it (listen, white noise); see src/actions.tsx.
       sendPush([p.token], body, data, "hush", undefined, kind === "awake" ? undefined : "hush-sleep").catch(() => {});
     }
-  }, [peers, s.notifyOthers, mon.m.babyName, soundId]);
+  }, [peers, s.notifyOthers, mon.m.babyName, mon.rooms, soundId]);
 
   const fellAsleep = useCallback(async () => {
     const at = Date.now();
