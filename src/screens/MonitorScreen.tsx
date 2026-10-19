@@ -45,9 +45,8 @@ export function MonitorScreen() {
             <Pressable onPress={() => setRemote(false)} hitSlop={10} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t("common.back")}>
               <Icon d='<path d="M15 6l-6 6 6 6"/>' size={20} color={colors.cream} width={2.2} />
             </Pressable>
-            <Text style={styles.remoteTitle}>{t("rx.remote")}</Text>
+            <PhonePicker />
           </View>
-          <PhoneRoles />
           <OtherRooms alerts={alerts} />
         </>
       ) : (
@@ -78,29 +77,37 @@ export function MonitorScreen() {
   );
 }
 
-/** Every phone in the family and what it's doing: the baby monitor by the crib, or getting the alerts. */
-function PhoneRoles() {
-  const { members, rooms, listening, target, setFocus } = useMonitor();
+/** Which phone the remote controls, as one pill: its name, its room and what it's doing. Tap to pick another. */
+function PhonePicker() {
+  const { members, rooms, target, setFocus, targetBaby } = useMonitor();
+  const [open, setOpen] = useState(false);
   const monitors = new Set(rooms.map((r) => r.token));
-  const list = [
-    { key: "me", name: t("rt.you"), monitor: listening },
-    ...members.map((p, i) => ({ key: p.token, name: p.name.trim() || t("fam.unnamed", { n: i + 2 }), monitor: monitors.has(p.token) })),
-  ];
+  const nameOf = (tok: string) => { const i = members.findIndex((p) => p.token === tok); return members[i]?.name.trim() || t("fam.unnamed", { n: i + 2 }); };
+  const cur = target ?? members[0]?.token ?? "";
+  const many = members.length > 1;
+  const dot = (tok: string) => <View style={[styles.pickDot, { backgroundColor: monitors.has(tok) ? colors.sage : "#c9bfff" }]} />;
   return (
-    <View style={styles.roles}>
-      {list.map((x) => (
-        <Pressable key={x.key} disabled={x.key === "me"} onPress={() => setFocus(x.key)}
-          style={[styles.roleChip, x.key === target && styles.roleChipOn]}
-          accessibilityLabel={`${x.name}: ${x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}`} accessibilityState={{ selected: x.key === target }}>
-          <View style={[styles.chipIcon, { backgroundColor: x.monitor ? colors.sage : "#c9bfff" }]}>
-            <Icon d={x.monitor ? ICONS.mic : BELL} size={13} color={colors.bg} width={2.2} />
-          </View>
-          <Text style={styles.roleChipText} numberOfLines={1}>
-            <Text style={{ color: colors.cream }}>{x.name}</Text>
-            <Text style={{ color: colors.muted }}>{" · "}{x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
-          </Text>
-        </Pressable>
-      ))}
+    <View style={{ flex: 1 }}>
+      <Pressable onPress={() => many && setOpen((x) => !x)} style={styles.pick} accessibilityRole={many ? "button" : "text"} accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${t("rx.remote")}: ${nameOf(cur)}, ${monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}`}>
+        {dot(cur)}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pickName} numberOfLines={1}>{nameOf(cur)}{targetBaby ? <Text style={styles.pickRoom}>{"  ·  "}{t("hero.room", { name: babyLabel(targetBaby) })}</Text> : null}</Text>
+          <Text style={styles.pickSub} numberOfLines={1}>{t("rx.remote")} · {monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
+        </View>
+        {many && <Icon d={open ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>'} size={18} color={colors.muted} width={2.2} />}
+      </Pressable>
+      {open && (
+        <View style={styles.pickList}>
+          {members.map((p) => (
+            <Pressable key={p.token} onPress={() => { setFocus(p.token); setOpen(false); }} style={[styles.pickItem, p.token === cur && { backgroundColor: colors.card2 }]} accessibilityRole="menuitem" accessibilityState={{ selected: p.token === cur }}>
+              {dot(p.token)}
+              <Text style={styles.pickItemName} numberOfLines={1}>{nameOf(p.token)}</Text>
+              <Text style={styles.pickSub}>{monitors.has(p.token) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -650,12 +657,6 @@ function RoomCircle({ r, lastAlert, onSound }: { r: Remote; lastAlert: AlertReco
     : on ? t("room.quiet") : t("room.off");
   return (
     <View style={{ alignItems: "center", gap: 18 }}>
-      <View style={styles.controlling}>
-        <Icon d='<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>' size={16} color={colors.peach} width={2} />
-        <Text style={styles.controllingText} numberOfLines={1}>
-          {t("rt.controlling", { phone })}{targetBaby ? `  ·  ${t("hero.room", { name: babyLabel(targetBaby) })}` : ""}
-        </Text>
-      </View>
       <Pressable onPress={() => r.send("status")} style={({ pressed }) => [{ marginVertical: 22 }, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button" accessibilityLabel={`${status}. ${t("remote.refresh")}`}>
         <View style={[styles.glow2, { backgroundColor: `rgba(${glow},0.04)` }]} />
         <View style={[styles.glow1, { backgroundColor: `rgba(${glow},0.08)` }]} />
@@ -806,6 +807,14 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  pick: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 9, paddingHorizontal: 14, minHeight: 52 },
+  pickDot: { width: 10, height: 10, borderRadius: 5 },
+  pickName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  pickRoom: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
+  pickSub: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
+  pickList: { marginTop: 6, backgroundColor: colors.card, borderRadius: 20, padding: 6, gap: 2 },
+  pickItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 14 },
+  pickItemName: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   roleQ: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, marginLeft: 4, marginTop: -6 },
   rolePick: { flexDirection: "row", gap: 8 },
   roleOpt: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 14, minHeight: 62 },
@@ -817,8 +826,8 @@ const xstyles = StyleSheet.create({
   remoteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
   remoteBtnTitle: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
   remoteBtnSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
-  remoteHead: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: -6 },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  remoteHead: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: -6, zIndex: 5 },
+  backBtn: { marginTop: 7, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   remoteTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 24, padding: 12, paddingRight: 14 },
   switchIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
