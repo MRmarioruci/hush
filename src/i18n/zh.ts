@@ -683,6 +683,7 @@ export const zh: Record<Key, string> = {
   "rx.roomSub": "收听、白噪音、醒来",
   "rx.switchPhone": "点按切换",
   "common.ok": "好",
+  "rx.remoteWhat": "{names}的白噪音和睡眠",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

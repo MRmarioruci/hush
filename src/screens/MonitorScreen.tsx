@@ -56,10 +56,10 @@ export function MonitorScreen() {
           <Rise key={listening ? "monitor" : "alerts"}>{listening ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
           {!listening && (
             <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
-              <View style={styles.remoteIcon}><Icon d={EAR} size={22} color={colors.bg} width={2} /></View>
+              <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.remoteBtnTitle}>{rooms[0]?.room?.baby ? t("hero.room", { name: babyLabel(rooms[0].room.baby) }) : t("rx.room")}</Text>
-                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.roomSub") : t("rx.remoteNone")}</Text>
+                <Text style={styles.remoteBtnTitle}>{t("rx.remote")}</Text>
+                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.remoteWhat", { names: rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ") }) : t("rx.remoteNone")}</Text>
               </View>
               <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
             </Pressable>
@@ -94,7 +94,7 @@ function PhonePicker() {
         {dot(cur)}
         <View style={{ flex: 1 }}>
           <Text style={styles.pickName} numberOfLines={1}>{nameOf(cur)}{targetBaby ? <Text style={styles.pickRoom}>{"  ·  "}{t("hero.room", { name: babyLabel(targetBaby) })}</Text> : null}</Text>
-          <Text style={styles.pickSub} numberOfLines={1}>{monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}{many ? ` · ${t("rx.switchPhone")}` : ""}</Text>
+          <Text style={styles.pickSub} numberOfLines={1}>{t("rx.remote")} · {monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
         </View>
         {many && <Icon d={open ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>'} size={18} color={colors.muted} width={2.2} />}
       </Pressable>
@@ -156,6 +156,7 @@ function Receiving({ alerts }: { alerts: AlertRecord[] }) {
           <Text style={styles.rxSub} numberOfLines={2}>{rooms.length ? t("rx.from", { names }) : t("rx.none")}</Text>
         </View>
       </View>
+      {rooms.length > 0 && <View style={{ alignSelf: "stretch" }}><ListenRound /></View>}
       <Tonight alerts={alerts} />
     </View>
   );
@@ -787,7 +788,7 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
   return (
     <>
       <RoomCircle r={remote} lastAlert={alerts[0] ?? null} onSound={() => setSounds((x) => !x)} />
-      <ListenRound>
+      <View style={styles.remoteRow}>
         <RoundBtn onPress={() => remote.send(playing ? "stop" : "play")} disabled={!!remote.cmdOpen} bg={playing ? colors.peach : colors.card}
           label={playing ? t("rt.pause") : t("remote.noise")} a11y={playing ? t("remote.stop") : t("remote.play")}>
           {remote.cmdOpen ? <ActivityIndicator color={playing ? "#4a3412" : colors.cream} /> : (
@@ -799,7 +800,7 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
             <Icon d={naps.state.asleep ? SUN_D : MOON_D} size={28} color="#c9bfff" width={2} />
           </RoundBtn>
         )}
-      </ListenRound>
+      </View>
       <RemoteNotice r={remote} />
       {sounds && <SoundStrip r={remote} />}
       <Tonight alerts={alerts} />
@@ -809,6 +810,7 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  remoteRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
   pick: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 9, paddingHorizontal: 14, minHeight: 52 },
   pickDot: { width: 10, height: 10, borderRadius: 5 },
   pickName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },

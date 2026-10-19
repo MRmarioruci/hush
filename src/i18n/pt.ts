@@ -683,6 +683,7 @@ export const pt: Record<Key, string> = {
   "rx.roomSub": "Ouvir, ruído branco, acordou",
   "rx.switchPhone": "toque para trocar",
   "common.ok": "OK",
+  "rx.remoteWhat": "Ruído branco e sono em {names}",
   "settings.title": "Ajustes",
   "settings.babyName": "Nome do bebê",
   "settings.prefs": "Preferências",

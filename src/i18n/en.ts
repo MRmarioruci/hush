@@ -683,6 +683,7 @@ export const en = {
   "rx.roomSub": "Listen in, white noise, woke up",
   "rx.switchPhone": "tap to switch",
   "common.ok": "OK",
+  "rx.remoteWhat": "White noise and sleep on {names}",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

@@ -683,6 +683,7 @@ export const el: Record<Key, string> = {
   "rx.roomSub": "Ακρόαση, λευκός θόρυβος, ξύπνησε",
   "rx.switchPhone": "πάτα για αλλαγή",
   "common.ok": "OK",
+  "rx.remoteWhat": "Λευκός θόρυβος και ύπνος: {names}",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

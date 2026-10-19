@@ -683,6 +683,7 @@ export const de: Record<Key, string> = {
   "rx.roomSub": "Mithören, Rauschen, aufgewacht",
   "rx.switchPhone": "tippen zum Wechseln",
   "common.ok": "OK",
+  "rx.remoteWhat": "Rauschen und Schlaf auf {names}",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",
