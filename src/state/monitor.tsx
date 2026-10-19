@@ -46,6 +46,7 @@ type Monitor = {
   requestClip: (seconds?: number, to?: string | null) => Promise<{ at: number; ok: boolean }>;
   /** Another phone wants to listen in but it's off here: ask on screen, and tell them if it's allowed. */
   askAllow: (who: string, from: string) => void;
+  cancelJoin: () => void;
   /** Why listening last stopped (null while it hasn't). */
   lastStop: Stop | null;
   status: CryStatus;
@@ -322,6 +323,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [m.myName, lang, m.me, setFamily, broadcast]);
 
   const [joining, setJoining] = useState<string | null>(null);
+  const approving = useRef(new Set<string>());
+  const beforeJoin = useRef<Family | null>(null);
   const joinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // A phone that lost its pairing asks the phones that still talk to it; they send the family back
@@ -355,6 +358,27 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const cur = mRef.current;
       const f = cur.family;
       const meTok = cur.me ?? "";
+      // A new phone used our code or QR: it only gets in when someone here taps Allow.
+      const theirs = msg.entries[msg.from];
+      if (f && meTok && msg.from !== meTok && msg.id === f.id && msg.key === f.key && theirs && !theirs.gone
+        && (!f.entries[msg.from] || f.entries[msg.from].gone)) {
+        Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+        if (approving.current.has(msg.from)) return;
+        approving.current.add(msg.from);
+        const who = theirs.name?.trim() || t("rt.otherPhone");
+        const room = cur.babyName.trim() ? t("hero.room", { name: babyLabel(cur.babyName) }) : t("rx.room");
+        dialog(t("pair.wantsTitle", { name: who, room }), t("pair.wantsBody", { name: babyLabel(cur.babyName) }), [
+          { text: t("pair.notNow"), style: "cancel", onPress: () => { approving.current.delete(msg.from); sendData([msg.from], { type: "join-denied", from: meTok }); } },
+          { text: t("pair.allow"), onPress: () => {
+            approving.current.delete(msg.from);
+            const now = mRef.current.family ?? f;
+            const next: Family = { ...now, entries: { ...now.entries, [msg.from]: { ...theirs, at: Date.now() } } };
+            setFamily(next);
+            broadcast(next);
+          } },
+        ]);
+        return;
+      }
       // This phone lost its pairing but the family still lists it: take the family back.
       if (!f || !membersOf(f, meTok).length) {
         getMyToken().then((tok) => {
@@ -421,13 +445,33 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     }
     const now = Date.now();
     const next: Family = { id: inv.id, key: inv.key, entries: { [tok]: { name: cur.myName.trim(), lang: getLang(), at: now }, [inv.token]: { name: inv.name, at: 1 } } };
+    beforeJoin.current = old ?? null;
     setFamily(next, { rooms: {} });
     setJoining(inv.token);
     if (joinTimer.current) clearTimeout(joinTimer.current);
-    joinTimer.current = setTimeout(() => setJoining((j) => (j === inv.token ? "failed" : j)), 25_000);
+    // The other phone has to tap Allow: give them time.
+    joinTimer.current = setTimeout(() => setJoining((j) => (j === inv.token ? "failed" : j)), 60_000);
     await broadcast(next, [inv.token]);
     return null;
   }, [myToken, setFamily, broadcast]);
+
+  /** Joining didn't work out (said no, no answer, or cancelled): back to how things were. */
+  const cancelJoin = useCallback(() => {
+    if (joinTimer.current) clearTimeout(joinTimer.current);
+    setJoining(null);
+    const meTok = mRef.current.me ?? "";
+    const prev = beforeJoin.current;
+    beforeJoin.current = null;
+    setFamily(prev ?? (meTok ? newFamily(meTok, mRef.current.myName.trim(), getLang()) : null), { rooms: {} });
+  }, [setFamily]);
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string } | undefined;
+      if (d?.type !== "join-denied" || !d.from) return;
+      setJoining((j) => (j === d.from ? "denied" : j));
+    });
+    return () => sub.remove();
+  }, []);
 
   const removeMember = useCallback((token: string) => {
     const f = mRef.current.family;
@@ -700,7 +744,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
   );
 }
 

@@ -10,6 +10,7 @@ import { ALERT_AFTER, CRY_CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken,
 import { inviteLink } from "../family";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
+import { PairFlow, PairStart, type PairMode } from "../components/PairFlow";
 import { useMonitor } from "../state/monitor";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSleep } from "../state/sleep";
@@ -33,13 +34,14 @@ export function MonitorScreen() {
   const alerts = useAlerts();
   const [fam, setFam] = useState<false | "list" | "add">(false);
   const [remote, setRemote] = useState(false);
+  const [pair, setPair] = useState<PairMode | null>(null);
   useAskFamily();
   // Changing what this phone does always lands on its own view.
   useEffect(() => { setRemote(false); }, [listening]);
   return (
-    <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setFam("add")} /> : undefined}>
+    <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setPair("invite")} /> : undefined}>
       {members.length === 0 ? (
-        <FamilyStart />
+        <PairStart onPick={setPair} />
       ) : remote ? (
         <>
           <View style={styles.remoteHead}>
@@ -67,11 +69,12 @@ export function MonitorScreen() {
           <TrialNote />
         </>
       )}
+      <PairFlow mode={pair} onClose={() => setPair(null)} />
       <Modal visible={!!fam} transparent animationType="slide" onRequestClose={() => setFam(false)}>
         <Pressable style={styles.sheetBack} onPress={() => setFam(false)} accessibilityLabel={t("common.close")} />
         <View style={styles.sheet}>
           <View style={styles.grab} />
-          <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 30 }} keyboardShouldPersistTaps="handled"><FamilyCard adding={fam === "add"} /></ScrollView>
+          <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 30 }} keyboardShouldPersistTaps="handled"><FamilyCard onInvite={() => { setFam(false); setPair("invite"); }} onJoin={() => { setFam(false); setPair("join"); }} /></ScrollView>
         </View>
       </Modal>
     </Screen>
@@ -280,9 +283,9 @@ function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
 
 /* ---------------- the family: every phone that joined ---------------- */
 
-function FamilyCard({ adding }: { adding?: boolean } = {}) {
+function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => void }) {
   const { m, update, members, removeMember, leaveFamily, join, joining, baby } = useMonitor();
-  const [showCode, setShowCode] = useState(!!adding);
+  const [showCode, setShowCode] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -330,14 +333,14 @@ function FamilyCard({ adding }: { adding?: boolean } = {}) {
           </View>
         ))}
         {!showCode && (
-          <Pressable onPress={() => setShowCode(true)} style={styles.person}>
+          <Pressable onPress={onInvite} style={styles.person}>
             <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
             <Text style={[styles.personName, { color: colors.peach }]}>{t("fam.add")}</Text>
           </Pressable>
         )}
         {showCode && <View style={{ paddingTop: 10 }}><CodeCard onClose={() => setShowCode(false)} bare /></View>}
         <View style={styles.famLinks}>
-          <Pressable onPress={() => setScanning(true)} hitSlop={8}><Text style={styles.change}>{t("fam.scan")}</Text></Pressable>
+          <Pressable onPress={onJoin} hitSlop={8}><Text style={styles.change}>{t("pair.join")}</Text></Pressable>
           <Pressable
             onPress={() => dialog(t("fam.leave"), t("fam.leaveAsk", { name: baby }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.leave"), style: "destructive", onPress: leaveFamily }])}
             hitSlop={8}
