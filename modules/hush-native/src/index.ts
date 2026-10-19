@@ -24,6 +24,7 @@ type CryNative = {
   requestBatteryExempt(): boolean;
   installer(): string;
   battery?(): [number, boolean];
+  reportRoom?(): boolean;
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   setRoom?(playing: boolean, sound: string): void;
@@ -66,6 +67,8 @@ export const cryDetector = cry
       requestBatteryExempt: () => cry.requestBatteryExempt(),
       installer: () => { try { return cry.installer(); } catch { return ""; } },
       /** This phone's battery: [percent or -1, plugged in]. */
+      /** Tell the family's phones now whether this phone is listening. */
+      reportRoom: () => { try { cry.reportRoom?.(); } catch {} },
       battery: (): [number, boolean] | null => { try { return cry.battery?.() ?? null; } catch { return null; } },
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),
       /** Uploads the last few seconds heard (kept in memory while listening) as a WAV to uploadUrl. */

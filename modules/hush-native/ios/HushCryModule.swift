@@ -58,6 +58,8 @@ public class HushCryModule: Module, NotificationDelegate {
     }
 
     // "testflight" or "appstore" (both sell through the App Store), "simulator" otherwise.
+    Function("reportRoom") { () -> Bool in false }
+
     Function("battery") { () -> [Any] in
       UIDevice.current.isBatteryMonitoringEnabled = true
       let level = UIDevice.current.batteryLevel

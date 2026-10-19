@@ -84,6 +84,13 @@ class HushCryModule : Module() {
     }
 
     // Which app store installed hush ("com.android.vending" = Google Play), or "" if sideloaded.
+    // Tell the family's phones right away whether this phone is listening (after starting or stopping).
+    Function("reportRoom") {
+      val ctx = appContext.reactContext ?: return@Function false
+      Thread { try { CryEngine.reportRoom(ctx) } catch (_: Exception) {} }.start()
+      true
+    }
+
     Function("battery") {
       val ctx = appContext.reactContext ?: return@Function listOf(-1, false)
       val (pct, plugged) = CryEngine.battery(ctx)

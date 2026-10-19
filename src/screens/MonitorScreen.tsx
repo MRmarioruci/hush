@@ -37,13 +37,13 @@ export function MonitorScreen() {
         <FamilyStart />
       ) : listening ? (
         <>
-          <RoleChip monitor />
+          <PhoneRoles />
           <ThisPhone />
           {rooms.length > 0 && <OtherRooms alerts={alerts} />}
         </>
       ) : (
         <>
-          <RoleChip />
+          <PhoneRoles />
           <OtherRooms alerts={alerts} />
           <StartHere />
         </>
@@ -59,15 +59,29 @@ export function MonitorScreen() {
   );
 }
 
-/** Says what this phone is doing: the baby monitor by the crib, or a phone that gets the alerts. */
-function RoleChip({ monitor }: { monitor?: boolean }) {
-  const tone = monitor ? colors.sage : "#c9bfff";
+/** Every phone in the family and what it's doing: the baby monitor by the crib, or getting the alerts. */
+function PhoneRoles() {
+  const { members, rooms, listening, target, setFocus } = useMonitor();
+  const monitors = new Set(rooms.map((r) => r.token));
+  const list = [
+    { key: "me", name: t("rt.you"), monitor: listening },
+    ...members.map((p, i) => ({ key: p.token, name: p.name.trim() || t("fam.unnamed", { n: i + 2 }), monitor: monitors.has(p.token) })),
+  ];
   return (
-    <View style={styles.roleChip} accessibilityRole="text">
-      <View style={[styles.chipIcon, { backgroundColor: tone }]}>
-        <Icon d={monitor ? ICONS.mic : BELL} size={14} color={colors.bg} width={2.2} />
-      </View>
-      <Text style={styles.roleChipText}>{monitor ? t("rt.roleMonitor") : t("rt.roleParent")}</Text>
+    <View style={styles.roles}>
+      {list.map((x) => (
+        <Pressable key={x.key} disabled={x.key === "me" || listening} onPress={() => setFocus(x.key)}
+          style={[styles.roleChip, !listening && x.key === target && styles.roleChipOn]}
+          accessibilityLabel={`${x.name}: ${x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}`} accessibilityState={{ selected: !listening && x.key === target }}>
+          <View style={[styles.chipIcon, { backgroundColor: x.monitor ? colors.sage : "#c9bfff" }]}>
+            <Icon d={x.monitor ? ICONS.mic : BELL} size={13} color={colors.bg} width={2.2} />
+          </View>
+          <Text style={styles.roleChipText} numberOfLines={1}>
+            <Text style={{ color: colors.cream }}>{x.name}</Text>
+            <Text style={{ color: colors.muted }}>{" · "}{x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
+          </Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -534,7 +548,10 @@ function CribBaby({ size, awake }: { size: number; awake: boolean }) {
 
 /** The baby's room as one big glowing circle. Tap it to check again. */
 function RoomCircle({ r, lastAlert, onSound }: { r: Remote; lastAlert: AlertRecord | null; onSound: () => void }) {
+  const { targetName, targetBaby, members, target } = useMonitor();
   const room = r.room;
+  const idx = members.findIndex((p) => p.token === target);
+  const phone = targetName.trim() || t("fam.unnamed", { n: idx + 2 });
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
   const checking = r.waiting && !r.cmdOpen;
@@ -552,7 +569,13 @@ function RoomCircle({ r, lastAlert, onSound }: { r: Remote; lastAlert: AlertReco
     : on ? t("room.quiet") : t("room.off");
   return (
     <View style={{ alignItems: "center", gap: 18 }}>
-      <Pressable onPress={() => r.send("status")} style={({ pressed }) => [{ marginVertical: 26 }, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button" accessibilityLabel={`${status}. ${t("remote.refresh")}`}>
+      <View style={styles.controlling}>
+        <Icon d='<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>' size={16} color={colors.peach} width={2} />
+        <Text style={styles.controllingText} numberOfLines={1}>
+          {t("rt.controlling", { phone })}{targetBaby ? `  ·  ${t("hero.room", { name: babyLabel(targetBaby) })}` : ""}
+        </Text>
+      </View>
+      <Pressable onPress={() => r.send("status")} style={({ pressed }) => [{ marginVertical: 22 }, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button" accessibilityLabel={`${status}. ${t("remote.refresh")}`}>
         <View style={[styles.glow2, { backgroundColor: `rgba(${glow},0.04)` }]} />
         <View style={[styles.glow1, { backgroundColor: `rgba(${glow},0.08)` }]} />
         <View style={styles.crib}>
@@ -679,19 +702,6 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
   );
   return (
     <>
-      {rooms.length > 1 && (
-        <View style={styles.roomPicker}>
-          {rooms.map((r) => {
-            const on = r.token === target;
-            const label = r.room?.baby ? t("hero.room", { name: babyLabel(r.room.baby) }) : r.name || r.room?.name || "hush";
-            return (
-              <Pressable key={r.token} onPress={() => setFocus(r.token)} style={[styles.roomChip, on && { backgroundColor: colors.cream }]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
-                <Text style={[styles.roomChipText, on && { color: colors.bg }]} numberOfLines={1}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
       <RoomCircle r={remote} lastAlert={alerts[0] ?? null} onSound={() => setSounds((x) => !x)} />
       <ListenRound>
         <RoundBtn onPress={() => remote.send(playing ? "stop" : "play")} disabled={!!remote.cmdOpen} bg={playing ? colors.peach : colors.card}
@@ -715,12 +725,16 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  controlling: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: -6 },
+  controllingText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach, flexShrink: 1 },
   headAdd: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   stopHere: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, height: 46, paddingHorizontal: 20, borderRadius: 23, borderWidth: 1.5, borderColor: colors.card2, marginTop: 4 },
   stopHereText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
-  roleChip: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 18, paddingLeft: 5, paddingRight: 14, height: 36, marginTop: -6, marginBottom: 12 },
-  chipIcon: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  roleChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
+  roles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: -6, marginBottom: 12 },
+  roleChipOn: { borderWidth: 1.5, borderColor: colors.peach },
+  roleChip: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.card, borderRadius: 18, paddingLeft: 5, paddingRight: 13, height: 34, maxWidth: "100%" },
+  chipIcon: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  roleChipText: { fontFamily: fonts.bodyBold, fontSize: 13, flexShrink: 1 },
   retry: { backgroundColor: colors.bg, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9 },
   retryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
   toggles: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 8 },

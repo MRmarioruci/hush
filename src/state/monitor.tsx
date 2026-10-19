@@ -440,6 +440,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (!cryDetector) return t("perm.androidOnly");
     if (listening) {
       setListening(false, "you");
+      // The other phones show which phone is the monitor: tell them straight away.
+      setTimeout(() => cryDetector?.reportRoom(), 600);
       setTimeout(async () => { await syncEvents(); await sendNightSummary(); }, 1200);
       return null;
     }
@@ -447,6 +449,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (problem) return problem;
     if (!(await unlock.beforeListen())) return null; // trial over: the unlock sheet is showing
     setListening(true);
+    setTimeout(() => cryDetector?.reportRoom(), 1500);
     return membersOf(mRef.current.family, mRef.current.me ?? "").length ? null : t("perm.pairToGet");
   }, [listening, syncEvents, sendNightSummary, unlock, setListening]);
 
