@@ -85,7 +85,7 @@ object AlertSender {
             val alarm = data["type"] in setOf("cry", "stopped", "test")
             put("sound", if (alarm) "alert.wav" else "default")
             put("priority", "high")
-            put("channelId", if (alarm) "baby-alarm-2" else "cry-alerts")
+            put("channelId", if (alarm) "baby-alarm-3" else "hush-info-2")
             // iPhones: crying breaks through Focus (needs the time-sensitive entitlement).
             put("interruptionLevel", if (alarm) "time-sensitive" else "active")
             // A "Listen" button on crying alerts (registered by the parent's app).

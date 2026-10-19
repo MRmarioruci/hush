@@ -46,7 +46,7 @@ enum AlertSender {
         "sound": alarm ? "alert.wav" : "default",
         "priority": "high",
         // Android channel; iPhones: crying breaks through Focus.
-        "channelId": alarm ? "baby-alarm-2" : "cry-alerts",
+        "channelId": alarm ? "baby-alarm-3" : "hush-info-2",
         "interruptionLevel": alarm ? "time-sensitive" : "active",
         "data": data,
       ]

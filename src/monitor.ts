@@ -140,20 +140,22 @@ export async function requestMic(): Promise<boolean> {
 }
 
 /** Crying alerts use an alarm-style channel so they ring and vibrate even with the phone on silent. */
-export const ALARM_CHANNEL = "baby-alarm-2";
+export const ALARM_CHANNEL = "baby-alarm-3"; // -3: one buzz instead of three (a channel's vibration can't change)
 export const ALARM_SOUND = "alert.wav";
-export const INFO_CHANNEL = "cry-alerts";
+export const INFO_CHANNEL = "hush-info-2";
 
 export async function setupAlertChannel() {
   if (Platform.OS !== "android") return;
-  await Notifications.deleteNotificationChannelAsync("baby-alarm").catch(() => {}); // replaced (new sound)
+  // Replaced channels (new sound, then a single buzz). Messages from phones on older versions still name
+  // them, so the previous pair stays until both phones have updated; Android then just uses its settings.
+  await Notifications.deleteNotificationChannelAsync("baby-alarm").catch(() => {});
   await Notifications.setNotificationChannelAsync(ALARM_CHANNEL, {
     name: t("notif.alarmName"),
     description: t("notif.alarmDesc"),
     importance: Notifications.AndroidImportance.MAX,
     sound: ALARM_SOUND,
     enableVibrate: true,
-    vibrationPattern: [0, 700, 300, 700, 300, 700],
+    vibrationPattern: [0, 600],
     bypassDnd: true,
     audioAttributes: {
       usage: Notifications.AndroidAudioUsage.ALARM,
@@ -167,7 +169,7 @@ export async function setupAlertChannel() {
     importance: Notifications.AndroidImportance.HIGH,
     sound: "default",
     enableVibrate: true,
-    vibrationPattern: [0, 300, 200, 300],
+    vibrationPattern: [0, 250],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 }

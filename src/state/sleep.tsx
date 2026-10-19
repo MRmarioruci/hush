@@ -309,7 +309,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   remote.current = { toggle, set, soundId, listening: mon.listening, members: mon.members, me: mon.me, name: mon.m.myName, baby: mon.m.babyName };
   const roomFor = useCallback(() => {
     const r = remote.current;
-    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening: r.listening, listenSince: listenSince.current, at: Date.now() };
+    // Whether the microphone is really on comes from the native listener, not this screen's state
+    // (they can differ after hush was restarted in the background), so phones never flip between answers.
+    const listening = cryDetector ? cryDetector.isListening() : r.listening;
+    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening, listenSince: listenSince.current, at: Date.now() };
   }, [player]);
   useEffect(() => {
     const sub = addPushListener((n) => {
@@ -321,8 +324,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       else if (d.cmd === "stop" && endPending("remote", r.members.find((p) => p.token === d.from)?.name)) { /* was already quiet */ }
       else if (d.cmd === "stop" && player.playing) { stopWhy.current = { why: "remote", who: r.members.find((p) => p.token === d.from)?.name }; player.pause(); }
       else if (d.cmd === "sound" && d.sound && SOUNDS.some((x) => x.id === d.sound)) r.set({ sound: d.sound });
-      // Answer after the change has taken effect.
-      setTimeout(() => sendData([d.from!], roomFor()), 900);
+      // Answer after the change has taken effect. Android answers "status" natively (with battery), so only once.
+      if (!(d.cmd === "status" && Platform.OS === "android" && cryDetector)) setTimeout(() => sendData([d.from!], roomFor()), 900);
       Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
     });
     return () => sub.remove();

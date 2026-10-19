@@ -26,7 +26,7 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
       val data = remoteMessage.data
       val body = data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() }
       val type = body?.optString("type")
-      if (type in setOf("cry", "stopped", "test") || data["channelId"] == "baby-alarm-2") alarmBuzz(applicationContext)
+      if (type in setOf("cry", "stopped", "test") || data["channelId"]?.startsWith("baby-alarm") == true) alarmBuzz(applicationContext)
       // Requests from a paired parent, answered here so they work with the screen locked.
       if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
     } catch (_: Exception) {}
@@ -139,7 +139,7 @@ object RoomCommands {
   }
 }
 
-private val PATTERN = longArrayOf(0, 700, 300, 700, 300, 700)
+private val PATTERN = longArrayOf(0, 600) // one firm buzz
 
 fun alarmBuzz(context: Context) {
   val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= 31) {
