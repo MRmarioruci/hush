@@ -73,7 +73,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     loadMonitor().then((raw) => {
       const v = migrate(raw);
       // No name yet: start with the phone's own name (e.g. "Redmi Note 14"); it can be changed in the phones list.
-      const dn = !v.myName?.trim() ? cryDetector?.deviceName?.() : null;
+      // Old placeholder names ("Parent 1", "Phone 2", in any language) count as no name.
+      const placeholder = !v.myName?.trim() || /^[^\s\d]+\s*\d{1,2}$/u.test(v.myName.trim());
+      const dn = placeholder ? cryDetector?.deviceName?.() : null;
       if (dn) { const next = { ...v, myName: dn }; saveMonitor(next); setM(next); } else setM(v);
     });
   }, []);
