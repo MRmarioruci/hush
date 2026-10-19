@@ -14,7 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSleep } from "../state/sleep";
 import { useNaps } from "../state/naps";
 import { stopLine } from "../stops";
-import { EAR, ListenRound, RoundBtn } from "../components/Listen";
+import { EAR, ListenRound, Notice, RoundBtn } from "../components/Listen";
 import { Ring } from "../components/Ring";
 import { MoonFace } from "../components/MoonFace";
 import Svg, { Circle, SvgXml } from "react-native-svg";
@@ -30,9 +30,9 @@ export function MonitorScreen() {
   const { members, listening, rooms } = useMonitor();
   useT();
   const alerts = useAlerts();
-  const [fam, setFam] = useState(false);
+  const [fam, setFam] = useState<false | "list" | "add">(false);
   return (
-    <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam(true)} /> : undefined}>
+    <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setFam("add")} /> : undefined}>
       {members.length === 0 ? (
         <FamilyStart />
       ) : listening ? (
@@ -48,11 +48,11 @@ export function MonitorScreen() {
           <StartHere />
         </>
       )}
-      <Modal visible={fam} transparent animationType="slide" onRequestClose={() => setFam(false)}>
+      <Modal visible={!!fam} transparent animationType="slide" onRequestClose={() => setFam(false)}>
         <Pressable style={styles.sheetBack} onPress={() => setFam(false)} accessibilityLabel={t("common.close")} />
         <View style={styles.sheet}>
           <View style={styles.grab} />
-          <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 30 }} keyboardShouldPersistTaps="handled"><FamilyCard /></ScrollView>
+          <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 30 }} keyboardShouldPersistTaps="handled"><FamilyCard adding={fam === "add"} /></ScrollView>
         </View>
       </Modal>
     </Screen>
@@ -73,19 +73,24 @@ function RoleChip({ monitor }: { monitor?: boolean }) {
 }
 
 /** The family's phones as overlapping initials, top right. Opens the phones sheet. */
-function Avatars({ onPress }: { onPress: () => void }) {
+function Avatars({ onPress, onAdd }: { onPress: () => void; onAdd: () => void }) {
   const { m, members } = useMonitor();
   const names = [m.myName.trim() || t("fam.thisPhone"), ...members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 }))];
   const tints = [colors.peach, "#c9bfff", colors.sage, colors.rose];
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={{ flexDirection: "row" }} accessibilityRole="button" accessibilityLabel={t("fam.title")}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Pressable onPress={onPress} hitSlop={8} style={{ flexDirection: "row" }} accessibilityRole="button" accessibilityLabel={t("fam.title")}>
       {names.slice(0, 4).map((n, i) => (
         <View key={i} style={[styles.headAvatar, { backgroundColor: tints[i % tints.length], marginLeft: i ? -10 : 0 }]}>
           <Text style={styles.headAvatarText}>{n.slice(0, 1).toUpperCase()}</Text>
         </View>
       ))}
       {names.length > 4 && <View style={[styles.headAvatar, { backgroundColor: colors.card2, marginLeft: -10 }]}><Text style={[styles.headAvatarText, { color: colors.cream }]}>+{names.length - 4}</Text></View>}
-    </Pressable>
+      </Pressable>
+      <Pressable onPress={onAdd} hitSlop={8} style={styles.headAdd} accessibilityRole="button" accessibilityLabel={t("fam.add")}>
+        <Icon d={PLUS} size={18} color={colors.peach} width={2.4} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -191,9 +196,9 @@ function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
 
 /* ---------------- the family: every phone that joined ---------------- */
 
-function FamilyCard() {
+function FamilyCard({ adding }: { adding?: boolean } = {}) {
   const { m, update, members, removeMember, leaveFamily, join, joining, baby } = useMonitor();
-  const [showCode, setShowCode] = useState(false);
+  const [showCode, setShowCode] = useState(!!adding);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -324,6 +329,10 @@ function ThisPhone() {
       </View>
 
       <PowerPill names={names} />
+      <Pressable onPress={toggle} style={({ pressed }) => [styles.stopHere, pressed && { opacity: 0.8 }]} accessibilityRole="button">
+        <Icon d={BELL} size={18} color="#c9bfff" width={2} />
+        <Text style={styles.stopHereText}>{t("rt.stopHere")}</Text>
+      </Pressable>
       <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </>
@@ -458,8 +467,8 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
 let myTokenCache: string | null = null;
 const myToken = async () => (myTokenCache ??= await getMyToken());
 /** Parent's phone: ask the baby's phone to play, stop, switch sound, or report. */
-export async function roomCmd(to: string, cmd: string, sound?: string) {
-  try { await sendData([to], { type: "cmd", cmd, sound, from: await myToken() }); } catch {}
+export async function roomCmd(to: string, cmd: string, sound?: string): Promise<boolean> {
+  try { return await sendData([to], { type: "cmd", cmd, sound, from: await myToken() }); } catch { return false; }
 }
 
 /** The baby's room as last reported, with play/stop and the sounds. */
@@ -477,13 +486,16 @@ function useRemote() {
   const waiting = !!firstOpen && Date.now() - firstOpen < 15000;
   // Only "no answer" when nothing came back for a while, polls included.
   const noReply = !!firstOpen && Date.now() - firstOpen >= 25000;
+  const [fail, setFail] = useState<{ cmd: string; at: number } | null>(null);
   const send = useCallback(async (cmd: string, sound?: string) => {
     if (!target) return;
     const at = Date.now();
     setAsks((xs) => [...xs.filter((x) => at - x.at < 120_000), { cmd, at }]);
     setTimeout(() => tick((x) => x + 1), 15500);
     setTimeout(() => tick((x) => x + 1), 25500);
-    await roomCmd(target, cmd, sound);
+    const ok = await roomCmd(target, cmd, sound);
+    // Polls fail quietly unless nothing else is being tried; a tap that couldn't be sent always says so.
+    setFail((f) => (!ok ? (cmd === "status" && f ? f : { cmd, at }) : f && f.at <= at ? null : f));
   }, [target]);
   // Opening the page: ask every phone in the family, to find the ones listening.
   const tokens = members.map((p) => p.token).join(",");
@@ -497,7 +509,9 @@ function useRemote() {
     const id = setInterval(() => send("status"), 10_000);
     return () => clearInterval(id);
   }, [target, send]));
-  return { room, send, waiting, noReply, lastCmd, cmdOpen: cmdOpen && Date.now() - cmdOpen.at < 15000 ? cmdOpen.cmd : null };
+  // A play/stop/sound request that got no report back within 15 s.
+  const cmdLate = !!cmdOpen && Date.now() - cmdOpen.at >= 15000 ? cmdOpen.cmd : null;
+  return { room, send, waiting, noReply, lastCmd, fail: fail && Date.now() - fail.at < 120_000 ? fail : null, cmdLate, cmdOpen: cmdOpen && Date.now() - cmdOpen.at < 15000 ? cmdOpen.cmd : null };
 }
 type Remote = ReturnType<typeof useRemote>;
 
@@ -595,6 +609,17 @@ function Tonight({ alerts }: { alerts: AlertRecord[] }) {
   );
 }
 
+/** What's happening with the last request to the room, in words: sending, no answer (and why), or couldn't send. */
+function RemoteNotice({ r }: { r: Remote }) {
+  const { targetBaby, targetName } = useMonitor();
+  const name = targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("rt.otherPhone");
+  if (r.fail) return <Notice bad text={t("rt.sendFail")} onPress={() => r.send(r.fail!.cmd === "status" ? "status" : r.fail!.cmd)} />;
+  if (r.cmdOpen) return <Notice spin text={t(r.cmdOpen === "stop" ? "rt.stopping" : r.cmdOpen === "play" ? "rt.starting" : "rt.sending", { name })} />;
+  if (r.cmdLate) return <Notice bad text={t("rt.noAnswer", { name })} onPress={() => r.send("status")} />;
+  if (r.noReply) return <Notice bad text={t("rt.noAnswer", { name })} onPress={() => r.send("status")} />;
+  return null;
+}
+
 /** The sounds on the baby's phone, as a strip of circles. */
 function SoundStrip({ r }: { r: Remote }) {
   const room = r.room;
@@ -681,6 +706,7 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
           </RoundBtn>
         )}
       </ListenRound>
+      <RemoteNotice r={remote} />
       {sounds && <SoundStrip r={remote} />}
       <Tonight alerts={alerts} />
     </>
@@ -689,6 +715,9 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  headAdd: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  stopHere: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, height: 46, paddingHorizontal: 20, borderRadius: 23, borderWidth: 1.5, borderColor: colors.card2, marginTop: 4 },
+  stopHereText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
   roleChip: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 18, paddingLeft: 5, paddingRight: 14, height: 36, marginTop: -6, marginBottom: 12 },
   chipIcon: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   roleChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },

@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { colors, fonts } from "../theme";
 import { CLIP_SECONDS } from "../monitor";
-import { dateLocale, fmtTime, useT } from "../i18n";
+import { babyLabel, dateLocale, fmtTime, t, useT } from "../i18n";
 import { useMonitor } from "../state/monitor";
 import { Card, Icon, Label } from "./ui";
 
@@ -34,8 +34,9 @@ export function listenFromOutside(seconds: number) {
 
 /** Asking for a clip, waiting for it, and playing it: shared by the card and the Home button. */
 function useClip(outside = false) {
-  const { m, update, requestClip, target } = useMonitor();
+  const { m, update, requestClip, target, targetBaby, targetName } = useMonitor();
   const [asked, setAsked] = useState(0);
+  const [sendFail, setSendFail] = useState(false);
   const [askedFor, setAskedFor] = useState(CLIP_SECONDS);
   const [, tick] = useState(0);
   const player = useAudioPlayer(null);
@@ -43,8 +44,9 @@ function useClip(outside = false) {
   const clip = m.clip;
   // Compare with when it arrived here, not the baby's phone's clock.
   const fresh = !!clip && (clip.got ?? clip.at) >= asked;
-  const waiting = asked > 0 && !fresh && Date.now() - asked < WAIT_MS;
-  const timedOut = asked > 0 && !fresh && !waiting;
+  const waiting = asked > 0 && !sendFail && !fresh && Date.now() - asked < WAIT_MS;
+  const timedOut = asked > 0 && !sendFail && !fresh && !waiting;
+  const roomName = targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("rt.otherPhone");
 
   const play = (url: string) => {
     try { player.replace({ uri: url }); player.play(); } catch {}
@@ -58,7 +60,10 @@ function useClip(outside = false) {
   const ask = async (seconds: number) => {
     setAskedFor(seconds);
     update({ clipSeconds: seconds });
-    setAsked(await requestClip(seconds));
+    setSendFail(false);
+    const r = await requestClip(seconds);
+    setSendFail(!r.ok);
+    setAsked(r.at);
   };
 
   // The clip I just asked for plays as soon as it arrives.
@@ -82,7 +87,7 @@ function useClip(outside = false) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const elapsed = asked ? Date.now() - asked : 0;
-  return { m, target, clip, fresh, waiting, timedOut, elapsed, askedFor, status, toggle, ask };
+  return { m, target, clip, fresh, waiting, timedOut, sendFail, roomName, elapsed, askedFor, status, toggle, ask };
 }
 
 function fmtWhen(ms: number) {
@@ -166,8 +171,10 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
         </RoundBtn>
         {children}
       </View>
-      {c.timedOut && <Text style={[styles.err, { textAlign: "center" }]}>{t("listen.noAnswer")}</Text>}
-      {error && <Text style={[styles.err, { textAlign: "center" }]}>{t(`listen.err.${error}`)}</Text>}
+      {c.waiting && <Notice spin text={t("rt.waitingClip", { name: c.roomName, s: Math.round(c.elapsed / 1000) })} />}
+      {c.sendFail && <Notice bad text={t("rt.sendFail")} />}
+      {c.timedOut && <Notice bad text={t("rt.noClip", { name: c.roomName })} />}
+      {error && <Notice bad text={t(`listen.err.${error}`)} />}
       {c.clip?.url ? (
         <View style={styles.clip}>
           <Pressable onPress={c.toggle} style={[styles.clipBtn, c.status.playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={c.status.playing ? t("common.pause") : t("common.play")}>
@@ -183,6 +190,16 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
         </View>
       ) : null}
     </View>
+  );
+}
+
+/** One line of feedback under the round buttons: working on it, or what went wrong and what to do. */
+export function Notice({ text, bad, spin, onPress }: { text: string; bad?: boolean; spin?: boolean; onPress?: () => void }) {
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} style={[styles.notice, bad && { backgroundColor: "rgba(255,157,176,0.14)" }]} accessibilityRole={bad ? "alert" : "text"} accessibilityLiveRegion="polite">
+      {spin ? <ActivityIndicator size="small" color={colors.muted} /> : bad ? <Icon d='<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>' size={18} color={colors.rose} width={2.2} /> : null}
+      <Text style={[styles.noticeText, bad && { color: colors.cream }]}>{text}</Text>
+    </Pressable>
   );
 }
 
@@ -225,6 +242,8 @@ export function ListenButton() {
 }
 
 const styles = StyleSheet.create({
+  notice: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },
+  noticeText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.muted },
   roundRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
   roundItem: { width: 88, alignItems: "center", gap: 8 },
   roundBtn: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center" },

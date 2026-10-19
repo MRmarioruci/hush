@@ -42,7 +42,7 @@ type Monitor = {
   update: (patch: Partial<MonitorSettings>) => void;
   listening: boolean;
   /** Ask a listening phone for a few seconds of sound (default: the target). Returns when it was asked. */
-  requestClip: (seconds?: number, to?: string | null) => Promise<number>;
+  requestClip: (seconds?: number, to?: string | null) => Promise<{ at: number; ok: boolean }>;
   /** Why listening last stopped (null while it hasn't). */
   lastStop: Stop | null;
   status: CryStatus;
@@ -563,11 +563,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const requestClip = useCallback(async (seconds = CLIP_SECONDS, which?: string | null) => {
     const to = which ?? targetRef.current;
     const at = Date.now();
-    if (!to) return at;
+    if (!to) return { at, ok: false };
     let me = "";
     try { me = await getMyToken(); } catch {}
-    await sendData([to], { type: "cmd", cmd: "clip", seconds, from: me });
-    return at;
+    const ok = await sendData([to], { type: "cmd", cmd: "clip", seconds, from: me });
+    return { at, ok };
   }, []);
 
   // Another phone asked for our days.
