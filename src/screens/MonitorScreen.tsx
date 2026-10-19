@@ -141,7 +141,8 @@ function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
   const { invite, members } = useMonitor();
   const [code, setCode] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { invite().then(setCode, (e) => setErr((e as Error).message)); }, [invite]);
+  const [tries, setTries] = useState(0);
+  useEffect(() => { setErr(null); invite().then(setCode, (e) => setErr((e as Error).message)); }, [invite, tries]);
   // Close once a new phone has joined.
   const count = useRef(members.length);
   useEffect(() => { if (members.length > count.current) onClose?.(); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -149,7 +150,13 @@ function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
     <View style={{ alignItems: "center", gap: 14 }}>
       <Text style={styles.stepTitle}>{t("fam.codeTitle")}</Text>
       <View style={styles.qr}>
-        {code ? <QRCode value={code} size={188} backgroundColor={colors.cream} color={colors.bg} /> : <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>}
+        {code ? <QRCode value={code} size={188} backgroundColor={colors.cream} color={colors.bg} /> : (
+          <View style={{ alignItems: "center", gap: 12 }}>
+            {!err && <ActivityIndicator color={colors.bg} />}
+            <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>
+            {err && <Pressable onPress={() => setTries((x) => x + 1)} style={styles.retry} accessibilityRole="button"><Text style={styles.retryText}>{t("common.tryAgain")}</Text></Pressable>}
+          </View>
+        )}
       </View>
       <View style={{ gap: 10, alignSelf: "stretch" }}>
         <Step n={1} text={t("fam.codeStep1")} />
@@ -667,6 +674,8 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  retry: { backgroundColor: colors.bg, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9 },
+  retryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
   toggles: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 8 },
   statusIcons: { flexDirection: "row", alignItems: "center", gap: 16 },
   statusIcon: { flexDirection: "row", alignItems: "center", gap: 5 },

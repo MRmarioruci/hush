@@ -228,7 +228,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   /** This phone's push address (asks for notifications the first time). */
   const myToken = useCallback(async () => {
-    const tok = await getMyToken();
+    let tok: string;
+    try { tok = await getMyToken(); } catch (e) {
+      // Google's push service unreachable for a moment: the address we already have still works.
+      if (mRef.current.me) tok = mRef.current.me; else throw e;
+    }
     if (tok !== mRef.current.me) {
       const cur = mRef.current;
       // A family made before the address was known (an update from paired phones): add ourselves.

@@ -202,8 +202,17 @@ export async function getMyToken(): Promise<string> {
   const perm = await Notifications.requestPermissionsAsync();
   if (!perm.granted) throw new Error(t("perm.notifs"));
   await setupAlertChannel();
-  const { data } = await Notifications.getExpoPushTokenAsync({ projectId: id });
-  return data;
+  // Google's push service is sometimes briefly unreachable (SERVICE_NOT_AVAILABLE, timeouts): try a few times.
+  let last: unknown;
+  for (const wait of [0, 1500, 4000, 8000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      const { data } = await Notifications.getExpoPushTokenAsync({ projectId: id });
+      return data;
+    } catch (e) { last = e; }
+  }
+  const msg = String((last as Error)?.message ?? last);
+  throw new Error(/SERVICE_NOT_AVAILABLE|TIMEOUT|network|IOException|UnknownHost/i.test(msg) ? t("perm.tokenNet") : t("perm.tokenFail"));
 }
 
 export async function loadAlerts(): Promise<AlertRecord[]> {
