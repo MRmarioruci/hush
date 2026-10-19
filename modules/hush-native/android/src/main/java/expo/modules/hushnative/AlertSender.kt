@@ -49,11 +49,34 @@ object AlertSender {
           setRequestProperty("Content-Type", "application/json")
         }
         conn.outputStream.use { it.write(messages.toString().toByteArray()) }
-        conn.responseCode
+        val code = conn.responseCode
+        val text = (if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         conn.disconnect()
+        noteDead(tokens, text)
       } catch (_: Exception) {}
     }.start()
   }
+
+  /** Phones whose push address no longer works (app removed, data cleared): Expo says DeviceNotRegistered. */
+  private val dead = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+  /** Tickets come back in the order the messages were sent. Dead addresses stop getting alerts at once. */
+  fun noteDead(sentTo: List<String>, response: String) {
+    try {
+      val data = JSONObject(response).optJSONArray("data") ?: return
+      for (i in 0 until minOf(data.length(), sentTo.size)) {
+        val err = data.optJSONObject(i)?.optJSONObject("details")?.optString("error")
+        if (err == "DeviceNotRegistered") {
+          dead.add(sentTo[i])
+          CryEngine.targets = CryEngine.targets.filter { it["token"] != sentTo[i] }
+          Diag.add("push address gone: …${sentTo[i].takeLast(6)}")
+        }
+      }
+    } catch (_: Exception) {}
+  }
+
+  /** For the app: dead addresses seen since last asked (it removes those phones from the family). */
+  fun takeDead(): List<String> = synchronized(dead) { dead.toList().also { dead.clear() } }
 
   /** Which notification a message replaces: one per baby's room, its clips, its sleep notes, and tests. */
   fun topicOf(data: Map<String, Any>): String? {
@@ -107,6 +130,7 @@ object AlertSender {
         val code = conn.responseCode
         val text = (if (code < 400) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         conn.disconnect()
+        noteDead(messagesFor.map { it.first }, text)
         onDone?.invoke(code in 200..299 && !text.contains("\"status\":\"error\""), text)
       } catch (e: Exception) {
         Log.w("HushCry", "Alert failed", e)

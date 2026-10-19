@@ -26,6 +26,7 @@ type CryNative = {
   battery?(): [number, boolean];
   reportRoom?(): boolean;
   deviceName?(): string;
+  takeDeadTokens?(): string[];
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
   setRoom?(playing: boolean, sound: string): void;
@@ -71,6 +72,8 @@ export const cryDetector = cry
       /** Tell the family's phones now whether this phone is listening. */
       reportRoom: () => { try { cry.reportRoom?.(); } catch {} },
       /** The phone's own name as people know it ("Redmi Note 14", "Pixel 8"), or "" if unknown. */
+      /** Push addresses the native side found dead (DeviceNotRegistered) since last asked. */
+      takeDeadTokens: (): string[] => { try { return cry.takeDeadTokens?.() ?? []; } catch { return []; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },
       battery: (): [number, boolean] | null => { try { return cry.battery?.() ?? null; } catch { return null; } },
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),

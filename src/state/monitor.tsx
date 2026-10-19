@@ -6,7 +6,7 @@ import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
-import { CLIP_SECONDS, CRY_CLIP_SECONDS, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, type Room, setupAlertChannel, getMyToken, sendDataMany } from "../monitor";
+import { CLIP_SECONDS, CRY_CLIP_SECONDS, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, type Room, setupAlertChannel, getMyToken, sendDataMany, onDeadTokens } from "../monitor";
 import { makeInvite, membersOf, mergeEntries, newFamily, readFamilyMsg, readInvite, type Family, type Member } from "../family";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
@@ -437,6 +437,23 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     setFamily(next, { rooms });
     broadcast(next);
   }, [setFamily, broadcast]);
+
+  // Phones whose push address stopped working (hush removed, data cleared) leave the family by
+  // themselves, so nothing keeps sending to them. Found by any send, here or in the native listener.
+  useEffect(() => {
+    const drop = (tokens: string[]) => {
+      if (!loaded.current) return;
+      const f = mRef.current.family;
+      const gone = tokens.filter((tok) => f?.entries[tok] && !f.entries[tok].gone && tok !== mRef.current.me);
+      gone.forEach((tok) => { removeMember(tok); diag.mark(`removed phone with dead push address …${tok.slice(-6)}`); });
+    };
+    const off = onDeadTokens(drop);
+    const check = () => drop(cryDetector?.takeDeadTokens() ?? []);
+    const id = setInterval(check, 60_000);
+    const app = AppState.addEventListener("change", (st) => st === "active" && check());
+    ready.current.then(check);
+    return () => { off(); clearInterval(id); app.remove(); };
+  }, [removeMember]);
 
   const leaveFamily = useCallback(() => {
     const cur = mRef.current;

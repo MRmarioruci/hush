@@ -238,6 +238,16 @@ export async function recordAlert(n: Notifications.Notification) {
 }
 
 /** A silent message between hush phones (no notification is shown). */
+/** Push addresses Expo says no longer work (the app was removed or its data cleared). */
+const deadListeners = new Set<(tokens: string[]) => void>();
+export const onDeadTokens = (fn: (tokens: string[]) => void) => { deadListeners.add(fn); return () => { deadListeners.delete(fn); }; };
+/** Tickets come back in the order sent; DeviceNotRegistered means that phone can't get pushes any more. */
+function noteDead(sentTo: string[], json: unknown) {
+  const tickets = (json as { data?: { status?: string; details?: { error?: string } }[] } | null)?.data ?? [];
+  const dead = sentTo.filter((_, i) => tickets[i]?.details?.error === "DeviceNotRegistered");
+  if (dead.length) deadListeners.forEach((fn) => fn(dead));
+}
+
 export async function sendData(to: string[], data: Record<string, unknown>): Promise<boolean> {
   if (!to.length) return false;
   try {
@@ -246,6 +256,7 @@ export async function sendData(to: string[], data: Record<string, unknown>): Pro
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(to.map((t) => ({ to: t, data: { ...data, _id: msgId() }, priority: "high", _contentAvailable: true }))),
     });
+    noteDead(to, await res.clone().json().catch(() => null));
     return res.ok;
   } catch {
     return false;
@@ -263,6 +274,7 @@ export async function sendDataMany(messages: { to: string; data: Record<string, 
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(messages.slice(i, i + 90).map((m) => ({ ...m, data: { ...m.data, _id: msgId() }, priority: "high", _contentAvailable: true }))),
       });
+      noteDead(messages.slice(i, i + 90).map((m) => m.to), await res.clone().json().catch(() => null));
       ok = ok && res.ok;
     }
     return ok;
@@ -296,6 +308,7 @@ export async function sendPush(to: string[], body: string, data: Record<string, 
       body: JSON.stringify(to.map((t) => ({ to: t, title, body, data: { ...data, _id: msgId() }, sound: channelId === ALARM_CHANNEL ? ALARM_SOUND : "default", priority: "high", channelId, interruptionLevel: channelId === ALARM_CHANNEL ? "time-sensitive" : "active", ...(categoryId ? { categoryId } : {}), ...(() => { const k = topicOf(data); return k ? { tag: k, collapseId: k } : {}; })() }))),
     });
     const json = await res.json().catch(() => null);
+    noteDead(to, json);
     return res.ok && !(json?.data ?? []).some((d: { status?: string }) => d.status === "error");
   } catch {
     return false;

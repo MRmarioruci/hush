@@ -101,6 +101,8 @@ class HushCryModule : Module() {
       (set?.takeIf { it.isNotBlank() } ?: bt?.takeIf { it.isNotBlank() } ?: model).trim()
     }
 
+    Function("takeDeadTokens") { AlertSender.takeDead() }
+
     Function("battery") {
       val ctx = appContext.reactContext ?: return@Function listOf(-1, false)
       val (pct, plugged) = CryEngine.battery(ctx)

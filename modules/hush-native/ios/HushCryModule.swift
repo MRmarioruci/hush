@@ -59,6 +59,7 @@ public class HushCryModule: Module, NotificationDelegate {
 
     // "testflight" or "appstore" (both sell through the App Store), "simulator" otherwise.
     Function("reportRoom") { () -> Bool in false }
+    Function("takeDeadTokens") { () -> [String] in [] }
 
     // iOS only gives apps the generic name ("iPhone"), which is still better than nothing.
     Function("deviceName") { () -> String in UIDevice.current.name }
