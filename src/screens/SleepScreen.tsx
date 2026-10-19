@@ -8,7 +8,7 @@ import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
 import { LIMIT_DB, ROOM_M } from "../safety";
-import { Slider } from "../components/Slider";
+import { Dial } from "../components/Dial";
 import { Card, Chip, Label, Pill, Screen } from "../components/ui";
 import { TIMERS, fmtDist, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { fmtTime, useT } from "../i18n";
@@ -29,86 +29,54 @@ export function SleepScreen() {
     ? z.dev.step === 0 ? t("sounds.volOff") : `${Math.round((z.dev.step / z.dev.max) * 100)}%`
     : s.vol === 0 ? t("sounds.volOff") : `${s.vol}%`;
 
+  const vol = z.dev ? (z.dev.max ? z.dev.step / z.dev.max : 0) : s.vol / 100;
+  const setVol = (v: number) => (z.dev ? z.setStep(Math.round(v * z.dev.max)) : z.set({ vol: Math.round(v * 100) }));
+  const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === s.timer));
+  const smart = s.mode === "smart";
+
   return (
     <Screen title={t("sounds.title")}>
-      {/* now playing */}
-      <Pressable onPress={z.toggle} style={({ pressed }) => [styles.now, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityLabel={z.playing ? t("common.pause") : t("common.play")}>
-        <View style={styles.playBtn}>
-          <Svg width={22} height={22} viewBox="0 0 24 24">
-            <Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} />
-          </Svg>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.nowName}>{t(`sound.${z.soundId}`)}</Text>
-          <Text style={styles.nowSub}>
-            {z.playing ? (z.timerLeft != null ? t("sounds.playingStops", { time: fmtLeft(z.timerLeft) }) : t("home.playing")) : stopLine(z.lastStop, t, fmtTime) ?? t(`sound.${z.soundId}.sub`)}
-          </Text>
-        </View>
-      </Pressable>
-
-      <Card>
-        <Label>{t("sounds.sound")}</Label>
-        <View style={styles.grid}>
-          {SOUNDS.map((x) => {
-            const on = x.id === z.soundId;
-            return (
-              <Pressable
-                key={x.id}
-                onPress={() => z.set({ sound: x.id })}
-                style={({ pressed }) => [styles.tile, on && styles.tileOn, pressed && { transform: [{ scale: 0.95 }] }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <SvgXml
-                  width={26}
-                  height={26}
-                  xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`}
-                />
-                <Text style={[styles.tileText, on && { color: colors.bg }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Card>
-
-      <Card>
-        <View>
-          <Label right={<Text style={styles.val}>{volLabel}</Text>}>{z.s.mode === "smart" ? t("sounds.highest") : z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}</Label>
-          {z.dev ? (
-            <Slider label={t("sounds.phoneVolume")} value={z.dev.step} min={0} max={z.dev.max} onChange={z.setStep} />
-          ) : (
-            <Slider label={t("sounds.volume")} value={s.vol} min={0} max={100} onChange={(v) => z.set({ vol: v })} />
-          )}
-        </View>
-        <View style={styles.place}>
-          <Text style={styles.placeLabel}>{t("sounds.placeAt")}</Text>
-          <Text style={[styles.placeNum, { color: tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
+      {/* the dial: drag for volume; the middle says how far the phone must be from the crib */}
+      <View style={{ alignItems: "center" }}>
+        <Dial size={272} value={vol} onChange={setVol} color={tooLoud ? colors.rose : colors.peach} label={z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}>
+          <Text style={styles.placeLabel}>{t("sounds.placeShort")}</Text>
+          <Text style={[styles.placeNum, { color: tooLoud ? colors.rose : tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
           <Text style={styles.placeLabel}>{t("sounds.fromCrib")}</Text>
-        </View>
-        {tooLoud ? (
-          <View style={styles.warn}>
-            <Text style={styles.warnText}>{t("sounds.tooLoudRoom", { dist: fmtDist(ROOM_M, s.unit) })}</Text>
-          </View>
-        ) : (
-          <Pill label={tag.t} color={tag.c} />
-        )}
-        <Text style={styles.hint}>
-          {t("sounds.placeHint", { db: LIMIT_DB })}
-          {z.s.mode === "smart" ? " " + t("sounds.smartStart") : ""}
-          {Platform.OS === "ios" ? " " + t("sounds.iosVolume") : ""}
-        </Text>
-      </Card>
+          <Text style={styles.volText}>{volLabel}</Text>
+        </Dial>
+        <Pressable onPress={z.toggle} style={({ pressed }) => [styles.play, pressed && { transform: [{ scale: 0.94 }] }]} accessibilityLabel={z.playing ? t("common.pause") : t("common.play")}>
+          <Svg width={24} height={24} viewBox="0 0 24 24"><Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} /></Svg>
+        </Pressable>
+        {tooLoud && <Text style={styles.warnLine}>{t("sounds.tooLoudRoom", { dist: fmtDist(ROOM_M, s.unit) })}</Text>}
+      </View>
 
-      <SmartCard />
+      <View style={styles.grid}>
+        {SOUNDS.map((x) => {
+          const on = x.id === z.soundId;
+          return (
+            <Pressable key={x.id} onPress={() => z.set({ sound: x.id })} style={styles.tile} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
+              <View style={[styles.tileIcon, on && { backgroundColor: colors.peach }]}>
+                <SvgXml width={24} height={24} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : "#c9bfff"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+              </View>
+              <Text style={[styles.tileText, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      <Card>
-        <Label>{t("sounds.stopAfter")}</Label>
-        <View style={styles.chips}>
-          {TIMERS.map(([m]) => <Chip key={m} grow label={t(`timer.${m}`)} on={s.timer === m} onPress={() => z.setTimer(m)} />)}
-        </View>
-        <Text style={styles.hint}>{t("sounds.fades")}</Text>
-      </Card>
+      <View style={styles.pills}>
+        <Pressable onPress={() => z.set({ mode: smart ? "manual" : "smart" })} style={styles.pill} accessibilityRole="switch" accessibilityState={{ checked: smart }}>
+          <Svg width={20} height={20} viewBox="0 0 24 24"><Path d={smart ? "M3 17c4 0 4-10 9-10s5 6 9 6" : "M3 12h18"} stroke={smart ? colors.sage : colors.muted} strokeWidth={2} strokeLinecap="round" fill="none" /></Svg>
+          <Text style={styles.pillText}>{smart ? t("smart.smart") : t("smart.manual")}</Text>
+        </Pressable>
+        <Pressable onPress={() => z.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0])} style={styles.pill} accessibilityLabel={t("sounds.stopAfter")}>
+          <Svg width={20} height={20} viewBox="0 0 24 24"><Circle cx={12} cy={13} r={7} stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} fill="none" /><Path d="M12 10v3l2 1.5M10 3h4" stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} strokeLinecap="round" fill="none" /></Svg>
+          <Text style={styles.pillText}>{z.timerLeft != null ? fmtLeft(z.timerLeft) : s.timer ? t(`timer.${s.timer}`) : t("home.noTimerShort")}</Text>
+        </Pressable>
+      </View>
 
+      {smart && <SmartCard />}
+      {Platform.OS === "ios" && <Text style={styles.hint}>{t("sounds.iosVolume")}</Text>}
     </Screen>
   );
 }
@@ -144,8 +112,15 @@ const styles = StyleSheet.create({
   playBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
   nowName: { fontFamily: fonts.display, fontSize: 19, color: colors.cream },
   nowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { flexBasis: "30%", flexGrow: 1, borderRadius: 18, paddingTop: 12, paddingBottom: 10, alignItems: "center", gap: 6 },
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 6 },
+  tile: { width: "25%", paddingVertical: 6, alignItems: "center", gap: 6 },
+  tileIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  volText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, marginTop: 8 },
+  play: { marginTop: -34, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
+  warnLine: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.rose, textAlign: "center", marginTop: 10 },
+  pills: { flexDirection: "row", gap: 10 },
+  pill: { flex: 1, height: 52, borderRadius: 26, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  pillText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   tileOn: { backgroundColor: colors.peach },
   tileText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
   chips: { flexDirection: "row", gap: 6 },
@@ -187,48 +162,21 @@ function SmartCard() {
   })();
 
   return (
-    <Card style={{ gap: 14 }}>
-      <View style={styles.modeRow}>
-        {(["smart", "manual"] as const).map((m) => (
-          <Pressable key={m} onPress={() => z.set({ mode: m })} style={[styles.modeItem, z.s.mode === m && styles.modeOn]}>
-            <Text style={[styles.modeText, z.s.mode === m && { color: colors.bg }]}>{m === "smart" ? t("smart.smart") : t("smart.manual")}</Text>
-          </Pressable>
-        ))}
+    <View style={{ gap: 10 }}>
+      <View style={styles.smartRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>{t("smart.respond")}</Text>
+          <Text style={styles.hint}>{z.smart ? phaseText : t("smart.respondSub", { name: mon.baby })}</Text>
+        </View>
+        <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
       </View>
-      {smart ? (
-        <>
-          <Curve phase={z.smart?.phase ?? null} startedAt={null} />
-          <View style={styles.smartRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.smartTitle}>{z.smart ? t("smart.atCrib", { db: Math.round(z.smart.db) }) : t("smart.title")}</Text>
-              <Text style={styles.hint}>{phaseText}</Text>
-            </View>
-          </View>
-          <View style={styles.smartRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>{t("smart.respond")}</Text>
-              <Text style={styles.hint}>{t("smart.respondSub", { name: mon.baby })}</Text>
-            </View>
-            <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
-          </View>
-          {z.s.smartCry && !micOk && (
-            <Pressable
-              onPress={async () => {
-                const problem = await askMicAndNotifications();
-                setMicMsg(problem);
-                setMicOk(!problem);
-              }}
-              style={styles.allow}
-            >
-              <Text style={styles.allowText}>{t("smart.allowMic")}</Text>
-            </Pressable>
-          )}
-          {micMsg && <Text style={styles.hint}>{micMsg}</Text>}
-        </>
-      ) : (
-        <Text style={styles.hint}>{t("smart.manualHint")}</Text>
+      {z.s.smartCry && !micOk && (
+        <Pressable onPress={async () => { const problem = await askMicAndNotifications(); setMicMsg(problem); setMicOk(!problem); }} style={styles.allow}>
+          <Text style={styles.allowText}>{t("smart.allowMic")}</Text>
+        </Pressable>
       )}
-    </Card>
+      {micMsg && <Text style={styles.hint}>{micMsg}</Text>}
+    </View>
   );
 }
 

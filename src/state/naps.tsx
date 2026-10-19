@@ -23,12 +23,20 @@ type NapsCtx = {
   /** The sleep in progress was started by the sound; undo removes it. */
   fromSound: boolean;
   undoSound: () => Promise<void>;
+  /** A sleep that has gone on far longer than makes sense (someone forgot "woke up"), and a guess
+   * of when it really ended (white noise turned off, monitor stopped). */
+  stale: { since: number; guess: number | null } | null;
+  /** End the sleep at a given time. */
+  wokeAt: (at: number) => Promise<string | null>;
+  /** "Still asleep": stop asking for a while. */
+  stillAsleep: () => void;
 };
 
 const Ctx = createContext<NapsCtx | null>(null);
 export const useNaps = () => useContext(Ctx)!;
 const REMINDER = "nap-reminder";
 const PEER = "hush:peerSleep";
+const ACK = "hush:stillAsleepAt";
 /** What a paired phone last said: asleep since when, or awake. */
 type PeerSleep = { asleep: boolean; since: number; at: number; from: string };
 
@@ -39,7 +47,7 @@ const durIn = (L: Lang, min: number) => {
 const clockIn = (L: Lang, ms: number) => new Date(ms).toLocaleTimeString(L, { hour: "numeric", minute: "2-digit" });
 
 export function NapsProvider({ children }: { children: ReactNode }) {
-  const { s, starts, playing, stop, soundId } = useSleep();
+  const { s, starts, playing, stop, soundId, lastStop } = useSleep();
   const mon = useMonitor();
   const lang = useLang();
   const [nights, setNights] = useState<Night[]>([]);
@@ -147,12 +155,11 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   }, [reload, notify]);
 
   /** `skip`: the phone that asked (it already knows). Never turns the baby monitor off. */
-  const wakeUp = useCallback(async (skip?: string) => {
-    const at = Date.now();
+  const wakeUp = useCallback(async (skip?: string, at = Date.now()) => {
     const slept = state.asleep ? (at - state.since) / 60_000 : 0;
     const who = skip ? (mon.members.find((p) => p.token === skip)?.name || t("stop.otherPhone")) : undefined;
     // White noise is for sleeping; stop it when the baby is up.
-    if (playing) stop("woke", who);
+    if (playing && Date.now() - at < 5 * 60_000) stop("woke", who);
     // Asleep only because another phone said so: ask that phone to end its sleep.
     if (!openFrom && !monitorAsleep && peerAsleep && peer) {
       let me = "";
@@ -169,6 +176,26 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     return mon.listening ? t("nap.stillListening") : null;
   }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, savePeer, state, notify]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
+  const wokeAt = useCallback((at: number) => wakeUp(undefined, Math.min(Date.now(), Math.max(at, state.asleep ? state.since + 60_000 : at))), [wakeUp, state]);
+
+  // A sleep that can't still be going on: over 14 h from an evening start, over 4 h from a daytime one.
+  const [ack, setAck] = useState(0); // "still asleep" pressed at
+  useEffect(() => { AsyncStorage.getItem(ACK).then((v) => v && setAck(Number(v) || 0)).catch(() => {}); }, []);
+  const stillAsleep = useCallback(() => { const at = Date.now(); setAck(at); AsyncStorage.setItem(ACK, String(at)).catch(() => {}); }, []);
+  let stale: NapsCtx["stale"] = null;
+  if (state.asleep) {
+    const h = new Date(state.since).getHours();
+    const limit = (h >= 17 || h < 5 ? 14 : 4) * 3600_000;
+    const asked = ack > state.since ? ack : 0;
+    if (now - state.since > limit && (!asked || now - asked > limit / 3)) {
+      // The first sign it ended: white noise turned off, or the monitor stopped, after it began.
+      const signs = [lastStop, mon.lastStop]
+        .filter((x): x is NonNullable<typeof x> => !!x && x.at > state.since + 20 * 60_000 && x.why !== "interrupted" && x.why !== "system")
+        .map((x) => x.at)
+        .sort((a, b) => a - b);
+      stale = { since: state.since, guess: signs[0] ?? null };
+    }
+  }
 
   // Messages from the paired phones: "asleep / awake", and "the baby woke up" from the other side.
   const wakeRef = useRef(wakeUp);
@@ -227,5 +254,5 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     })();
   }, [s.features.naps, s.napReminders, state.asleep, state.asleep ? 0 : state.sweet?.[0], lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload, fromSound: !!soundSleep && openFrom != null, undoSound }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload, fromSound: !!soundSleep && openFrom != null, undoSound, stale, wokeAt, stillAsleep }}>{children}</Ctx.Provider>;
 }

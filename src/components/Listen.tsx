@@ -148,6 +148,56 @@ export function ListenCard({ bare }: { bare?: boolean } = {}) {
   );
 }
 
+/** Monitor tab, round style: the listen circle (tap: listen, long-press: change length) beside other round buttons, then the clip. */
+export function ListenRound({ children }: { children?: React.ReactNode }) {
+  const t = useT();
+  const c = useClip(true);
+  const [len, setLen] = useState(c.m.clipSeconds ?? CLIP_SECONDS);
+  const frac = 1 - Math.exp(-c.elapsed / TYPICAL_MS);
+  const error = c.fresh && c.clip?.error ? c.clip.error : null;
+  const playFrac = c.status.duration > 0 ? Math.min(1, c.status.currentTime / c.status.duration) : 0;
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={styles.roundRow}>
+        <RoundBtn
+          onPress={() => c.ask(len)} onLongPress={() => setLen(LENGTHS[(LENGTHS.indexOf(len) + 1) % LENGTHS.length])}
+          disabled={c.waiting || !c.target} bg={colors.sage} label={c.waiting ? t("listen.sending") : t("listen.button", { s: len })} progress={c.waiting ? frac : undefined}>
+          {c.waiting ? <ActivityIndicator color={colors.bg} /> : <Icon d={EAR} size={28} color={colors.bg} width={2} />}
+        </RoundBtn>
+        {children}
+      </View>
+      {c.timedOut && <Text style={[styles.err, { textAlign: "center" }]}>{t("listen.noAnswer")}</Text>}
+      {error && <Text style={[styles.err, { textAlign: "center" }]}>{t(`listen.err.${error}`)}</Text>}
+      {c.clip?.url ? (
+        <View style={styles.clip}>
+          <Pressable onPress={c.toggle} style={[styles.clipBtn, c.status.playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={c.status.playing ? t("common.pause") : t("common.play")}>
+            <Icon d={c.status.playing ? PAUSE : PLAY} size={20} color={colors.bg} width={2} />
+          </Pressable>
+          <View style={{ flex: 1, gap: 6 }}>
+            <View style={styles.clipHead}>
+              <Text style={styles.clipTitle}>{c.clip.auto ? t("listen.latestCry") : t("listen.latest")}</Text>
+              <Text style={styles.clipMeta}>{fmtWhen(c.clip.at)} · {t("listen.secs", { s: c.clip.seconds ?? CLIP_SECONDS })}</Text>
+            </View>
+            <View style={styles.track}><View style={[styles.trackFill, { width: `${playFrac * 100}%` }]} /></View>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** A round button with a short label under it. `progress` draws a ring while something is on its way. */
+export function RoundBtn({ onPress, onLongPress, disabled, bg = colors.card, label, children, progress, a11y }: {
+  onPress: () => void; onLongPress?: () => void; disabled?: boolean; bg?: string; label: string; children: React.ReactNode; progress?: number; a11y?: string;
+}) {
+  return (
+    <Pressable onPress={onPress} onLongPress={onLongPress} disabled={disabled} style={({ pressed }) => [styles.roundItem, pressed && { transform: [{ scale: 0.95 }] }]} accessibilityRole="button" accessibilityLabel={a11y ?? label}>
+      <View style={[styles.roundBtn, { backgroundColor: bg }, progress != null && { opacity: 0.6 + 0.4 * progress }]}>{children}</View>
+      <Text style={styles.roundLabel} numberOfLines={2}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** Home: one button, last-used length. */
 export function ListenButton() {
   const t = useT();
@@ -175,6 +225,10 @@ export function ListenButton() {
 }
 
 const styles = StyleSheet.create({
+  roundRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
+  roundItem: { width: 82, alignItems: "center", gap: 7 },
+  roundBtn: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center" },
+  roundLabel: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, textAlign: "center", fontVariant: ["tabular-nums"] },
   listenHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headText: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
   lengths: { flexDirection: "row", gap: 2 },

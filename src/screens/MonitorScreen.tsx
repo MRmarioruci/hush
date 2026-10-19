@@ -13,7 +13,9 @@ import { useMonitor } from "../state/monitor";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSleep } from "../state/sleep";
 import { stopLine } from "../stops";
-import { EAR, ListenCard } from "../components/Listen";
+import { EAR, ListenRound, RoundBtn } from "../components/Listen";
+import { Ring } from "../components/Ring";
+import { MoonFace } from "../components/MoonFace";
 import { SvgXml } from "react-native-svg";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
@@ -41,7 +43,6 @@ export function MonitorScreen() {
         <>
           <OtherRooms alerts={alerts} />
           <ThisPhone />
-          <AlertsCard alerts={alerts} />
           <FamilyCard />
         </>
       )}
@@ -242,64 +243,45 @@ function ThisPhone() {
     </Card>
   );
 
+  const threshold = THRESHOLDS[m.sensitivity];
+  const score = status.score ?? 0;
+  const level = Math.min(1, score / Math.max(threshold * 2, 0.01)); // the alert line sits halfway round
+  const hears = status.top != null && (status.topScore ?? 0) > 0.1 ? heardLabel(status.top, YAMNET_LABELS[status.top]) : t("hear.quiet");
+  const clipSecs = m.cryClip ?? CRY_CLIP_SECONDS;
+  const cycle = <T,>(xs: T[], v: T) => xs[(xs.indexOf(v) + 1) % xs.length];
   return (
     <>
       <View style={styles.orbWrap}>
-        <Orb listening={listening} crying={crying} score={status.score ?? 0} onPress={toggle} baby={baby} />
-        <Text style={styles.orbMeta}>{lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet")}</Text>
-        <Text style={styles.meta}>
-          {[
-            t("nursery.alertsTo", { names: members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ") }),
-            sleep.playing ? t(`sound.${sleep.soundId}`) : null,
-            m.allowListen ? t("listen.chipOn") : null,
-          ].filter(Boolean).join("  ·  ")}
+        <View style={styles.orbBox}>
+          <Ring size={ORB + 34} stroke={6} progress={level} color={score >= threshold ? colors.rose : colors.sage} track={colors.card} fill="transparent" style={{ position: "absolute" }} />
+          <Orb listening={listening} crying={crying} score={score} onPress={toggle} baby={baby} />
+        </View>
+        <Text style={styles.orbMeta} numberOfLines={1}>{hears}</Text>
+        <Text style={styles.meta} numberOfLines={2}>
+          {[lastCry ? t("nursery.lastAlert", { time: fmtTime(lastCry) }) : t("nursery.quiet"), sleep.playing ? t(`sound.${sleep.soundId}`) : null].filter(Boolean).join("  ·  ")}
         </Text>
       </View>
 
-      <TrialNote />
-      <Hearing />
-      <KeepAwake />
-
-      <Card style={[{ gap: 16 }, styles.listenBorder, m.allowListen && styles.listenCardOn]}>
-        <View style={styles.listenCard}>
-          <View style={[styles.listenIcon, m.allowListen && { backgroundColor: colors.sage }]}>
-            <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : colors.muted} width={2} />
-          </View>
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={styles.listenTitle}>{t("listen.allow")}</Text>
-            <Text style={styles.roleSub}>{m.allowListen ? t("listen.allowOn") : t("listen.allowOff")}</Text>
-          </View>
-          <Switch value={!!m.allowListen} onValueChange={(allowListen) => update({ allowListen })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("listen.allow")} />
-        </View>
+      <View style={styles.toggles}>
+        <RoundBtn onPress={() => update({ allowListen: !m.allowListen })} bg={m.allowListen ? colors.sage : colors.card} label={t("rt.listenIn")} a11y={t("listen.allow")}>
+          <Icon d={EAR} size={26} color={m.allowListen ? colors.bg : colors.muted} width={2} />
+        </RoundBtn>
         {m.allowListen && (
-          <View style={{ gap: 10 }}>
-            <Label>{t("listen.withCry")}</Label>
-            <Segmented
-              options={[0, 5, 10].map((v) => ({ value: v, label: v ? t("listen.secs", { s: v }) : t("listen.none") }))}
-              value={m.cryClip ?? CRY_CLIP_SECONDS}
-              onChange={(cryClip) => update({ cryClip })}
-            />
-            <Text style={styles.roleSub}>
-              {(m.cryClip ?? CRY_CLIP_SECONDS) ? t("listen.withCryOn", { s: m.cryClip ?? CRY_CLIP_SECONDS }) : t("listen.withCryOff")}
-            </Text>
-          </View>
+          <RoundBtn onPress={() => update({ cryClip: cycle([0, 5, 10], clipSecs) })} bg={clipSecs ? colors.card2 : colors.card} label={t("rt.clip")} a11y={t("listen.withCry")}>
+            <Text style={styles.roundVal}>{clipSecs ? t("listen.secs", { s: clipSecs }) : t("listen.none")}</Text>
+          </RoundBtn>
         )}
-      </Card>
+        <RoundBtn onPress={() => update({ alertAfter: cycle(ALERT_AFTER.map(([v]) => v), m.alertAfter) })} label={t("nursery.alertAfter")}>
+          <Text style={styles.roundVal}>{t(`after.${m.alertAfter}`)}</Text>
+        </RoundBtn>
+        <RoundBtn onPress={() => update({ sensitivity: cycle(["low", "medium", "high"] as Sensitivity[], m.sensitivity) })} label={t("nursery.sensitivity")}>
+          <Text style={styles.roundVal}>{t(`sens.${m.sensitivity}`)}</Text>
+        </RoundBtn>
+      </View>
+      <Text style={styles.foot}>{t("rt.tapToChange", { names: members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ") })}</Text>
 
-      <Card style={{ gap: 16 }}>
-        <Text style={styles.cardTitle}>{t("nursery.alertSettings")}</Text>
-        <View style={{ gap: 10 }}>
-          <Label>{t("nursery.alertAfter")}</Label>
-          <Segmented options={ALERT_AFTER.map(([v]) => ({ value: v, label: t(`after.${v}`) }))} value={m.alertAfter} onChange={(alertAfter) => update({ alertAfter })} />
-          <Text style={styles.roleSub}>
-            {m.alertAfter === 0 ? t("nursery.afterNow") : t(m.alertAfter === 60 ? "nursery.after60" : "nursery.after10", { name: baby })}
-          </Text>
-        </View>
-        <View style={{ gap: 10 }}>
-          <Label>{t("nursery.sensitivity")}</Label>
-          <Segmented options={(["low", "medium", "high"] as Sensitivity[]).map((v) => ({ value: v, label: t(`sens.${v}`) }))} value={m.sensitivity} onChange={(sensitivity) => update({ sensitivity })} />
-        </View>
-      </Card>
+      <KeepAwake />
+      <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </>
   );
@@ -322,34 +304,6 @@ function KeepAwake() {
         </Pressable>
       )}
     </View>
-  );
-}
-
-/** Live view of what the baby's phone hears, so you can see the detector working. */
-function Hearing() {
-  const { m, status, baby } = useMonitor();
-  const threshold = THRESHOLDS[m.sensitivity];
-  const score = status.score ?? 0;
-  const pct = Math.min(100, (score / Math.max(threshold * 2, 0.01)) * 100); // the line sits halfway
-  const label = status.top != null && (status.topScore ?? 0) > 0.1 ? heardLabel(status.top, YAMNET_LABELS[status.top]) : t("hear.quiet");
-  const hot = score >= threshold;
-  return (
-    <Card style={{ gap: 12 }}>
-      <Label right={<Text style={styles.hearingNow} numberOfLines={1}>{label}</Text>}>{t("hear.title")}</Label>
-      <View>
-        <View style={styles.meter}>
-          <View style={[styles.meterFill, { width: `${pct}%`, backgroundColor: hot ? colors.rose : colors.sage }]} />
-          <View style={styles.meterLine} />
-        </View>
-        <View style={styles.meterLabels}>
-          <Text style={styles.meterText}>{t("hear.calm")}</Text>
-          <Text style={styles.meterText}>{t("hear.crying")}</Text>
-        </View>
-      </View>
-      <Text style={styles.roleSub}>
-        {t(m.alertAfter === 0 ? "hear.now" : m.alertAfter === 60 ? "hear.after60" : "hear.after10")} {t("hear.test")}
-      </Text>
-    </Card>
   );
 }
 
@@ -506,80 +460,77 @@ const ago = (ms: number) => {
 const BATTERY = '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 11v2"/>';
 const NOISE = '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>';
 
-/** The baby's phone at a glance: listening or not, white noise, battery, and how fresh that is. */
-function RoomHero({ r, lastAlert }: { r: Remote; lastAlert: AlertRecord | null }) {
-  const { targetName, targetBaby } = useMonitor();
+/** The baby's room as one big circle: the sleepy moon while all is quiet, awake after a cry. Tap to check again. */
+function RoomCircle({ r, lastAlert, alerts }: { r: Remote; lastAlert: AlertRecord | null; alerts: AlertRecord[] }) {
+  const { targetName, targetBaby, baby } = useMonitor();
   const room = r.room;
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
-  const checking = !room && r.waiting;
+  const checking = r.waiting && !r.cmdOpen;
   // It reports every 10 minutes while listening; much longer than that means something's wrong.
   const heard = room?.got ?? room?.at ?? 0;
   const stale = !!room && (r.noReply || (room.listening && Date.now() - heard > 25 * 60_000));
-  const recentCry = lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
+  const recentCry = !!lastAlert && Date.now() - lastAlert.at < 15 * 60_000;
   const on = !!room?.listening && !stale;
   const tone = recentCry ? colors.rose : stale ? colors.peach : on ? colors.sage : colors.muted;
   const lowBattery = room?.battery != null && room.battery <= 20 && !room.charging;
-  const meta = room ? [
-    room.battery != null ? `${room.battery}%${room.charging ? ` · ${t("remote.charging")}` : ""}` : null,
-    t("remote.checked", { when: ago(heard) }),
-  ].filter(Boolean).join("  ·  ") : null;
+  const status = recentCry ? t("room.cried", { time: fmtTime(lastAlert!.at) })
+    : !room ? (checking ? t("remote.waiting") : t("remote.noState"))
+    : stale ? t("room.stale", { time: fmtTime(heard) })
+    : on ? t("room.quiet") : t("room.off");
+  const name = targetBaby ? babyLabel(targetBaby) : baby;
+  // Tonight's cries as dots, oldest first.
+  const tonight = alerts.filter((a) => Date.now() - a.at < 12 * 3600_000).slice(0, 10).reverse();
   return (
-    <View style={{ gap: 6 }}>
-      <View style={styles.hero}>
-        <View style={[styles.heroDot, { backgroundColor: tone }]} />
-        <View style={{ flex: 1, gap: 1 }}>
-          <Text style={styles.heroTitle} numberOfLines={1}>{targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("fam.unnamed", { n: 2 })}</Text>
-          <Text style={[styles.heroStatus, { color: tone }]} numberOfLines={2}>
-            {recentCry ? lastAlert!.body
-              : !room ? (checking ? t("remote.waiting") : t("remote.noState"))
-              : stale ? t("remote.stale", { time: fmtTime(heard) })
-              : on ? t("remote.listening") : t("remote.notListening")}
-          </Text>
-        </View>
-        <Pressable onPress={() => r.send("status")} hitSlop={12} style={styles.refresh} accessibilityRole="button" accessibilityLabel={t("remote.refresh")}>
-          {checking ? <ActivityIndicator color={colors.muted} size="small" /> : <Icon d={REFRESH} size={18} color={colors.muted} width={2} />}
-        </Pressable>
+    <View style={{ alignItems: "center", gap: 8 }}>
+      <Text style={styles.heroTitle} numberOfLines={1}>{targetBaby ? t("hero.room", { name }) : targetName || t("fam.unnamed", { n: 2 })}</Text>
+      <Ring size={212} stroke={7} progress={on || recentCry ? 1 : 0.0001} color={tone} track={colors.card2} onPress={() => r.send("status")} label={t("remote.refresh")}>
+        <MoonFace size={112} awake={recentCry} />
+        {checking && <View style={styles.checking}><ActivityIndicator color={colors.muted} size="small" /></View>}
+      </Ring>
+      <Text style={[styles.circleStatus, { color: tone === colors.muted ? colors.cream : tone }]} numberOfLines={2}>{status}</Text>
+      <View style={styles.statusIcons}>
+        {room?.battery != null && (
+          <View style={styles.statusIcon}>
+            <Icon d={BATTERY} size={16} color={lowBattery ? colors.rose : colors.muted} width={2} />
+            <Text style={[styles.meta, lowBattery && { color: colors.rose }]}>{room.battery}%{room.charging ? " ⚡" : ""}</Text>
+          </View>
+        )}
+        {room && <Text style={styles.meta}>{ago(heard)}</Text>}
       </View>
-      {meta && <Text style={[styles.meta, lowBattery && { color: colors.rose }]}>{meta}</Text>}
+      {tonight.length > 0 && (
+        <View style={styles.dots} accessibilityLabel={t("room.tonight", { n: tonight.length })}>
+          {tonight.map((a) => (
+            <View key={a.id} style={{ alignItems: "center", gap: 3 }}>
+              <View style={styles.cryDot} />
+              <Text style={styles.dotTime}>{fmtTime(a.at)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
-/** White noise on the baby's phone: play/stop and the sound. */
-function NoiseCard({ r }: { r: Remote }) {
+/** The sounds on the baby's phone, as a strip of circles. */
+function SoundStrip({ r }: { r: Remote }) {
   const room = r.room;
-  const playing = !!room?.playing;
-  const busy = !!r.cmdOpen;
   const strip = useRef<ScrollView>(null);
   return (
-    <View style={{ gap: 12 }}>
-      <View style={styles.roomRow}>
-        <Pressable onPress={() => r.send(playing ? "stop" : "play")} disabled={busy} style={[styles.roomBtn, playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={playing ? t("remote.stop") : t("remote.play")}>
-          {busy ? <ActivityIndicator color={playing ? colors.bg : colors.cream} /> : (
-            <Icon d={playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={22} color={playing ? colors.bg : colors.cream} width={2} />
-          )}
-        </Pressable>
-        <View style={{ flex: 1, gap: 1 }}>
-          <Text style={styles.rowTitle}>{busy ? t("remote.waiting") : playing ? t("remote.playing", { sound: t(`sound.${room!.sound}`) }) : t("remote.noise")}</Text>
-          <Text style={styles.roleSub}>{busy ? " " : playing ? t("remote.tapStop") : t("remote.tapPlay")}</Text>
-        </View>
-      </View>
-      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}
-        onLayout={() => strip.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 2) * 62, animated: false })}>
-        {SOUNDS.map((x) => {
-          const on = room?.sound === x.id;
-          return (
-            <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={styles.stripItem} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
-              <View style={[styles.stripIcon, on && { backgroundColor: colors.peach }]}>
-                <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
-              </View>
-              <Text style={[styles.stripText, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
+    <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}
+      onLayout={() => strip.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 2) * 62, animated: false })}>
+      {SOUNDS.map((x) => {
+        const on = room?.sound === x.id;
+        return (
+          <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={styles.stripItem} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
+            <View style={[styles.stripIcon, on && { backgroundColor: colors.peach }]}>
+              <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+            </View>
+            <Text style={[styles.stripText, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -630,40 +581,38 @@ function OtherRooms({ alerts, onlyListening }: { alerts: AlertRecord[]; onlyList
           })}
         </View>
       )}
-      <Card style={{ gap: 18 }}>
-        <RoomHero r={remote} lastAlert={alerts[0] ?? null} />
-        <View style={styles.rule} />
-        <ListenCard bare />
-        <View style={styles.rule} />
-        <NoiseCard r={remote} />
-      </Card>
+      <RoomCircle r={remote} lastAlert={alerts[0] ?? null} alerts={alerts} />
+      <ListenRound>
+        <RoundBtn onPress={() => remote.send(remote.room?.playing ? "stop" : "play")} disabled={!!remote.cmdOpen} bg={remote.room?.playing ? colors.peach : colors.card}
+          label={remote.room?.playing ? t(`sound.${remote.room.sound}`) : t("remote.noise")} a11y={remote.room?.playing ? t("remote.stop") : t("remote.play")}>
+          {remote.cmdOpen ? <ActivityIndicator color={remote.room?.playing ? colors.bg : colors.cream} /> : (
+            <Icon d={remote.room?.playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={24} color={remote.room?.playing ? colors.bg : colors.cream} width={2} />
+          )}
+        </RoundBtn>
+        <RoundBtn onPress={() => remote.send("status")} label={t("remote.refresh")}>
+          <Icon d={REFRESH} size={24} color={colors.cream} width={2} />
+        </RoundBtn>
+      </ListenRound>
+      <SoundStrip r={remote} />
     </>
   );
 }
 
-function AlertsCard({ alerts }: { alerts: AlertRecord[] }) {
-  if (!alerts.length) return null;
-  return (
-    <Card style={{ gap: 4 }}>
-      <Label>{t("parent.alerts")}</Label>
-      {alerts.length === 0 ? (
-        <Text style={styles.empty}>{t("parent.none")}</Text>
-      ) : (
-        alerts.slice(0, 8).map((a) => (
-          <View key={a.id} style={styles.alertRow}>
-            <View style={styles.alertDot} />
-            <Text style={styles.personName}>{a.body}</Text>
-            <Text style={styles.time}>{fmtTime(a.at)}</Text>
-          </View>
-        ))
-      )}
-    </Card>
-  );
-}
-
 const ORB = 184;
+const xstyles = StyleSheet.create({
+  toggles: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 4 },
+  roundVal: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, textAlign: "center" },
+  circleStatus: { fontFamily: fonts.display, fontSize: 22, textAlign: "center" },
+  statusIcons: { flexDirection: "row", alignItems: "center", gap: 14 },
+  statusIcon: { flexDirection: "row", alignItems: "center", gap: 5 },
+  checking: { position: "absolute", bottom: 26 },
+  dots: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 4 },
+  cryDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.rose },
+  dotTime: { fontFamily: fonts.body, fontSize: 10.5, color: colors.muted, fontVariant: ["tabular-nums"] },
+});
 const REFRESH = '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>';
 const styles = StyleSheet.create({
+  ...xstyles,
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
   listenCard: { flexDirection: "row", alignItems: "center", gap: 14 },
   listenBorder: { borderWidth: 1.5, borderColor: "transparent" },

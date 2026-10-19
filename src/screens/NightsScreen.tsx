@@ -7,7 +7,10 @@ import { useMonitor } from "../state/monitor";
 import { dayKey, fmtClock, fmtDur, loadManual, type ManualSleep, type Night, type Sleep } from "../nights";
 import { useNaps } from "../state/naps";
 import { useSleep } from "../state/sleep";
-import { SleepRow, SleepSheet, TypicalCard } from "../components/Naps";
+import { AgeGuide, SleepRow, SleepSheet } from "../components/Naps";
+import { Ring } from "../components/Ring";
+import Svg, { Circle, Path } from "react-native-svg";
+import { ageMonths, bandFor } from "../naps";
 import { dateLocale, t, useT } from "../i18n";
 
 type Mode = "day" | "week" | "month";
@@ -107,64 +110,113 @@ export function NightsScreen() {
 /* ---------------- one night ---------------- */
 
 function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string; naps: boolean; edit: (s: Sleep) => (() => void) | undefined; onAdd: () => void }) {
+  const { s } = useSleep();
+  const [guide, setGuide] = useState(false);
   const i = Math.max(0, nights.findIndex((n) => n.key === selected));
   const n = nights[i];
   const strip = nights.slice(0, 60);
   const heard = n.listening.length > 0;
-  const metric = (x: Night) => (strip.some((y) => y.listening.length) ? x.cryMin : x.sleptMin ?? 0);
-  const max = Math.max(5, ...strip.map(metric));
+  const crying = strip.some((y) => y.listening.length);
+  const months = ageMonths(s.birthday, keyDate(n.key).getTime() + 12 * 3600_000);
+  const band = months == null ? null : bandFor(months);
+  const goal = band?.total ? band.total[1] * 60 : 15 * 60;
+  const sleeps = n.sleeps ?? [];
+  // Only the part of each sleep inside this day, so the legend adds up to the total in the middle.
+  const d0 = keyDate(n.key).getTime(), d1 = addDays(keyDate(n.key), 1).getTime();
+  const within = (x: Sleep) => Math.max(0, Math.min(x.to, d1) - Math.max(x.from, d0)) / 60_000;
+  const nightMin = sleeps.filter((x) => x.kind === "night").reduce((a, x) => a + within(x), 0);
+  const napList = sleeps.filter((x) => x.kind === "nap" && within(x) > 0);
+  const napMin = napList.reduce((a, x) => a + within(x), 0);
 
   return (
     <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dayStrip}
-        style={{ marginHorizontal: -20, transform: [{ scaleX: -1 }] }}
-      >
+      {/* each day as a little ring: how full the day's sleep (or crying) was */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayStrip}
+        style={{ marginHorizontal: -20, transform: [{ scaleX: -1 }] }}>
         {strip.map((x) => {
           const on = x.key === n.key;
+          const frac = crying ? Math.min(1, x.cryMin / 60) : Math.min(1, (x.sleptMin ?? 0) / goal);
           return (
-            <Pressable key={x.key} onPress={() => onSelect(x.key)} style={[styles.day, on && styles.dayOn, { transform: [{ scaleX: -1 }] }]} accessibilityLabel={longDate(x.key)}>
-              <Text style={[styles.dayName, on && { color: colors.bg }]}>{dayName(x.key)}</Text>
-              <Text style={[styles.dayNum, on && { color: colors.bg }]}>{keyDate(x.key).getDate()}</Text>
-              <View style={[styles.dayBar, { width: 6 + 18 * (metric(x) / max), backgroundColor: on ? colors.bg : strip.some((y) => y.listening.length) ? colors.rose : colors.sage, opacity: on ? 0.5 : 0.8 }]} />
+            <Pressable key={x.key} onPress={() => onSelect(x.key)} style={[styles.day, { transform: [{ scaleX: -1 }] }]} accessibilityLabel={longDate(x.key)} accessibilityState={{ selected: on }}>
+              <Ring size={42} stroke={5} progress={frac} color={on ? colors.peach : crying ? colors.rose : colors.sage} track={colors.card}>
+                <Text style={[styles.dayNum, on && { color: colors.peach }]}>{keyDate(x.key).getDate()}</Text>
+              </Ring>
+              <Text style={[styles.dayName, on && { color: colors.peach }]}>{dayName(x.key)}</Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <View style={styles.picker}>
-        <Pressable onPress={() => onSelect(nights[Math.min(nights.length - 1, i + 1)].key)} disabled={i >= nights.length - 1} hitSlop={12} style={i >= nights.length - 1 && { opacity: 0.25 }} accessibilityLabel={t("nights.earlier")}>
-          <Icon d={LEFT} size={22} color={colors.cream} width={2} />
-        </Pressable>
-        <View style={{ alignItems: "center", flexShrink: 1 }}>
-          <Text style={styles.pickTitle}>{dayTitle(n.key)}</Text>
-          <Text style={styles.pickSub}>{heard ? t("nights.heard", { dur: fmtDur(n.listenedMin) }) : t("nights.slept", { dur: fmtDur(n.sleptMin ?? 0) })}</Text>
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Text style={styles.pickTitle}>{dayTitle(n.key)}</Text>
+        <Clock n={n}>
+          <Text style={styles.clockBig}>{fmtDur(n.sleptMin ?? 0)}</Text>
+          <Text style={styles.clockSub}>{band?.total ? t("nights.sleptUsual", { range: t("age.rangeH", { lo: band.total[0], hi: band.total[1] }) }) : t("nights.sleptShort")}</Text>
+        </Clock>
+        <View style={styles.legend}>
+          {nightMin > 0 && <Key color="#c9bfff" label={`${t("nights.night")} ${fmtDur(nightMin)}`} />}
+          {napList.length > 0 && <Key color={colors.peach} label={`${t("nights.naps", { count: napList.length })} ${fmtDur(napMin)}`} />}
+          {heard && <Key color={colors.rose} label={`${t("nights.crying")} ${fmtDur(n.cryMin)}`} />}
         </View>
-        <Pressable onPress={() => onSelect(nights[Math.max(0, i - 1)].key)} disabled={i === 0} hitSlop={12} style={i === 0 && { opacity: 0.25 }} accessibilityLabel={t("nights.later")}>
-          <Icon d={ICONS.chevron} size={22} color={colors.cream} width={2} />
-        </Pressable>
       </View>
 
-      {(heard || (n.logged ?? []).length > 0) && <Timeline n={n} />}
-      {((n.sleeps ?? []).length > 0 || napsOn) && <Sleeps n={n} edit={edit} onAdd={napsOn ? onAdd : undefined} />}
-      {napsOn && <TypicalCard n={n} />}
-
-      {(heard || !napsOn) && <View style={styles.tiles}>
-        {heard ? (
-          <>
-            <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
-            <Tile value={fmtDur(n.cryMin)} label={t("nights.total")} />
-            <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
-          </>
-        ) : (
-          <Tile value={fmtDur(n.sleptMin ?? 0)} label={t("typ.total")} />
+      <View style={styles.roundRow}>
+        <Pressable onPress={onAdd} style={styles.roundBtn} accessibilityLabel={t("nights.addSleep")}>
+          <Icon d='<path d="M12 5v14M5 12h14"/>' size={20} color={colors.bg} width={2.4} />
+        </Pressable>
+        {napsOn && months != null && (
+          <Pressable onPress={() => setGuide(true)} style={styles.softBtn}>
+            <Text style={styles.softBtnText}>{t("nights.ageGuide")}</Text>
+          </Pressable>
         )}
-        <Tile value={String(naps(n))} label={t("nights.naps", { count: naps(n) })} />
-      </View>}
-      <WhenChart nights={nights.slice(0, 14)} baby={n.baby || baby} />
+      </View>
+
+      {sleeps.length > 0 && <Sleeps n={n} edit={edit} />}
+      {heard && (
+        <View style={styles.tiles}>
+          <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
+          <Tile value={fmtDur(n.longestQuietMin)} label={t("nights.quiet")} />
+        </View>
+      )}
+      {crying && <WhenChart nights={nights.slice(0, 14)} baby={n.baby || baby} />}
+      <AgeGuide visible={guide} onClose={() => setGuide(false)} />
     </>
+  );
+}
+
+/** The day as a 24 h clock: midnight at the top, sleeps as arcs (night lavender, naps butter), crying as rose ticks inside. */
+function Clock({ n, children }: { n: Night; children: React.ReactNode }) {
+  const S = 264, C = S / 2, R = 104, R2 = 82;
+  const start = keyDate(n.key).getTime(), end = addDays(keyDate(n.key), 1).getTime();
+  const ang = (v: number) => ((Math.max(start, Math.min(end, v)) - start) / (end - start)) * 360 - 90;
+  const pt = (r: number, deg: number) => [C + r * Math.cos((deg * Math.PI) / 180), C + r * Math.sin((deg * Math.PI) / 180)];
+  const arc = (r: number, a: number, b: number) => {
+    const from = ang(a), to = Math.max(ang(b), from + 1.5);
+    const [x1, y1] = pt(r, from), [x2, y2] = pt(r, Math.min(to, from + 359.9));
+    return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  };
+  const inDay = (a: number, b: number) => b > start && a < end;
+  const now = Date.now();
+  const [nx, ny] = pt(R, ang(now));
+  const logged = (n.sleeps ?? []).length ? [] : (n.logged ?? []);
+  return (
+    <View style={{ width: S, height: S, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={S} height={S} style={{ position: "absolute", left: 0, top: 0 }}>
+        <Circle cx={C} cy={C} r={R} stroke={colors.card} strokeWidth={24} fill="none" />
+        {(n.sleeps ?? []).filter((x) => inDay(x.from, x.to)).map((x, k) => (
+          <Path key={k} d={arc(R, x.from, x.to)} stroke={x.kind === "night" ? "#c9bfff" : colors.peach} strokeWidth={24} strokeLinecap="round" fill="none" />
+        ))}
+        {logged.filter(([a, b]) => inDay(a, b)).map(([a, b], k) => <Path key={`g${k}`} d={arc(R, a, b)} stroke="#c9bfff" strokeWidth={24} strokeLinecap="round" fill="none" />)}
+        {n.noise.filter(([a, b]) => inDay(a, b)).map(([a, b], k) => <Path key={`n${k}`} d={arc(R2, a, b)} stroke={colors.moon} strokeOpacity={0.35} strokeWidth={3} fill="none" />)}
+        {n.spells.filter(([a, b]) => inDay(a, b)).map(([a, b], k) => <Path key={`s${k}`} d={arc(R2, a, b)} stroke={colors.rose} strokeWidth={8} strokeLinecap="round" fill="none" />)}
+        {now > start && now < end && <Circle cx={nx} cy={ny} r={6} fill={colors.cream} />}
+      </Svg>
+      {[0, 6, 12, 18].map((h) => {
+        const [x, y] = pt(R - 26, h * 15 - 90);
+        return <Text key={h} style={[styles.clockHour, { left: x - 12, top: y - 8 }]}>{h}</Text>;
+      })}
+      {children}
+    </View>
   );
 }
 
@@ -447,10 +499,10 @@ const styles = StyleSheet.create({
   modeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
 
   dayStrip: { gap: 6, paddingHorizontal: 20 },
-  day: { width: 46, alignItems: "center", gap: 2, paddingVertical: 9, borderRadius: 16 },
+  day: { width: 46, alignItems: "center", gap: 4, paddingVertical: 4 },
   dayOn: { backgroundColor: colors.peach },
   dayName: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
-  dayNum: { fontFamily: fonts.display, fontSize: 18, color: colors.cream, fontVariant: ["tabular-nums"] },
+  dayNum: { fontFamily: fonts.display, fontSize: 14, color: colors.cream, fontVariant: ["tabular-nums"] },
   dayBar: { height: 4, borderRadius: 2, marginTop: 3 },
 
   picker: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, gap: 10 },
@@ -473,7 +525,14 @@ const styles = StyleSheet.create({
   spell: { position: "absolute", top: 7, bottom: 7, borderRadius: 4, backgroundColor: colors.rose },
   axis: { flexDirection: "row", justifyContent: "space-between" },
   axisText: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted, fontVariant: ["tabular-nums"] },
-  legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
+  legend: { flexDirection: "row", gap: 14, flexWrap: "wrap", justifyContent: "center" },
+  clockBig: { fontFamily: fonts.display, fontSize: 40, color: colors.cream, fontVariant: ["tabular-nums"] },
+  clockSub: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", maxWidth: 150 },
+  clockHour: { position: "absolute", width: 24, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 11, color: "#8f86bf" },
+  roundRow: { flexDirection: "row", gap: 10, justifyContent: "center", alignItems: "center" },
+  roundBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
+  softBtn: { height: 50, borderRadius: 25, paddingHorizontal: 22, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  softBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
 
   tiles: { flexDirection: "row", gap: 8, paddingHorizontal: 6 },
   tile: { flexBasis: 0, flexGrow: 1, paddingVertical: 4, paddingHorizontal: 4, gap: 2 },

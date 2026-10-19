@@ -1,201 +1,242 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View, ScrollView } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import Svg, { Circle } from "react-native-svg";
 import { SvgXml } from "react-native-svg";
+import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
 import { ROOM_M } from "../safety";
 import { Moon } from "../components/Moon";
-import { Card, ICONS, Icon, Screen } from "../components/ui";
+import { MoonFace } from "../components/MoonFace";
+import { Ring } from "../components/Ring";
+import { ICONS, Icon, Screen } from "../components/ui";
 import { TIMERS, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
-import { fmtTime, useT, babyLabel } from "../i18n";
-import { NapCard } from "../components/Naps";
+import { useNaps } from "../state/naps";
+import { fmtClock, fmtDur } from "../nights";
+import { fmtTime, useT, babyLabel, dateLocale } from "../i18n";
+import { AgeGuide, SleepSheet, SUN } from "../components/Naps";
 import { stopLine } from "../stops";
 import { roomCmd } from "./MonitorScreen";
-import { ListenButton } from "../components/Listen";
+import type { ManualSleep } from "../nights";
 
-const greetingKey = () => {
-  const h = new Date().getHours();
-  return h < 5 ? "greet.late" : h < 12 ? "greet.morning" : h < 18 ? "greet.afternoon" : "greet.evening";
-};
+const MIN = 60_000;
+const MOON_ICON = '<path d="M15.5 4.2a7.5 7.5 0 1 0 4.3 11.6A6 6 0 0 1 15.5 4.2z"/>';
 
 export function HomeScreen() {
   const nav = useNavigation<{ navigate: (n: string) => void }>();
   const sleep = useSleep();
   const mon = useMonitor();
-  const [note, setNote] = useState<string | null>(null);
-  const [asked, setAsked] = useState(0);
-  // Parent's phone: ask the baby's phone how the room is when Home opens.
-  useEffect(() => { if (mon.role === "parent" && mon.target) roomCmd(mon.target, "status"); }, [mon.role, mon.target]); // eslint-disable-line react-hooks/exhaustive-deps
-  const soundScroll = useRef<ScrollView>(null);
+  const naps = useNaps();
   const t = useT();
   const f = sleep.s.features;
+  const [note, setNote] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
+  const [guide, setGuide] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  // Watching another room: ask how it is when Home opens.
+  useEffect(() => { if (mon.role === "parent" && mon.target) roomCmd(mon.target, "status"); }, [mon.role, mon.target]); // eslint-disable-line react-hooks/exhaustive-deps
+  const soundScroll = useRef<ScrollView>(null);
+  const baby = mon.m.babyName.trim();
+  const name = babyLabel(mon.m.babyName);
 
   const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === sleep.s.timer));
   const nextTimer = () => sleep.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0]);
-  const timerText = sleep.timerLeft != null
-    ? t("home.stopsIn", { time: fmtLeft(sleep.timerLeft) })
-    : sleep.s.timer ? t("home.stopAfter", { time: t(`timer.${TIMERS[timerIdx][0]}`) }) : t("home.noTimer");
+  const timerText = sleep.timerLeft != null ? fmtLeft(sleep.timerLeft) : sleep.s.timer ? t(`timer.${TIMERS[timerIdx][0]}`) : t("home.noTimerShort");
+  const timerProgress = sleep.timerLeft != null && sleep.s.timer ? sleep.timerLeft / (sleep.s.timer * MIN) : null;
 
-  const crying = !!mon.status.crying;
-  const monState = !mon.listening
-    ? { color: colors.card2 }
-    : crying
-      ? { color: colors.rose }
-      : { color: colors.sage };
-  const parents = mon.members.length;
+  const now = Date.now();
+  const st = naps.state;
+  const stale = naps.stale;
 
   return (
     <Screen
-      eyebrow={t(greetingKey())}
-      title={mon.m.babyName.trim() ? t("home.family", { name: mon.m.babyName.trim() }) : "hush"}
+      title={baby || "hush"}
       right={
         <Pressable onPress={() => nav.navigate("Settings")} hitSlop={12} style={styles.gear} accessibilityLabel={t("home.settings")}>
           <Icon d={ICONS.gear} size={22} color={colors.cream} />
         </Pressable>
       }
     >
-      {/* ---- next nap ---- */}
-      {f.naps && !f.sounds && <NapCard big />}
+      {stale && f.naps && <StillAsleep since={stale.since} guess={stale.guess} name={name} onPick={(at) => naps.wokeAt(at)} onYes={naps.stillAsleep} />}
 
-      {/* ---- white noise ---- */}
-      {f.sounds && <Card style={{ alignItems: "center", paddingTop: 8 }}>
-        <Moon
-          size={150}
-          playing={sleep.playing}
-          beat={sleep.beat}
-          softBeat={sleep.soundId === "womb" && sleep.beat % 2 === 1}
-          slow={sleep.soundId === "ocean"}
-          still={sleep.still}
-          onPress={sleep.toggle}
-        />
-        <View style={{ alignItems: "center", gap: 2, marginTop: -6 }}>
-          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}</Text>
-          <Text style={styles.sub}>{sleep.playing ? t("home.playing") : stopLine(sleep.lastStop, t, fmtTime) ?? t("home.tapMoon")}</Text>
-        </View>
-
-        <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}
-          onLayout={() => soundScroll.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === sleep.soundId) - 2) * 62, animated: false })}>
-          {SOUNDS.map((x) => {
-            const on = x.id === sleep.soundId;
-            return (
-              <Pressable key={x.id} onPress={() => sleep.set({ sound: x.id })} style={styles.soundItem} accessibilityLabel={t(`sound.${x.id}`)}>
-                <View style={[styles.soundIcon, on && { backgroundColor: colors.peach }]}>
-                  <SvgXml
-                    width={22}
-                    height={22}
-                    xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`}
-                  />
-                </View>
-                <Text style={[styles.soundName, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.quickRow}>
-          <Pressable onPress={nextTimer} style={styles.quick}>
-            <Icon d={ICONS.timer} size={18} />
-            <Text style={styles.quickText}>{timerText}</Text>
-          </Pressable>
-          <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
-            <View style={[styles.levelDot, { backgroundColor: sleep.safeDist == null ? colors.muted : sleep.safeDist > ROOM_M ? colors.rose : sleep.safeDist > 2 ? colors.peach : colors.sage }]} />
-            <Text style={styles.quickText} numberOfLines={1}>
-              {sleep.safeDist == null ? t("home.volumeOff") : t("home.placeAt", { dist: fmtMinDist(sleep.safeDist, sleep.s.unit) })}
-            </Text>
-          </Pressable>
-        </View>
-      </Card>}
-
-      {f.naps && f.sounds && <NapCard />}
-
-      {/* ---- baby monitor: what it shows depends on this phone's role ---- */}
-      {f.monitor && <Pressable onPress={() => nav.navigate("Monitor")}>
-        <Card>
-          <View style={styles.monHead}>
-            <View style={styles.monIcon}>
-              <Icon
-                d={mon.role === "parent" ? ICONS.bell : mon.role === "nursery" ? ICONS.crib : ICONS.monitor}
-                size={24}
-                color={mon.listening ? monState.color : mon.role === "parent" ? colors.peach : colors.muted}
-                width={2}
-              />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.monTitle}>
-                {mon.role === "nursery" ? (mon.listening ? t("home.listeningFor", { name: mon.baby }) : t("home.babyMonitor")) : mon.role === "parent" ? t("home.cryAlerts") : t("home.babyMonitor")}
-              </Text>
-              <Text style={styles.sub}>
-                {mon.role == null
-                  ? (mon.members.length ? t("home.noRoom") : t("home.useSecond"))
-                  : mon.role === "parent"
-                    ? mon.target ? t("home.onConnected", { name: mon.targetBaby ? babyLabel(mon.targetBaby) : mon.targetName }) : t("home.notConnected")
-                    : !parents ? t("home.connectFirst")
-                    : mon.listening ? (crying ? t("orb.crying", { name: mon.baby }) : mon.lastCry ? t("nursery.lastAlert", { time: fmtTime(mon.lastCry) }) : t("nursery.quiet"))
-                    : t("home.off")}
-              </Text>
-            </View>
-            {mon.role === "nursery" && parents > 0 ? (
-              <Switch
-                value={mon.listening}
-                onValueChange={async () => setNote(await mon.toggleListening())}
-                trackColor={{ false: colors.card2, true: colors.sage }}
-                thumbColor={colors.cream}
-                accessibilityLabel={t("orb.a11y")}
-              />
-            ) : (
-              <Icon d={ICONS.chevron} size={20} />
+      {/* ---- the moon: white noise ---- */}
+      {f.sounds && !stale && (
+        <View style={{ alignItems: "center" }}>
+          <View>
+            <Moon size={176} playing={sleep.playing} beat={sleep.beat} softBeat={sleep.soundId === "womb" && sleep.beat % 2 === 1} slow={sleep.soundId === "ocean"} still={sleep.still} onPress={sleep.toggle} />
+            {timerProgress != null && (
+              <Svg width={264} height={264} style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Circle cx={132} cy={132} r={102} stroke={colors.peach} strokeWidth={5} fill="none" strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 102} ${2 * Math.PI * 102}`} strokeDashoffset={2 * Math.PI * 102 * (1 - timerProgress)} transform="rotate(-90 132 132)" />
+              </Svg>
             )}
           </View>
-          {mon.role === "parent" && mon.target && (
-            <View style={styles.remote}>
-              <Pressable
-                onPress={() => { setAsked(Date.now()); roomCmd(mon.target!, mon.room?.playing ? "stop" : "play"); }}
-                style={[styles.remoteBtn, mon.room?.playing && { backgroundColor: colors.peach }]}
-                accessibilityRole="button"
-                accessibilityLabel={mon.room?.playing ? t("remote.stop") : t("remote.play")}
-              >
-                <Icon d={mon.room?.playing ? '<rect x="7" y="6" width="3.5" height="12" rx="1"/><rect x="13.5" y="6" width="3.5" height="12" rx="1"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={20} color={mon.room?.playing ? colors.bg : colors.cream} width={2} />
-              </Pressable>
-              <Text style={styles.remoteText} numberOfLines={1}>
-                {asked && (!mon.room || (mon.room.got ?? mon.room.at) < asked) && Date.now() - asked < 15000
-                  ? t("remote.waiting")
-                  : !mon.room ? t("remote.unknown")
-                  : mon.room.playing ? t("remote.playing", { sound: t(`sound.${mon.room.sound}`) }) : t("remote.off")}
-              </Text>
-            </View>
+          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}</Text>
+          {!sleep.playing && sleep.lastStop && <Text style={styles.sub}>{stopLine(sleep.lastStop, t, fmtTime)}</Text>}
+
+          <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}
+            onLayout={() => soundScroll.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === sleep.soundId) - 2) * 58, animated: false })}>
+            {SOUNDS.map((x) => {
+              const on = x.id === sleep.soundId;
+              return (
+                <Pressable key={x.id} onPress={() => sleep.set({ sound: x.id })} style={[styles.soundIcon, on && { backgroundColor: colors.peach }]} accessibilityLabel={t(`sound.${x.id}`)} accessibilityState={{ selected: on }}>
+                  <SvgXml width={22} height={22} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.quickRow}>
+            <Pressable onPress={nextTimer} style={styles.quick} accessibilityLabel={t("sounds.stopAfter")}>
+              <Icon d={ICONS.timer} size={18} color={sleep.s.timer ? colors.peach : colors.muted} />
+              <Text style={styles.quickText}>{timerText}</Text>
+            </Pressable>
+            <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
+              <View style={[styles.levelDot, { backgroundColor: sleep.safeDist == null ? colors.muted : sleep.safeDist > ROOM_M ? colors.rose : sleep.safeDist > 2 ? colors.peach : colors.sage }]} />
+              <Text style={styles.quickText} numberOfLines={1}>{sleep.safeDist == null ? t("home.volumeOff") : fmtMinDist(sleep.safeDist, sleep.s.unit)}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ---- three rings: sleep, next nap, the baby's room ---- */}
+      {!stale && (f.naps || f.monitor) && (
+        <View style={styles.orbs}>
+          {f.naps && (st.asleep ? (
+            <Orb big={fmtDur(Math.max(0, now - st.since) / MIN)} label={t("orb.asleep")} color={colors.sage} progress={(now - st.since) / (90 * MIN)} onPress={() => nav.navigate("Sleep")} />
+          ) : (
+            <Orb big={st.awakeSince != null ? fmtDur(Math.max(0, now - st.awakeSince) / MIN) : "–"} label={t("orb.awake")} color={colors.peach}
+              progress={st.awakeSince != null && st.sweet ? (now - st.awakeSince) / (st.sweet[1] - st.awakeSince) : 0} onPress={() => nav.navigate("Sleep")} />
+          ))}
+          {f.naps && (st.asleep ? (
+            <Orb big={fmtClock(st.since)} label={t("orb.since")} color="#c9bfff" progress={1} small onPress={() => setGuide(true)} />
+          ) : (
+            <Orb big={st.target ? fmtClock(st.target) : "–"} label={st.asleep ? "" : t(st.bedtime ? "orb.bedtime" : "orb.nextNap")} color={colors.peach} small
+              progress={st.awakeSince != null && st.sweet ? (now - st.awakeSince) / (st.sweet[1] - st.awakeSince) : 0} onPress={() => setGuide(true)} />
+          ))}
+          {f.monitor && <RoomOrb onPress={() => nav.navigate("Monitor")} />}
+        </View>
+      )}
+
+      {/* ---- one button ---- */}
+      {f.naps && !stale && (
+        <View style={{ alignItems: "center", gap: 10 }}>
+          <Pressable onPress={async () => setNote(st.asleep ? await naps.wokeUp() : await naps.fellAsleep())} style={({ pressed }) => [styles.main, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button">
+            {st.asleep ? <Icon d={SUN} size={20} color={colors.bg} width={2} /> : <Icon d={MOON_ICON} size={20} color={colors.bg} width={2} />}
+            <Text style={styles.mainText}>{st.asleep ? t("nap.wokeUp", { name }) : t("nap.fellAsleep", { name })}</Text>
+          </Pressable>
+          {st.asleep && naps.fromSound ? (
+            <Text style={styles.small}>{t("nap.fromSound")} <Text onPress={naps.undoSound} style={styles.link}>{t("nap.undo")}</Text></Text>
+          ) : (
+            <Text onPress={() => setSheet("new")} style={styles.link}>{t("nap.addSleep")}</Text>
           )}
-          {mon.role === "parent" && mon.target && <View style={{ marginTop: 10 }}><ListenButton /></View>}
-          {note && <Text style={styles.note}>{note}</Text>}
-        </Card>
-      </Pressable>}
+          {note && <Text style={styles.small}>{note}</Text>}
+        </View>
+      )}
+
+      <SleepSheet value={sheet} onClose={() => setSheet(null)} />
+      <AgeGuide visible={guide} onClose={() => setGuide(false)} />
     </Screen>
   );
 }
 
+function Orb({ big, label, color, progress, onPress, small }: { big: string; label: string; color: string; progress: number; onPress?: () => void; small?: boolean }) {
+  return (
+    <View style={styles.orb}>
+      <Ring size={98} stroke={5} progress={progress} color={color} onPress={onPress} label={`${label} ${big}`}>
+        <Text style={[styles.orbBig, { color }, small && { fontSize: 15 }]} numberOfLines={1} adjustsFontSizeToFit>{big}</Text>
+      </Ring>
+      <Text style={styles.orbLabel} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+/** The baby's room at a glance: this phone listening, another room, or not set up. */
+function RoomOrb({ onPress }: { onPress: () => void }) {
+  const mon = useMonitor();
+  const t = useT();
+  let big: string, color: string, on = true;
+  if (mon.listening) {
+    big = mon.status.crying ? t("orb.cryingShort") : t("orb.listening");
+    color = mon.status.crying ? colors.rose : colors.sage;
+  } else if (mon.room) {
+    const fresh = Date.now() - (mon.room.got ?? mon.room.at) < 30 * MIN;
+    on = mon.room.listening && fresh;
+    big = on ? t("orb.quiet") : t("orb.off");
+    color = on ? colors.sage : colors.muted;
+  } else {
+    big = mon.members.length ? t("orb.off") : t("orb.setUp");
+    color = colors.muted;
+    on = false;
+  }
+  return <Orb big={big} label={t("orb.room")} color={color} progress={on ? 1 : 0} small onPress={onPress} />;
+}
+
+/** A sleep that can't still be going on: ask, with a guess of when it ended. */
+function StillAsleep({ since, guess, name, onPick, onYes }: { since: number; guess: number | null; name: string; onPick: (at: number) => void; onYes: () => void }) {
+  const t = useT();
+  const pick = () => {
+    if (Platform.OS !== "android") { onPick(guess ?? Date.now()); return; }
+    DateTimePickerAndroid.open({
+      value: new Date(guess ?? Date.now()),
+      mode: "time",
+      onChange: (e, d) => {
+        if (e.type !== "set" || !d) return;
+        // The time picked is the latest such time after the sleep began (and not in the future).
+        let at = d.getTime();
+        while (at > Date.now()) at -= 24 * 3600_000;
+        if (at < since) at = Date.now();
+        onPick(at);
+      },
+    });
+  };
+  return (
+    <View style={{ alignItems: "center", gap: 14, paddingTop: 6 }}>
+      <Ring size={200} stroke={5} progress={1} color={colors.peach} track={colors.card2}>
+        <MoonFace size={128} awake />
+      </Ring>
+      <Text style={styles.stillTitle}>{t("still.title", { name })}</Text>
+      <Text style={styles.stillSub}>{t("still.sub", { time: new Date(since).toDateString() === new Date().toDateString() ? fmtClock(since) : `${new Date(since).toLocaleDateString(dateLocale(), { weekday: "short" })} ${fmtClock(since)}`, name })}</Text>
+      <View style={{ alignSelf: "stretch", gap: 10 }}>
+        {guess && (
+          <Pressable onPress={() => onPick(guess)} style={[styles.main, { alignSelf: "stretch", justifyContent: "center" }]} accessibilityRole="button">
+            <Icon d={SUN} size={20} color={colors.bg} width={2} />
+            <Text style={styles.mainText}>{t("still.wokeAt", { time: fmtClock(guess) })}</Text>
+          </Pressable>
+        )}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable onPress={pick} style={styles.second} accessibilityRole="button"><Text style={styles.secondText}>{t("still.pick")}</Text></Pressable>
+          <Pressable onPress={onYes} style={styles.second} accessibilityRole="button"><Text style={styles.secondText}>{t("still.yes")}</Text></Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  gear: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", marginBottom: 2 },
-  name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream },
-  sub: { fontFamily: fonts.body, fontSize: 13.5, color: colors.muted, fontVariant: ["tabular-nums"] },
-  small: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted },
-  soundScroll: { alignSelf: "stretch", marginHorizontal: -18, flexGrow: 0 },
-  soundRow: { flexDirection: "row", gap: 6, paddingTop: 6, paddingHorizontal: 14 },
-  soundItem: { alignItems: "center", gap: 5, width: 56 },
-  soundIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(247,241,255,0.06)", alignItems: "center", justifyContent: "center" },
-  soundName: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
-  quickRow: { flexDirection: "row", gap: 8, alignSelf: "stretch" },
-  quick: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 8 },
-  quickText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.cream, fontVariant: ["tabular-nums"] },
+  gear: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  name: { fontFamily: fonts.display, fontSize: 22, color: colors.cream, marginTop: -10 },
+  sub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, marginTop: 2 },
+  small: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, textAlign: "center" },
+  link: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
+  soundScroll: { alignSelf: "stretch", marginHorizontal: -20, flexGrow: 0, marginTop: 14 },
+  soundRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20 },
+  soundIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  quickRow: { flexDirection: "row", gap: 8, alignSelf: "stretch", marginTop: 6 },
+  quick: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8 },
+  quickText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.cream, fontVariant: ["tabular-nums"] },
   levelDot: { width: 8, height: 8, borderRadius: 4 },
-  monHead: { flexDirection: "row", alignItems: "center", gap: 12 },
-  monIcon: { width: 32, height: 44, alignItems: "flex-start", justifyContent: "center" },
-  remote: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#3e3378" },
-  remoteBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
-  remoteText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
-  monTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.cream },
-  monFoot: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  note: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.cream },
-  link: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" },
-  linkText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.peach },
+  orbs: { flexDirection: "row", justifyContent: "space-around" },
+  orb: { alignItems: "center", gap: 7, width: 104 },
+  orbBig: { fontFamily: fonts.displayBold, fontSize: 18, paddingHorizontal: 10, fontVariant: ["tabular-nums"] },
+  orbLabel: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted },
+  main: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: colors.peach, borderRadius: 99, paddingHorizontal: 26, minHeight: 54 },
+  mainText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.bg },
+  second: { flex: 1, minHeight: 52, borderRadius: 99, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  secondText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
+  stillTitle: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.cream },
+  stillSub: { fontFamily: fonts.body, fontSize: 14.5, color: colors.muted, textAlign: "center", paddingHorizontal: 20, marginTop: -6 },
 });
