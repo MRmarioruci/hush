@@ -1,6 +1,6 @@
 {
   "name": "hush",
-  "version": "1.27.2",
+  "version": "1.27.3",
   "main": "index.ts",
   "private": true,
   "scripts": {
