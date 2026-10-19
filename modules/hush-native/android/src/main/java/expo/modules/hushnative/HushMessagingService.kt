@@ -116,7 +116,7 @@ object RoomCommands {
       val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, ASK)
         else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
       Diag.add("allow-listen asked by $who")
-      nm.notify(4344, builder.setSmallIcon(context.applicationInfo.icon).setContentTitle("hush")
+      nm.notify(4344, builder.setSmallIcon(NotifIcon.small(context)).setColor(NotifIcon.COLOR).setContentTitle("hush")
         .setContentText(CryEngine.txtAllowAsk.replace("{who}", who)).setContentIntent(pi).setAutoCancel(true).build())
     } catch (_: Exception) {}
   }
@@ -134,7 +134,7 @@ object RoomCommands {
       Diag.add("listen-in notice: $text")
       val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, QUIET)
         else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
-      nm.notify(4343, builder.setSmallIcon(context.applicationInfo.icon).setContentTitle("hush").setContentText(text).setAutoCancel(true).build())
+      nm.notify(4343, builder.setSmallIcon(NotifIcon.small(context)).setColor(NotifIcon.COLOR).setContentTitle("hush").setContentText(text).setAutoCancel(true).build())
     } catch (_: Exception) {}
   }
 }

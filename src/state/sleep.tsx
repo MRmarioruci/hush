@@ -15,6 +15,12 @@ import { t } from "../i18n";
 import * as Notifications from "expo-notifications";
 import { addPushListener, sendData } from "../monitor";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
+import { Asset } from "expo-asset";
+
+// The picture on the playback notification and lock screen (a file:// copy of the app's moon).
+let artwork: string | undefined;
+Asset.fromModule(require("../../assets/artwork.png")).downloadAsync()
+  .then((a) => { artwork = a.localUri ?? undefined; }).catch(() => {});
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 
@@ -80,7 +86,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     player.replace(sound.file);
     player.loop = true;
     if (wasPlaying) player.play();
-    try { player.updateLockScreenMetadata({ title: t(`sound.${soundId}`), artist: "hush" }); } catch {}
+    try { player.updateLockScreenMetadata({ title: t(`sound.${soundId}`), artist: "hush", artworkUrl: artwork }); } catch {}
   }, [soundId, sound, player]);
 
   // Why it stopped: set just before pausing. A stop without one was a call or another app.
@@ -294,7 +300,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     setStarts((n) => n + 1);
     player.volume = gainRef.current;
     player.play();
-    try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush" }); } catch {}
+    try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush", artworkUrl: artwork }); } catch {}
   }, [player]);
 
   // The native listener reports the room to the parents (also with the screen locked).

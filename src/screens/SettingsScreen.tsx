@@ -16,6 +16,9 @@ import { ageMonths } from "../naps";
 import { fmtAge, pickBirthday } from "../components/Naps";
 import { dateLocale } from "../i18n";
 import type { Features } from "../storage";
+import { addEvent, clearHistory } from "../nights";
+import { dialog } from "../components/Dialog";
+import { useNaps } from "../state/naps";
 
 const PRIVACY = "https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md";
 // Hugh et al., "Infant Sleep Machines and Hazardous Sound Pressure Levels", Pediatrics 2014.
@@ -43,6 +46,17 @@ export function SettingsScreen() {
     </View>
   );
   const unlock = useUnlock();
+  const naps = useNaps();
+  const clear = () => dialog(t("settings.clearTitle"), t("settings.clearBody"), [
+    { text: t("common.cancel"), style: "cancel" },
+    { text: t("settings.clearDo"), style: "destructive", onPress: async () => {
+      await clearHistory();
+      // Still listening: keep counting tonight from now on.
+      if (listening) await addEvent({ type: "listen_start", t: Date.now() });
+      naps.reload();
+      dialog(t("settings.cleared"));
+    } },
+  ]);
   const initial = (m.babyName.trim()[0] ?? "").toUpperCase();
   const t = useT();
   const langLabel = useLangLabel();
@@ -154,6 +168,10 @@ export function SettingsScreen() {
           </Row>
         )}
         {s.features.sounds && <Row label={t("settings.why")} onPress={() => Linking.openURL(STUDY)} />}
+      </Group>
+
+      <Group title={t("settings.data")}>
+        <Row label={t("settings.clear")} onPress={clear}><Icon d={ICONS.chevron} size={18} /></Row>
       </Group>
 
       <Group title={t("settings.about")}>

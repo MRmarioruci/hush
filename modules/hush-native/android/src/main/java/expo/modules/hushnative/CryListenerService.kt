@@ -30,7 +30,7 @@ class CryListenerService : Service() {
     }
     val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this)
     val notification = builder
-      .setSmallIcon(applicationInfo.icon)
+      .setSmallIcon(NotifIcon.small(this)).setColor(NotifIcon.COLOR)
       .setContentTitle(CryEngine.txtListenTitle)
       .setContentText(CryEngine.fill(CryEngine.txtListenText))
       .setOngoing(true)

@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
 import { useMonitor } from "../state/monitor";
-import { dayKey, fmtClock, fmtDur, loadManual, type ManualSleep, type Night, type Sleep } from "../nights";
+import { dayKey, fmtClock, fmtDur, loadManual, mergeSpans, type ManualSleep, type Night, type Sleep } from "../nights";
 import { useNaps } from "../state/naps";
 import { useSleep } from "../state/sleep";
 import { AgeGuide, SleepRow, SleepSheet } from "../components/Naps";
@@ -127,9 +127,10 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onMod
   // Only the part of each sleep inside this day, so the legend adds up to the total in the middle.
   const d0 = keyDate(n.key).getTime(), d1 = addDays(keyDate(n.key), 1).getTime();
   const within = (x: Sleep) => Math.max(0, Math.min(x.to, d1) - Math.max(x.from, d0)) / 60_000;
-  const nightMin = sleeps.filter((x) => x.kind === "night").reduce((a, x) => a + within(x), 0);
+  const part = (list: Sleep[]) => mergeSpans(list.map((x) => [Math.max(x.from, d0), Math.min(x.to, d1)] as [number, number]).filter(([p, q]) => q > p)).reduce((a, [p, q]) => a + (q - p) / 60_000, 0);
   const napList = sleeps.filter((x) => x.kind === "nap" && within(x) > 0);
-  const napMin = napList.reduce((a, x) => a + within(x), 0);
+  const nightMin = Math.min(part(sleeps.filter((x) => x.kind === "night")), n.sleptMin ?? 24 * 60);
+  const napMin = Math.min(part(napList), Math.max(0, (n.sleptMin ?? 24 * 60) - nightMin));
 
   return (
     <>

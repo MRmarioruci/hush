@@ -70,6 +70,7 @@ module.exports = ({ config }) => ({
   },
   plugins: [
     "./plugins/withReleaseSigning",
+    "./plugins/withMediaIcon",
     // Google Play Billing / StoreKit for the one-time baby monitor unlock (src/state/unlock.tsx).
     "expo-iap",
     "expo-font",

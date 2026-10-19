@@ -51,6 +51,9 @@ const NIGHTS = "hush:nights";
 export const RAW_DAYS = 14;
 const KEEP_DAYS = 3 * 365;
 const HOUR = 3600_000;
+/** No single sleep is longer than this. A monitor left listening for days, or a "woke up" that was
+ *  never tapped, would otherwise turn into one 70-hour sleep. */
+const LONG = 16 * HOUR;
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 /** Days run midnight to midnight, named after their date. */
@@ -122,6 +125,11 @@ export async function addEvents(list: HushEvent[]) {
 
 export const addEvent = (e: HushEvent) => addEvents([e]);
 
+/** Delete every sleep, nap and crying record kept on this phone (Settings → Clear sleep history). */
+export async function clearHistory() {
+  await AsyncStorage.multiRemove([EVENTS, MANUAL, NIGHTS, "hush:stillAsleepAt", "hush:stops"]).catch(() => {});
+}
+
 /** Pair start/stop events into [start, end] spans, closing an open span at `until`. */
 function spans(evs: HushEvent[], on: string, off: string, until: number): [number, number][] {
   const out: [number, number][] = [];
@@ -145,6 +153,45 @@ function nightOverlap(a: number, b: number) {
   return total;
 }
 
+/** Overlapping spans joined, so no minute is counted twice (a day never adds up to more than 24 h). */
+export function mergeSpans(list: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const [s, e] of [...list].sort((p, q) => p[0] - q[0])) {
+    const last = out[out.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else out.push([s, e]);
+  }
+  return out;
+}
+const spanMs = (list: [number, number][]) => mergeSpans(list).reduce((n, [s, e]) => n + (e - s), 0);
+const overlap = (p: { from: number; to: number }, q: { from: number; to: number }) => Math.max(0, Math.min(p.to, q.to) - Math.max(p.from, q.from));
+
+/** The same sleep recorded twice (two phones, or monitored and logged) counts once. */
+function dedupe(list: Sleep[]): Sleep[] {
+  const out: Sleep[] = [];
+  for (const x of [...list].sort((p, q) => p.from - q.from)) {
+    const twin = out.find((o) => overlap(o, x) > 0.5 * Math.min(o.to - o.from, x.to - x.from));
+    if (!twin) out.push(x);
+    else if (x.to - x.from > twin.to - twin.from) out[out.indexOf(twin)] = x;
+  }
+  return out;
+}
+
+/**
+ * The sleep(s) in one listening session. A normal session is one sleep; one left running for more
+ * than 16 h counts each night (7 pm to 7 am) it covered, instead of one impossible sleep.
+ */
+function sleepSpans(a: number, b: number): [number, number][] {
+  if (b - a <= LONG) return [[a, b]];
+  const out: [number, number][] = [];
+  const d = new Date(a); d.setHours(0, 0, 0, 0);
+  for (let day = d.getTime() - 24 * HOUR; day < b; day += 24 * HOUR) {
+    const s = Math.max(a, day + 19 * HOUR), e = Math.min(b, day + 31 * HOUR);
+    if (e - s >= HOUR) out.push([s, e]);
+  }
+  return out;
+}
+
 type Cry = Extract<HushEvent, { type: "cry" }>;
 
 export const kindOf = (a: number, b: number): "night" | "nap" => (nightOverlap(a, b) >= 2 * HOUR ? "night" : "nap");
@@ -157,7 +204,7 @@ function sleepsOf(evs: HushEvent[], now: number, manual: ManualSleep[] = []): Sl
   const sessions = sessionsOf(evs, now);
   const cries = evs.filter((e): e is Cry => e.type === "cry");
   const logged: Sleep[] = manual
-    .map((x) => ({ ...x, to: x.to ?? now }))
+    .map((x) => ({ ...x, to: Math.max(x.from, Math.min(x.to ?? now, x.from + LONG)) }))
     .filter((x) => !sessions.some((s) => Math.min(s.to, x.to) - Math.max(s.from, x.from) > 0.5 * (x.to - x.from)))
     .map((x) => {
       const mine = cries.filter((c) => c.start >= x.from && c.start <= x.to);
@@ -166,12 +213,12 @@ function sleepsOf(evs: HushEvent[], now: number, manual: ManualSleep[] = []): Sl
         cries: mine.length, cryMin: Math.round(mine.reduce((n, c) => n + Math.max(1000, c.end - c.start), 0) / 6000) / 10,
       };
     });
-  return [...sessions, ...logged].sort((p, q) => p.from - q.from);
+  return dedupe([...sessions, ...logged]);
 }
 
 function sessionsOf(evs: HushEvent[], now: number): Sleep[] {
   const cries = evs.filter((e): e is Cry => e.type === "cry");
-  return spans(evs, "listen_start", "listen_stop", now).map(([a, b]) => {
+  return spans(evs, "listen_start", "listen_stop", now).flatMap(([s, e]) => sleepSpans(s, e)).map(([a, b]) => {
     const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
     return {
       from: a,
@@ -189,11 +236,11 @@ const clip = (list: [number, number][], a: number, b: number) =>
 /** One day from the raw events (which may start before and end after it). */
 export function summarise(key: string, evs: HushEvent[], now = Date.now(), manual: ManualSleep[] = []): Night | null {
   const a = dayStart(key), b = nextDay(key);
-  const listening = clip(spans(evs, "listen_start", "listen_stop", now), a, b);
+  const listening = mergeSpans(clip(spans(evs, "listen_start", "listen_stop", now), a, b));
   const sleeps = sleepsOf(evs, now, manual).filter((s) => s.to > a && s.from < b);
   if (!listening.length && !sleeps.length) return null;
   const logged = clip(sleeps.filter((x) => x.logged).map((x) => [x.from, x.to] as [number, number]), a, b);
-  const asleep = clip(sleeps.map((x) => [x.from, x.to] as [number, number]), a, b);
+  const asleep = mergeSpans(clip(sleeps.map((x) => [x.from, x.to] as [number, number]), a, b));
   const noise = clip(spans(evs, "noise_start", "noise_stop", now), a, b);
   const cries = evs.filter((e): e is Cry => e.type === "cry" && e.start >= a && e.start < b);
   const spells = cries.map((c) => [c.start, Math.max(c.end, c.start + 1000)] as [number, number]);
@@ -322,15 +369,22 @@ export function mergeNights(a: Night[], b: Night[]): Night[] {
 /** Several phones listened on the same day: add their records up into one day. */
 function combine(list: Night[]): Night {
   if (list.length === 0) return { key: "", from: 0, to: 0, listenedMin: 0, cries: 0, cryMin: 0, longestQuietMin: 0, firstWake: null, alerts: 0, hours: [], spells: [], listening: [], noise: [] };
-  if (list.length === 1) return list[0];
   const byStart = <T extends [number, number]>(xs: T[]) => xs.sort((p, q) => p[0] - q[0]);
   const firsts = list.map((n) => n.firstWake).filter((x): x is number => x != null);
+  // Time is joined across phones, not added: two phones on the same night is still one night.
+  const d0 = dayStart(list[0].key), d1 = nextDay(list[0].key);
+  // Copies made by older versions (or another phone) may still hold one huge sleep: split it too.
+  const sleeps = dedupe(list.flatMap((n) => n.sleeps ?? []).flatMap((x) =>
+    x.to - x.from <= LONG ? [x] : sleepSpans(x.from, x.to).map(([from, to], i) => ({ ...x, from, to, kind: "night" as const, cries: i ? 0 : x.cries, cryMin: i ? 0 : x.cryMin }))));
+  const listening = list.flatMap((n) => n.listening);
+  const min = (ms: number) => Math.min(24 * 60, Math.round(ms / 60000));
+  const most = (f: (n: Night) => number) => Math.min(24 * 60, Math.max(...list.map(f)));
   return {
     key: list[0].key,
     from: Math.min(...list.map((n) => n.from)),
     to: Math.max(...list.map((n) => n.to)),
-    listenedMin: list.reduce((a, n) => a + n.listenedMin, 0),
-    sleptMin: list.reduce((a, n) => a + (n.sleptMin ?? n.listenedMin), 0),
+    listenedMin: listening.length ? min(spanMs(clip(listening, d0, d1))) : most((n) => n.listenedMin),
+    sleptMin: sleeps.length ? min(spanMs(clip(sleeps.map((x) => [x.from, x.to] as [number, number]), d0, d1))) : most((n) => n.sleptMin ?? n.listenedMin),
     logged: byStart(list.flatMap((n) => n.logged ?? [])),
     cries: list.reduce((a, n) => a + n.cries, 0),
     cryMin: Math.round(list.reduce((a, n) => a + n.cryMin, 0) * 10) / 10,
@@ -338,9 +392,9 @@ function combine(list: Night[]): Night {
     firstWake: firsts.length ? Math.min(...firsts) : null,
     alerts: list.reduce((a, n) => a + n.alerts, 0),
     hours: Array.from({ length: 24 }, (_, h) => Math.round(list.reduce((a, n) => a + (n.hours[h] ?? 0), 0) * 10) / 10),
-    sleeps: list.flatMap((n) => n.sleeps ?? []).sort((p, q) => p.from - q.from),
+    sleeps,
     spells: byStart(list.flatMap((n) => n.spells)),
-    listening: byStart(list.flatMap((n) => n.listening)),
+    listening: mergeSpans(listening),
     noise: byStart(list.flatMap((n) => n.noise)),
     baby: list.find((n) => n.baby)?.baby,
   };
