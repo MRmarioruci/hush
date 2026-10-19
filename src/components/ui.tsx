@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Children, useEffect, useRef, type ReactNode } from "react";
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
@@ -22,8 +22,27 @@ export function Screen({ title, eyebrow, right, children }: { title: string; eye
         </View>
         {right}
       </View>
-      {children}
+      {Children.toArray(children).map((c, i) => <Rise key={(c as { key?: string }).key ?? i} delay={Math.min(i, 6) * 60}>{c}</Rise>)}
     </ScrollView>
+  );
+}
+
+let reduceMotion = false;
+AccessibilityInfo.isReduceMotionEnabled?.().then((v) => { reduceMotion = v; }).catch(() => {});
+
+/** A soft entrance: fades in and drifts up a few points when it first appears. */
+export function Rise({ children, delay = 0, style }: { children: ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
+  const v = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const a = Animated.timing(v, { toValue: 1, duration: 420, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Animated.View style={[{ gap: 16, opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }, style]}>
+      {children}
+    </Animated.View>
   );
 }
 

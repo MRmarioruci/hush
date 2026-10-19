@@ -36,15 +36,20 @@ export function SleepScreen() {
 
   return (
     <Screen title={t("sounds.title")}>
-      {/* the dial: drag for volume; the middle says how far the phone must be from the crib */}
+      {/* the dial: drag for volume; the middle says how far the phone must be from the crib; play sits in the gap */}
       <View style={{ alignItems: "center" }}>
-        <Dial size={260} value={vol} onChange={setVol} color={tooLoud ? colors.rose : colors.peach} label={z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}
-          onCenterPress={z.toggle} bottom={<Text style={styles.volText}>{t("sounds.volumeIs", { vol: volLabel })}</Text>}>
-          <Svg width={22} height={22} viewBox="0 0 24 24" style={{ marginBottom: 4 }}><Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={z.playing ? colors.peach : colors.muted} /></Svg>
-          <Text style={styles.placeLabel}>{t("sounds.placeIt")}</Text>
-          <Text style={[styles.placeNum, { color: tooLoud ? colors.rose : tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
-          <Text style={styles.placeLabel}>{t("sounds.fromCrib")}</Text>
-        </Dial>
+        <View>
+          <Dial size={268} value={vol} onChange={setVol} color={tooLoud ? colors.rose : colors.peach} label={z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}>
+            <Text style={styles.placeLabel}>{t("sounds.placeIt")}</Text>
+            <Text style={[styles.placeNum, { color: tooLoud ? colors.rose : tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
+            <Text style={styles.placeLabel}>{t("sounds.fromCrib")}</Text>
+            <Text style={styles.volText}>{t("sounds.volumeIs", { vol: volLabel })}</Text>
+          </Dial>
+          <Pressable onPress={z.toggle} style={({ pressed }) => [styles.play, pressed && { transform: [{ scale: 0.94 }] }]} accessibilityRole="button" accessibilityLabel={z.playing ? t("common.pause") : t("common.play")}>
+            <Svg width={30} height={30} viewBox="0 0 24 24"><Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} /></Svg>
+          </Pressable>
+        </View>
+        <Text style={styles.nowName}>{t(`sound.${z.soundId}`)}{z.playing && z.timerLeft != null ? ` · ${t("home.leftShort", { time: fmtLeft(z.timerLeft) })}` : ""}</Text>
         {tooLoud && <Text style={styles.warnLine}>{t("sounds.tooLoudRoom", { dist: fmtDist(ROOM_M, s.unit) })}</Text>}
       </View>
 
@@ -62,18 +67,28 @@ export function SleepScreen() {
         })}
       </View>
 
-      <View style={styles.pills}>
-        <Pressable onPress={() => z.set({ mode: smart ? "manual" : "smart" })} style={styles.pill} accessibilityRole="switch" accessibilityState={{ checked: smart }}>
-          <Svg width={20} height={20} viewBox="0 0 24 24"><Path d={smart ? "M3 17c4 0 4-10 9-10s5 6 9 6" : "M3 12h18"} stroke={smart ? colors.sage : colors.muted} strokeWidth={2} strokeLinecap="round" fill="none" /></Svg>
-          <Text style={styles.pillText}>{smart ? t("smart.smart") : t("smart.manual")}</Text>
-        </Pressable>
-        <Pressable onPress={() => z.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0])} style={styles.pill} accessibilityLabel={t("sounds.stopAfter")}>
-          <Svg width={20} height={20} viewBox="0 0 24 24"><Circle cx={12} cy={13} r={7} stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} fill="none" /><Path d="M12 10v3l2 1.5M10 3h4" stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} strokeLinecap="round" fill="none" /></Svg>
-          <Text style={styles.pillText}>{z.timerLeft != null ? fmtLeft(z.timerLeft) : s.timer ? t(`timer.${s.timer}`) : t("home.noTimerShort")}</Text>
-        </Pressable>
+      {/* how the volume behaves: smart (follows the baby) or manual (stays put, optional timer) */}
+      <View style={styles.modeSeg}>
+        {(["smart", "manual"] as const).map((m) => {
+          const on = s.mode === m;
+          return (
+            <Pressable key={m} onPress={() => { z.set({ mode: m }); if (m === "smart" && s.timer) z.setTimer(0); }} style={[styles.modeItem, on && styles.modeItemOn]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
+              <Svg width={18} height={18} viewBox="0 0 24 24"><Path d={m === "smart" ? "M3 17c4 0 4-10 9-10s5 6 9 6" : "M3 12h18"} stroke={on ? colors.bg : colors.muted} strokeWidth={2.2} strokeLinecap="round" fill="none" /></Svg>
+              <Text style={[styles.modeText, on && { color: colors.bg }]}>{t(m === "smart" ? "smart.smart" : "smart.manual")}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      {smart && <SmartCard />}
+      {smart ? <SmartCard /> : (
+        <View style={styles.manualBox}>
+          <Text style={styles.hint}>{t("smart.manualHint")}</Text>
+          <Pressable onPress={() => z.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0])} style={[styles.pill, { flex: 0 }]} accessibilityLabel={t("sounds.stopAfter")}>
+            <Svg width={20} height={20} viewBox="0 0 24 24"><Circle cx={12} cy={13} r={7} stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} fill="none" /><Path d="M12 10v3l2 1.5M10 3h4" stroke={s.timer ? colors.peach : colors.muted} strokeWidth={2} strokeLinecap="round" fill="none" /></Svg>
+            <Text style={styles.pillText}>{t("sounds.stopAfter")}: {z.timerLeft != null ? fmtLeft(z.timerLeft) : s.timer ? t(`timer.${s.timer}`) : t("timer.0")}</Text>
+          </Pressable>
+        </View>
+      )}
       {Platform.OS === "ios" && <Text style={styles.hint}>{t("sounds.iosVolume")}</Text>}
     </Screen>
   );
@@ -96,9 +111,7 @@ const styles = StyleSheet.create({
   dialogLoud: { borderRadius: 99, paddingVertical: 12, alignItems: "center" },
   dialogLoudText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.rose },
   modeRow: { flexDirection: "row", backgroundColor: colors.card2, borderRadius: 99, padding: 3 },
-  modeItem: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 99 },
   modeOn: { backgroundColor: colors.peach },
-  modeText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
   smartRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   smartTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream, fontVariant: ["tabular-nums"] },
   rowLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
@@ -108,13 +121,22 @@ const styles = StyleSheet.create({
   curveText: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
   now: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: 24, padding: 14 },
   playBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.moon, alignItems: "center", justifyContent: "center" },
-  nowName: { fontFamily: fonts.display, fontSize: 19, color: colors.cream },
   nowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
   grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 6 },
   tile: { width: "25%", paddingVertical: 6, alignItems: "center", gap: 6 },
   tileIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   volText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#8f86bf" },
-  play: { marginTop: -34, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
+  play: { position: "absolute", bottom: -4, alignSelf: "center", width: 76, height: 76, borderRadius: 38, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center", borderWidth: 5, borderColor: colors.bg },
+  nowName: { fontFamily: fonts.display, fontSize: 20, color: colors.cream, marginTop: 14 },
+  modeSeg: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 27, padding: 4 },
+  modeItem: { flex: 1, height: 46, borderRadius: 23, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  modeItemOn: { backgroundColor: colors.sage },
+  modeText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.muted },
+  manualBox: { gap: 10 },
+  smartBox: { backgroundColor: colors.card, borderRadius: 24, padding: 16, gap: 12 },
+  smartWhat: { fontFamily: fonts.bodyBold, fontSize: 14, lineHeight: 20, color: colors.cream },
+  smartNow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  nowDot: { width: 8, height: 8, borderRadius: 4 },
   warnLine: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.rose, textAlign: "center", marginTop: 10 },
   pills: { flexDirection: "row", gap: 10 },
   pill: { flex: 1, height: 54, borderRadius: 27, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -160,11 +182,17 @@ function SmartCard() {
   })();
 
   return (
-    <View style={{ gap: 10 }}>
+    <View style={styles.smartBox}>
+      <Text style={styles.smartWhat}>{t("smart.what", { name: mon.baby })}</Text>
+      <Curve phase={z.smart?.phase ?? null} startedAt={null} />
+      <View style={styles.smartNow}>
+        <View style={[styles.nowDot, { backgroundColor: z.smart ? colors.sage : colors.card2 }]} />
+        <Text style={styles.hint} numberOfLines={2}>{z.smart ? phaseText : t("smart.idleShort")}</Text>
+      </View>
       <View style={styles.smartRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.rowLabel}>{t("smart.respond")}</Text>
-          <Text style={styles.hint}>{z.smart ? phaseText : t("smart.respondSub", { name: mon.baby })}</Text>
+          <Text style={styles.hint}>{t("smart.respondSub", { name: mon.baby })}</Text>
         </View>
         <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
       </View>
