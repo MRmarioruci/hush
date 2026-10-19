@@ -19,7 +19,7 @@ import { Ring } from "../components/Ring";
 import { MoonFace } from "../components/MoonFace";
 import Svg, { Circle, SvgXml } from "react-native-svg";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
-import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
+import { Card, ICONS, Icon, Label, Rise, Screen } from "../components/ui";
 import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
 import { SOUNDS } from "../sounds";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
@@ -33,8 +33,8 @@ export function MonitorScreen() {
   const [fam, setFam] = useState<false | "list" | "add">(false);
   const [remote, setRemote] = useState(false);
   useAskFamily();
-  // Becoming the monitor closes the remote.
-  useEffect(() => { if (listening && !rooms.length) setRemote(false); }, [listening, rooms.length]);
+  // Changing what this phone does always lands on its own view.
+  useEffect(() => { setRemote(false); }, [listening]);
   return (
     <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setFam("add")} /> : undefined}>
       {members.length === 0 ? (
@@ -52,7 +52,8 @@ export function MonitorScreen() {
         </>
       ) : (
         <>
-          {listening ? <ThisPhone /> : <Receiving alerts={alerts} />}
+          <RolePicker />
+          <Rise key={listening ? "monitor" : "alerts"}>{listening ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
           {(!listening || rooms.length > 0) && (
             <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
               <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
@@ -63,7 +64,7 @@ export function MonitorScreen() {
               <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
             </Pressable>
           )}
-          <RoleSwitch />
+          <TrialNote />
         </>
       )}
       <Modal visible={!!fam} transparent animationType="slide" onRequestClose={() => setFam(false)}>
@@ -153,25 +154,34 @@ function Receiving({ alerts }: { alerts: AlertRecord[] }) {
 }
 const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13h.01M14 13h.01M10 16.5h.01M14 16.5h.01"/>';
 
-/** The role switch at the bottom: on = this phone is the baby monitor by the crib. */
-function RoleSwitch() {
+/** What this phone does, chosen explicitly: get the alerts, or be the baby monitor by the crib. */
+function RolePicker() {
   const { listening, toggleListening, lastStop } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const last = !listening ? stopLine(lastStop, t, fmtTime) : null;
-  const flip = async () => { setBusy(true); setMsg(await toggleListening()); setBusy(false); };
+  const pick = async (monitor: boolean) => {
+    if (busy || monitor === listening) return;
+    setBusy(true); setMsg(await toggleListening()); setBusy(false);
+  };
+  const opt = (monitor: boolean) => {
+    const on = monitor === listening;
+    const tone = monitor ? colors.sage : "#c9bfff";
+    return (
+      <Pressable onPress={() => pick(monitor)} disabled={busy} style={[styles.roleOpt, on && { backgroundColor: tone }]} accessibilityRole="radio" accessibilityState={{ checked: on, busy }}>
+        {busy && !on ? <ActivityIndicator size="small" color={colors.cream} /> : <Icon d={monitor ? ICONS.mic : BELL} size={20} color={on ? colors.bg : tone} width={2.2} />}
+        <View style={{ flexShrink: 1 }}>
+          <Text style={[styles.roleOptTitle, on && { color: colors.bg }]} numberOfLines={1}>{t(monitor ? "rx.asMonitor" : "rx.asAlerts")}</Text>
+          <Text style={[styles.roleOptSub, on && { color: "rgba(34,27,69,0.7)" }]} numberOfLines={1}>{t(monitor ? "rx.asMonitorSub" : "rx.asAlertsSub")}</Text>
+        </View>
+      </Pressable>
+    );
+  };
   return (
     <View style={{ gap: 8 }}>
-      <Pressable onPress={flip} disabled={busy} style={styles.switchRow} accessibilityRole="switch" accessibilityState={{ checked: listening }}>
-        <View style={[styles.switchIcon, listening && { backgroundColor: colors.sage }]}><Icon d={ICONS.mic} size={20} color={listening ? colors.bg : colors.sage} width={2} /></View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.switchTitle}>{t("rx.switch")}</Text>
-          <Text style={styles.switchSub}>{listening ? t("rx.switchOn") : t("rx.switchOff")}</Text>
-        </View>
-        <Switch value={listening} onValueChange={flip} disabled={busy} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
-      </Pressable>
+      <Text style={styles.roleQ}>{t("rx.thisPhone")}</Text>
+      <View style={styles.rolePick} accessibilityRole="radiogroup">{opt(false)}{opt(true)}</View>
       {last && <Text style={[styles.meta, { textAlign: "center" }]}>{last}</Text>}
-      <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </View>
   );
@@ -409,37 +419,50 @@ const MIC = '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.
 function ListeningOrb({ level, hot, crying, baby, onPress }: { level: number; hot: boolean; crying: boolean; baby: string; onPress: () => void }) {
   const tone = crying ? colors.rose : colors.sage;
   const ink = crying ? "#5a1f2b" : "#1e4a39";
+  const r1 = useRef(new Animated.Value(0)).current;
+  const r2 = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
+  const lvl = useRef(new Animated.Value(level)).current;
+  useEffect(() => { Animated.timing(lvl, { toValue: level, duration: 350, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(); }, [level, lvl]);
   useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(breathe, { toValue: 1, duration: crying ? 600 : 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      Animated.timing(breathe, { toValue: 0, duration: crying ? 600 : 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    const dur = crying ? 1200 : 3200;
+    const ripple = (v: Animated.Value, delay: number) => Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
     ]));
-    loop.start();
-    return () => loop.stop();
-  }, [crying, breathe]);
+    const b = Animated.loop(Animated.sequence([
+      Animated.timing(breathe, { toValue: 1, duration: dur / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(breathe, { toValue: 0, duration: dur / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    const l1 = ripple(r1, 0), l2 = ripple(r2, dur / 2);
+    l1.start(); l2.start(); b.start();
+    return () => { l1.stop(); l2.stop(); b.stop(); };
+  }, [crying, r1, r2, breathe]);
   const C = 2 * Math.PI * 90;
+  const ring = (v: Animated.Value) => ({
+    position: "absolute" as const, width: 160, height: 160, borderRadius: 80, borderWidth: 2, borderColor: tone,
+    opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
+    transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] }) }],
+  });
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ width: 250, height: 250, alignItems: "center", justifyContent: "center" }, pressed && { transform: [{ scale: 0.97 }] }]}
       accessibilityRole="switch" accessibilityState={{ checked: true }} accessibilityLabel={t("orb.a11y")}>
-      <Animated.View style={{ position: "absolute", left: 0, top: 0, opacity: breathe.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) }}>
-        <Svg width={250} height={250}>
-          <Circle cx={125} cy={125} r={118} stroke={tone} strokeWidth={2} opacity={0.18} fill="none" />
-          <Circle cx={125} cy={125} r={104} stroke={tone} strokeWidth={2} opacity={0.35} fill="none" />
-        </Svg>
-      </Animated.View>
+      <Animated.View style={ring(r1)} />
+      <Animated.View style={ring(r2)} />
       <Svg width={250} height={250} style={{ position: "absolute", left: 0, top: 0 }}>
         <Circle cx={125} cy={125} r={90} stroke={colors.card} strokeWidth={10} fill="none" />
-        {level > 0.01 && <Circle cx={125} cy={125} r={90} stroke={hot ? colors.rose : colors.sage} strokeWidth={10} fill="none" strokeLinecap="round"
-          strokeDasharray={`${C} ${C}`} strokeDashoffset={C * (1 - level)} transform="rotate(-90 125 125)" />}
+        <AnimatedCircle cx={125} cy={125} r={90} stroke={hot ? colors.rose : colors.sage} strokeWidth={10} fill="none" strokeLinecap="round"
+          strokeDasharray={`${C} ${C}`} strokeDashoffset={lvl.interpolate({ inputRange: [0, 1], outputRange: [C, 0] })} transform="rotate(-90 125 125)" />
       </Svg>
-      <View style={[styles.listenOrb, { backgroundColor: tone }]}>
+      <Animated.View style={[styles.listenOrb, { backgroundColor: tone, transform: [{ scale: breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] }) }] }]}>
         <Icon d={MIC} size={34} color={ink} width={2} />
         <Text style={[styles.listenOrbText, { color: ink }]} numberOfLines={2}>{crying ? t("orb.crying", { name: baby }) : t("orb.listening")}</Text>
-      </View>
+      </Animated.View>
     </Pressable>
   );
 }
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /** One line at the bottom: charging and battery, and who gets the alerts. Asks for the battery exemption when missing. */
 function PowerPill({ names }: { names: string }) {
@@ -779,6 +802,11 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  roleQ: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, marginLeft: 4, marginTop: -6 },
+  rolePick: { flexDirection: "row", gap: 8 },
+  roleOpt: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 14, minHeight: 62 },
+  roleOptTitle: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
+  roleOptSub: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   rxBell: { width: 84, height: 84, borderRadius: 42, alignItems: "center", justifyContent: "center", marginBottom: 6 },
   rxSub: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", maxWidth: 170 },
   remoteBtn: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 24, padding: 12, paddingRight: 16 },
