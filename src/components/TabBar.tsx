@@ -44,10 +44,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               android_ripple={null}
               style={({ pressed }) => [styles.item, pressed && { transform: [{ scale: 0.92 }] }]}
             >
-              <View style={[styles.iconBox, focused && { backgroundColor: colors.peach }]}>
-                <Icon d={t.icon} size={24} color={focused ? colors.bg : colors.muted} width={2} />
+              <View style={styles.iconBox}>
+                <Icon d={t.icon} size={23} color={focused ? colors.peach : colors.muted} width={focused ? 2.1 : 1.8} />
                 {live && <View style={[styles.dot, { backgroundColor: liveColor }]} />}
               </View>
+              <Text style={[styles.text, focused && styles.textOn]} numberOfLines={1}>{tr(t.label)}</Text>
+              <View style={[styles.mark, focused && styles.markOn]} />
             </Pressable>
           );
         })}
@@ -57,24 +59,24 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 8 },
+  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 8, backgroundColor: "rgba(34,27,69,0.94)" },
   bar: {
     flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 32,
-    height: 64,
-    alignItems: "center",
+    backgroundColor: "#261f4d",
+    borderRadius: 28,
+    paddingVertical: 8,
     paddingHorizontal: 6,
     maxWidth: 440,
     width: "100%",
     alignSelf: "center",
-    shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 10,
+    borderWidth: 1,
+    borderColor: "#3a3070",
   },
-  item: { flex: 1, alignItems: "center", justifyContent: "center" },
-  iconBox: { width: 60, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  item: { flex: 1, alignItems: "center", gap: 2, paddingTop: 2 },
+  iconBox: { width: 40, height: 28, alignItems: "center", justifyContent: "center" },
   mark: { width: 4, height: 4, borderRadius: 2, marginTop: 1, backgroundColor: "transparent" },
   markOn: { backgroundColor: colors.peach },
-  dot: { position: "absolute", top: 7, right: 14, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, borderColor: colors.card },
+  dot: { position: "absolute", top: 1, right: 4, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: "#261f4d" },
   text: { fontFamily: fonts.body, fontSize: 11.5, color: colors.muted },
   textOn: { fontFamily: fonts.bodyBold, color: colors.peach },
 });
