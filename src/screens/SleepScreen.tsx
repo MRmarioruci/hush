@@ -38,15 +38,13 @@ export function SleepScreen() {
     <Screen title={t("sounds.title")}>
       {/* the dial: drag for volume; the middle says how far the phone must be from the crib */}
       <View style={{ alignItems: "center" }}>
-        <Dial size={272} value={vol} onChange={setVol} color={tooLoud ? colors.rose : colors.peach} label={z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}>
-          <Text style={styles.placeLabel}>{t("sounds.placeShort")}</Text>
+        <Dial size={260} value={vol} onChange={setVol} color={tooLoud ? colors.rose : colors.peach} label={z.dev ? t("sounds.phoneVolume") : t("sounds.volume")}
+          onCenterPress={z.toggle} bottom={<Text style={styles.volText}>{t("sounds.volumeIs", { vol: volLabel })}</Text>}>
+          <Svg width={22} height={22} viewBox="0 0 24 24" style={{ marginBottom: 4 }}><Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={z.playing ? colors.peach : colors.muted} /></Svg>
+          <Text style={styles.placeLabel}>{t("sounds.placeIt")}</Text>
           <Text style={[styles.placeNum, { color: tooLoud ? colors.rose : tag.c }]}>{z.safeDist == null ? "–" : fmtMinDist(z.safeDist, s.unit)}</Text>
           <Text style={styles.placeLabel}>{t("sounds.fromCrib")}</Text>
-          <Text style={styles.volText}>{volLabel}</Text>
         </Dial>
-        <Pressable onPress={z.toggle} style={({ pressed }) => [styles.play, pressed && { transform: [{ scale: 0.94 }] }]} accessibilityLabel={z.playing ? t("common.pause") : t("common.play")}>
-          <Svg width={24} height={24} viewBox="0 0 24 24"><Path d={z.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} /></Svg>
-        </Pressable>
         {tooLoud && <Text style={styles.warnLine}>{t("sounds.tooLoudRoom", { dist: fmtDist(ROOM_M, s.unit) })}</Text>}
       </View>
 
@@ -83,8 +81,8 @@ export function SleepScreen() {
 
 const styles = StyleSheet.create({
   place: { alignItems: "center", gap: 2, paddingVertical: 6 },
-  placeLabel: { fontFamily: fonts.body, fontSize: 14, color: colors.muted },
-  placeNum: { fontFamily: fonts.display, fontSize: 44, color: colors.cream, fontVariant: ["tabular-nums"] },
+  placeLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
+  placeNum: { fontFamily: fonts.display, fontSize: 50, lineHeight: 56, color: colors.cream, fontVariant: ["tabular-nums"] },
   warn: { backgroundColor: "rgba(255,157,176,0.14)", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
   warnText: { fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.rose },
   loudRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingTop: 4 },
@@ -114,12 +112,12 @@ const styles = StyleSheet.create({
   nowSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },
   grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 6 },
   tile: { width: "25%", paddingVertical: 6, alignItems: "center", gap: 6 },
-  tileIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  volText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, marginTop: 8 },
+  tileIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  volText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#8f86bf" },
   play: { marginTop: -34, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
   warnLine: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.rose, textAlign: "center", marginTop: 10 },
   pills: { flexDirection: "row", gap: 10 },
-  pill: { flex: 1, height: 52, borderRadius: 26, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  pill: { flex: 1, height: 54, borderRadius: 27, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   pillText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   tileOn: { backgroundColor: colors.peach },
   tileText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },

@@ -85,16 +85,19 @@ export function NightsScreen() {
   const openNight = (k: string) => { if (byKey.has(k)) { setKey(k); setMode("day"); } };
 
   return (
-    <Screen title={t("nights.title")}>
-      <View style={styles.modes}>
+    <Screen title={t("nights.title")} right={
+      <Pressable onPress={() => setSheet("new")} style={styles.headAdd} accessibilityRole="button" accessibilityLabel={t("nights.addSleep")}>
+        <Icon d='<path d="M12 5v14M5 12h14"/>' size={20} color={colors.bg} width={2.4} />
+      </Pressable>}>
+      {mode !== "day" && <View style={styles.modes}>
         {(["day", "week", "month"] as Mode[]).map((m) => (
           <Pressable key={m} onPress={() => setMode(m)} style={[styles.mode, mode === m && styles.modeOn]} accessibilityRole="tab" accessibilityState={{ selected: mode === m }}>
             <Text style={[styles.modeText, mode === m && { color: colors.bg }]}>{t(`nights.${m}`)}</Text>
           </Pressable>
         ))}
-      </View>
+      </View>}
 
-      {mode === "day" && <NightView nights={nights} selected={key ?? nights[0].key} onSelect={setKey} baby={baby} naps={f.naps} edit={edit} onAdd={() => setSheet("new")} />}
+      {mode === "day" && <NightView nights={nights} selected={key ?? nights[0].key} onSelect={setKey} baby={baby} naps={f.naps} edit={edit} onMode={setMode} />}
       {mode === "week" && <WeekView byKey={byKey} start={weekStart} setStart={setWeekStart} onOpen={openNight} baby={baby} sleepMode={sleepMode} />}
       {mode === "month" && <MonthView byKey={byKey} month={month} setMonth={setMonth} onOpen={openNight} baby={baby} sleepMode={sleepMode} />}
       {sheetEl}
@@ -109,7 +112,7 @@ export function NightsScreen() {
 
 /* ---------------- one night ---------------- */
 
-function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string; naps: boolean; edit: (s: Sleep) => (() => void) | undefined; onAdd: () => void }) {
+function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onMode }: { nights: Night[]; selected: string; onSelect: (k: string) => void; baby: string; naps: boolean; edit: (s: Sleep) => (() => void) | undefined; onMode: (m: Mode) => void }) {
   const { s } = useSleep();
   const [guide, setGuide] = useState(false);
   const i = Math.max(0, nights.findIndex((n) => n.key === selected));
@@ -161,13 +164,10 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onAdd
       </View>
 
       <View style={styles.roundRow}>
-        <Pressable onPress={onAdd} style={styles.roundBtn} accessibilityLabel={t("nights.addSleep")}>
-          <Icon d='<path d="M12 5v14M5 12h14"/>' size={20} color={colors.bg} width={2.4} />
-        </Pressable>
+        <Pressable onPress={() => onMode("week")} style={styles.softBtn}><Text style={styles.softBtnText}>{t("nights.week")}</Text></Pressable>
+        <Pressable onPress={() => onMode("month")} style={styles.softBtn}><Text style={styles.softBtnText}>{t("nights.month")}</Text></Pressable>
         {napsOn && months != null && (
-          <Pressable onPress={() => setGuide(true)} style={styles.softBtn}>
-            <Text style={styles.softBtnText}>{t("nights.ageGuide")}</Text>
-          </Pressable>
+          <Pressable onPress={() => setGuide(true)} style={styles.softBtn}><Text style={styles.softBtnText} numberOfLines={1}>{t("nights.ageGuide")}</Text></Pressable>
         )}
       </View>
 
@@ -531,7 +531,8 @@ const styles = StyleSheet.create({
   clockHour: { position: "absolute", width: 24, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 11, color: "#8f86bf" },
   roundRow: { flexDirection: "row", gap: 10, justifyContent: "center", alignItems: "center" },
   roundBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
-  softBtn: { height: 50, borderRadius: 25, paddingHorizontal: 22, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  softBtn: { flex: 1, height: 50, borderRadius: 25, paddingHorizontal: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  headAdd: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
   softBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
 
   tiles: { flexDirection: "row", gap: 8, paddingHorizontal: 6 },

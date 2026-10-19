@@ -6,12 +6,11 @@ import { SvgXml } from "react-native-svg";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { colors, fonts } from "../theme";
 import { SOUNDS } from "../sounds";
-import { ROOM_M } from "../safety";
 import { Moon } from "../components/Moon";
 import { MoonFace } from "../components/MoonFace";
 import { Ring } from "../components/Ring";
 import { ICONS, Icon, Screen } from "../components/ui";
-import { TIMERS, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
+import { fmtLeft, useSleep } from "../state/sleep";
 import { useMonitor } from "../state/monitor";
 import { useNaps } from "../state/naps";
 import { fmtClock, fmtDur } from "../nights";
@@ -42,9 +41,6 @@ export function HomeScreen() {
   const baby = mon.m.babyName.trim();
   const name = babyLabel(mon.m.babyName);
 
-  const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === sleep.s.timer));
-  const nextTimer = () => sleep.setTimer(TIMERS[(timerIdx + 1) % TIMERS.length][0]);
-  const timerText = sleep.timerLeft != null ? fmtLeft(sleep.timerLeft) : sleep.s.timer ? t(`timer.${TIMERS[timerIdx][0]}`) : t("home.noTimerShort");
   const timerProgress = sleep.timerLeft != null && sleep.s.timer ? sleep.timerLeft / (sleep.s.timer * MIN) : null;
 
   const now = Date.now();
@@ -74,7 +70,7 @@ export function HomeScreen() {
               </Svg>
             )}
           </View>
-          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}</Text>
+          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}{sleep.playing && sleep.timerLeft != null ? ` · ${t("home.leftShort", { time: fmtLeft(sleep.timerLeft) })}` : ""}</Text>
           {!sleep.playing && sleep.lastStop && <Text style={styles.sub}>{stopLine(sleep.lastStop, t, fmtTime)}</Text>}
 
           <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}
@@ -89,16 +85,6 @@ export function HomeScreen() {
             })}
           </ScrollView>
 
-          <View style={styles.quickRow}>
-            <Pressable onPress={nextTimer} style={styles.quick} accessibilityLabel={t("sounds.stopAfter")}>
-              <Icon d={ICONS.timer} size={18} color={sleep.s.timer ? colors.peach : colors.muted} />
-              <Text style={styles.quickText}>{timerText}</Text>
-            </Pressable>
-            <Pressable onPress={() => nav.navigate("Sounds")} style={styles.quick}>
-              <View style={[styles.levelDot, { backgroundColor: sleep.safeDist == null ? colors.muted : sleep.safeDist > ROOM_M ? colors.rose : sleep.safeDist > 2 ? colors.peach : colors.sage }]} />
-              <Text style={styles.quickText} numberOfLines={1}>{sleep.safeDist == null ? t("home.volumeOff") : fmtMinDist(sleep.safeDist, sleep.s.unit)}</Text>
-            </Pressable>
-          </View>
         </View>
       )}
 

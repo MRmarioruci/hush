@@ -1,3 +1,4 @@
+import UIKit
 import AVFoundation
 import ExpoModulesCore
 import ExpoNotifications
@@ -57,6 +58,13 @@ public class HushCryModule: Module, NotificationDelegate {
     }
 
     // "testflight" or "appstore" (both sell through the App Store), "simulator" otherwise.
+    Function("battery") { () -> [Any] in
+      UIDevice.current.isBatteryMonitoringEnabled = true
+      let level = UIDevice.current.batteryLevel
+      let state = UIDevice.current.batteryState
+      return [level < 0 ? -1 : Int(level * 100), state == .charging || state == .full]
+    }
+
     Function("installer") { () -> String in
       #if targetEnvironment(simulator)
       return "simulator"

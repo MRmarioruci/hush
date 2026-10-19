@@ -162,7 +162,7 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
         <RoundBtn
           onPress={() => c.ask(len)} onLongPress={() => setLen(LENGTHS[(LENGTHS.indexOf(len) + 1) % LENGTHS.length])}
           disabled={c.waiting || !c.target} bg={colors.sage} label={c.waiting ? t("listen.sending") : t("listen.button", { s: len })} progress={c.waiting ? frac : undefined}>
-          {c.waiting ? <ActivityIndicator color={colors.bg} /> : <Icon d={EAR} size={28} color={colors.bg} width={2} />}
+          {c.waiting ? <ActivityIndicator color="#1e4a39" /> : <Icon d={EAR} size={28} color="#1e4a39" width={2} />}
         </RoundBtn>
         {children}
       </View>
@@ -187,12 +187,12 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
 }
 
 /** A round button with a short label under it. `progress` draws a ring while something is on its way. */
-export function RoundBtn({ onPress, onLongPress, disabled, bg = colors.card, label, children, progress, a11y }: {
-  onPress: () => void; onLongPress?: () => void; disabled?: boolean; bg?: string; label: string; children: React.ReactNode; progress?: number; a11y?: string;
+export function RoundBtn({ onPress, onLongPress, disabled, bg = colors.card, label, children, progress, a11y, size = 72 }: {
+  onPress: () => void; onLongPress?: () => void; disabled?: boolean; bg?: string; label: string; children: React.ReactNode; progress?: number; a11y?: string; size?: number;
 }) {
   return (
     <Pressable onPress={onPress} onLongPress={onLongPress} disabled={disabled} style={({ pressed }) => [styles.roundItem, pressed && { transform: [{ scale: 0.95 }] }]} accessibilityRole="button" accessibilityLabel={a11y ?? label}>
-      <View style={[styles.roundBtn, { backgroundColor: bg }, progress != null && { opacity: 0.6 + 0.4 * progress }]}>{children}</View>
+      <View style={[styles.roundBtn, { backgroundColor: bg, width: size, height: size, borderRadius: size / 2 }, progress != null && { opacity: 0.6 + 0.4 * progress }]}>{children}</View>
       <Text style={styles.roundLabel} numberOfLines={2}>{label}</Text>
     </Pressable>
   );
@@ -226,9 +226,9 @@ export function ListenButton() {
 
 const styles = StyleSheet.create({
   roundRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
-  roundItem: { width: 82, alignItems: "center", gap: 7 },
+  roundItem: { width: 88, alignItems: "center", gap: 8 },
   roundBtn: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center" },
-  roundLabel: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted, textAlign: "center", fontVariant: ["tabular-nums"] },
+  roundLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", fontVariant: ["tabular-nums"] },
   listenHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headText: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
   lengths: { flexDirection: "row", gap: 2 },
