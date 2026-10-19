@@ -678,6 +678,7 @@ export const zh: Record<Key, string> = {
   "rt.clipOff": "不录音",
   "rt.canListen": "可以收听",
   "rt.cantListen": "不能收听",
+  "fam.rename": "重命名这部手机",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

@@ -678,6 +678,7 @@ export const el: Record<Key, string> = {
   "rt.clipOff": "Χωρίς ηχογράφηση",
   "rt.canListen": "Μπορεί να ακούσει",
   "rt.cantListen": "Δεν μπορεί να ακούσει",
+  "fam.rename": "Μετονομασία αυτού του κινητού",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

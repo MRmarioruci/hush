@@ -678,6 +678,7 @@ export const en = {
   "rt.clipOff": "No recording",
   "rt.canListen": "Can listen in",
   "rt.cantListen": "Can't listen in",
+  "fam.rename": "Rename this phone",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

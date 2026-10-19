@@ -678,6 +678,7 @@ export const fr: Record<Key, string> = {
   "rt.clipOff": "Pas d'enregistrement",
   "rt.canListen": "Peut écouter",
   "rt.cantListen": "Ne peut pas écouter",
+  "fam.rename": "Renommer ce téléphone",
   "settings.title": "Réglages",
   "settings.babyName": "Prénom de bébé",
   "settings.prefs": "Préférences",

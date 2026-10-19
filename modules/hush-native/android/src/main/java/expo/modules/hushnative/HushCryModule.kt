@@ -91,6 +91,16 @@ class HushCryModule : Module() {
       true
     }
 
+    // The name people know the phone by: what's set in Settings > About phone, else maker and model.
+    Function("deviceName") {
+      val ctx = appContext.reactContext
+      val set = try { ctx?.let { android.provider.Settings.Global.getString(it.contentResolver, "device_name") } } catch (_: Exception) { null }
+      val bt = try { ctx?.let { android.provider.Settings.Secure.getString(it.contentResolver, "bluetooth_name") } } catch (_: Exception) { null }
+      val maker = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+      val model = if (Build.MODEL.startsWith(Build.MANUFACTURER, ignoreCase = true)) Build.MODEL else "$maker ${Build.MODEL}"
+      (set?.takeIf { it.isNotBlank() } ?: bt?.takeIf { it.isNotBlank() } ?: model).trim()
+    }
+
     Function("battery") {
       val ctx = appContext.reactContext ?: return@Function listOf(-1, false)
       val (pct, plugged) = CryEngine.battery(ctx)

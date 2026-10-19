@@ -60,6 +60,9 @@ public class HushCryModule: Module, NotificationDelegate {
     // "testflight" or "appstore" (both sell through the App Store), "simulator" otherwise.
     Function("reportRoom") { () -> Bool in false }
 
+    // iOS only gives apps the generic name ("iPhone"), which is still better than nothing.
+    Function("deviceName") { () -> String in UIDevice.current.name }
+
     Function("battery") { () -> [Any] in
       UIDevice.current.isBatteryMonitoringEnabled = true
       let level = UIDevice.current.batteryLevel

@@ -69,7 +69,14 @@ export const useMonitor = () => useContext(Ctx)!;
 export function MonitorProvider({ children }: { children: ReactNode }) {
   const [m, setM] = useState<MonitorSettings>(MONITOR_DEFAULTS);
   const unlock = useUnlock();
-  useEffect(() => { loadMonitor().then((raw) => setM(migrate(raw))); }, []);
+  useEffect(() => {
+    loadMonitor().then((raw) => {
+      const v = migrate(raw);
+      // No name yet: start with the phone's own name (e.g. "Redmi Note 14"); it can be changed in the phones list.
+      const dn = !v.myName?.trim() ? cryDetector?.deviceName?.() : null;
+      if (dn) { const next = { ...v, myName: dn }; saveMonitor(next); setM(next); } else setM(v);
+    });
+  }, []);
   const update = useCallback((patch: Partial<MonitorSettings>) => {
     setM((prev) => {
       const next = { ...prev, ...patch };

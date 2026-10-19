@@ -304,13 +304,14 @@ function FamilyCard({ adding }: { adding?: boolean } = {}) {
         <Label right={<Pressable onPress={test} hitSlop={10} style={styles.inline}><Icon d={SEND} size={15} color={colors.peach} /><Text style={styles.inlineText}>{t("fam.test")}</Text></Pressable>}>
           {t("fam.title")}
         </Label>
-        <Pressable onPress={() => setEditing(true)} style={styles.person}>
+        <Pressable onPress={() => setEditing(true)} style={styles.person} accessibilityRole="button" accessibilityHint={t("fam.rename")}>
           <View style={[styles.avatar, { backgroundColor: colors.sage }]}><Icon d={ICONS.mic} size={16} color={colors.bg} width={2} /></View>
           {editing ? (
             <TextInput autoFocus value={m.myName} onChangeText={(myName) => update({ myName })} onBlur={() => setEditing(false)} placeholder={t("fam.myName")} placeholderTextColor={colors.muted} style={[styles.input, { flex: 1, textAlign: "left", paddingVertical: 7 }]} maxLength={30} />
           ) : (
             <Text style={styles.personName} numberOfLines={1}>{m.myName.trim() || t("fam.thisPhone")}</Text>
           )}
+          {!editing && <Icon d='<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>' size={16} color={colors.muted} width={2} />}
           <Text style={styles.youTag}>{t("fam.thisPhone")}</Text>
         </Pressable>
         {members.map((p, i) => (
