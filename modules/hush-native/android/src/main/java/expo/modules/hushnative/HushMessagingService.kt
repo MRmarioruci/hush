@@ -21,7 +21,7 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
     // expo's background-task runner can throw when a message wakes the app before it's ready
     // (NullPointerException in TaskService.executeTask). That must never crash hush: our own
     // handling below still runs, and the app catches up on the message when it opens.
-    try { super.onMessageReceived(remoteMessage) } catch (e: Throwable) { Diag.add("push handler error: ${e.javaClass.simpleName}: ${e.message}") }
+    try { super.onMessageReceived(withTopic(remoteMessage)) } catch (e: Throwable) { Diag.add("push handler error: ${e.javaClass.simpleName}: ${e.message}") }
     try {
       val data = remoteMessage.data
       val body = data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -31,6 +31,29 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
       if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
     } catch (_: Exception) {}
   }
+}
+
+/**
+ * One notification per topic, updated in place instead of piling up: everything about one baby's
+ * room (crying, still crying, battery, stopped listening) shares a slot, as do that room's clips and
+ * its sleep notes. expo-notifications uses the message's "tag" as the notification's id.
+ */
+private fun withTopic(m: RemoteMessage): RemoteMessage {
+  return try {
+    val body = m.data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return m
+    val from = body.optString("from").takeLast(12).ifEmpty { "room" }
+    val topic = when (body.optString("type")) {
+      "cry", "stopped", "battery" -> "hush-room-$from"
+      "clip" -> "hush-clip-$from"
+      "sleep" -> "hush-sleep-$from"
+      "test" -> "hush-test"
+      else -> return m
+    }
+    if (m.data["tag"] == topic) return m
+    val extras = m.toIntent().extras ?: return m
+    extras.putString("tag", topic)
+    RemoteMessage(extras)
+  } catch (_: Throwable) { m }
 }
 
 /** Baby's phone: answers "status" and "clip" (listen in) natively, even when the app is asleep. */

@@ -226,8 +226,11 @@ export async function recordAlert(n: Notifications.Notification) {
   const data = n.request.content.data as { type?: string } | undefined;
   if (!["cry", "battery", "stopped"].includes(data?.type ?? "")) return;
   const list = await loadAlerts();
-  if (list.some((a) => a.id === n.request.identifier)) return;
-  const next = [{ id: n.request.identifier, body: n.request.content.body ?? t("nights.crying"), at: n.date }, ...list].slice(0, 30);
+  // Alerts from one room share a notification (updated in place), so tell them apart by time too.
+  const d = n.request.content.data as { _id?: string; at?: number } | undefined;
+  const id = d?._id ?? `${n.request.identifier}:${d?.at ?? n.date}`;
+  if (list.some((a) => a.id === id)) return;
+  const next = [{ id, body: n.request.content.body ?? t("nights.crying"), at: n.date }, ...list].slice(0, 30);
   await AsyncStorage.setItem(ALERTS_KEY, JSON.stringify(next)).catch(() => {});
   return next;
 }
