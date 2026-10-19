@@ -31,21 +31,39 @@ export function MonitorScreen() {
   useT();
   const alerts = useAlerts();
   const [fam, setFam] = useState<false | "list" | "add">(false);
+  const [remote, setRemote] = useState(false);
+  useAskFamily();
+  // Becoming the monitor closes the remote.
+  useEffect(() => { if (listening && !rooms.length) setRemote(false); }, [listening, rooms.length]);
   return (
     <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setFam("add")} /> : undefined}>
       {members.length === 0 ? (
         <FamilyStart />
-      ) : listening ? (
+      ) : remote ? (
         <>
+          <View style={styles.remoteHead}>
+            <Pressable onPress={() => setRemote(false)} hitSlop={10} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t("common.back")}>
+              <Icon d='<path d="M15 6l-6 6 6 6"/>' size={20} color={colors.cream} width={2.2} />
+            </Pressable>
+            <Text style={styles.remoteTitle}>{t("rx.remote")}</Text>
+          </View>
           <PhoneRoles />
-          <ThisPhone />
-          {rooms.length > 0 && <OtherRooms alerts={alerts} />}
+          <OtherRooms alerts={alerts} />
         </>
       ) : (
         <>
-          <PhoneRoles />
-          <OtherRooms alerts={alerts} />
-          <StartHere />
+          {listening ? <ThisPhone /> : <Receiving alerts={alerts} />}
+          {(!listening || rooms.length > 0) && (
+            <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
+              <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.remoteBtnTitle}>{t("rx.remote")}</Text>
+                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.remoteSub", { names: rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ") }) : t("rx.remoteNone")}</Text>
+              </View>
+              <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
+            </Pressable>
+          )}
+          <RoleSwitch />
         </>
       )}
       <Modal visible={!!fam} transparent animationType="slide" onRequestClose={() => setFam(false)}>
@@ -70,9 +88,9 @@ function PhoneRoles() {
   return (
     <View style={styles.roles}>
       {list.map((x) => (
-        <Pressable key={x.key} disabled={x.key === "me" || listening} onPress={() => setFocus(x.key)}
-          style={[styles.roleChip, !listening && x.key === target && styles.roleChipOn]}
-          accessibilityLabel={`${x.name}: ${x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}`} accessibilityState={{ selected: !listening && x.key === target }}>
+        <Pressable key={x.key} disabled={x.key === "me"} onPress={() => setFocus(x.key)}
+          style={[styles.roleChip, x.key === target && styles.roleChipOn]}
+          accessibilityLabel={`${x.name}: ${x.monitor ? t("rt.isMonitor") : t("rt.isAlerts")}`} accessibilityState={{ selected: x.key === target }}>
           <View style={[styles.chipIcon, { backgroundColor: x.monitor ? colors.sage : "#c9bfff" }]}>
             <Icon d={x.monitor ? ICONS.mic : BELL} size={13} color={colors.bg} width={2.2} />
           </View>
@@ -108,18 +126,51 @@ function Avatars({ onPress, onAdd }: { onPress: () => void; onAdd: () => void })
   );
 }
 
-/** Not listening here: one small button to make this phone the monitor. */
-function StartHere() {
-  const { toggleListening, lastStop } = useMonitor();
-  const [msg, setMsg] = useState<string | null>(null);
-  const last = stopLine(lastStop, t, fmtTime);
+/** This phone gets the alerts: one calm circle saying so, and from which phones. */
+function Receiving({ alerts }: { alerts: AlertRecord[] }) {
+  const { rooms } = useMonitor();
+  const [, tick] = useState(0);
+  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  const last = alerts[0];
+  const crying = !!last && Date.now() - last.at < 15 * 60_000;
+  const tone = crying ? colors.rose : "#c9bfff";
+  const glow = crying ? "255,157,176" : "201,191,255";
+  const names = rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ");
   return (
-    <View style={{ alignItems: "center", gap: 8, marginTop: 6 }}>
-      <Pressable onPress={async () => setMsg(await toggleListening())} style={({ pressed }) => [styles.useHere, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityRole="button">
-        <Icon d={ICONS.mic} size={18} color={colors.sage} width={2} />
-        <Text style={styles.useHereText}>{t("here.useThis")}</Text>
+    <View style={{ alignItems: "center", gap: 14 }}>
+      <View style={{ marginVertical: 26 }}>
+        <View style={[styles.glow2, { backgroundColor: `rgba(${glow},0.04)` }]} />
+        <View style={[styles.glow1, { backgroundColor: `rgba(${glow},0.08)` }]} />
+        <View style={styles.crib}>
+          <View style={[styles.rxBell, { backgroundColor: tone }]}><Icon d={BELL} size={40} color={colors.bg} width={2} /></View>
+          <Text style={styles.cribStatus}>{crying ? t("room.cried", { time: fmtTime(last!.at) }) : t("rx.title")}</Text>
+          <Text style={styles.rxSub} numberOfLines={2}>{rooms.length ? t("rx.from", { names }) : t("rx.none")}</Text>
+        </View>
+      </View>
+      <Tonight alerts={alerts} />
+    </View>
+  );
+}
+const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13h.01M14 13h.01M10 16.5h.01M14 16.5h.01"/>';
+
+/** The role switch at the bottom: on = this phone is the baby monitor by the crib. */
+function RoleSwitch() {
+  const { listening, toggleListening, lastStop } = useMonitor();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const last = !listening ? stopLine(lastStop, t, fmtTime) : null;
+  const flip = async () => { setBusy(true); setMsg(await toggleListening()); setBusy(false); };
+  return (
+    <View style={{ gap: 8 }}>
+      <Pressable onPress={flip} disabled={busy} style={styles.switchRow} accessibilityRole="switch" accessibilityState={{ checked: listening }}>
+        <View style={[styles.switchIcon, listening && { backgroundColor: colors.sage }]}><Icon d={ICONS.mic} size={20} color={listening ? colors.bg : colors.sage} width={2} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.switchTitle}>{t("rx.switch")}</Text>
+          <Text style={styles.switchSub}>{listening ? t("rx.switchOn") : t("rx.switchOff")}</Text>
+        </View>
+        <Switch value={listening} onValueChange={flip} disabled={busy} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
       </Pressable>
-      {last && <Text style={styles.meta}>{last}</Text>}
+      {last && <Text style={[styles.meta, { textAlign: "center" }]}>{last}</Text>}
       <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </View>
@@ -343,10 +394,6 @@ function ThisPhone() {
       </View>
 
       <PowerPill names={names} />
-      <Pressable onPress={toggle} style={({ pressed }) => [styles.stopHere, pressed && { opacity: 0.8 }]} accessibilityRole="button">
-        <Icon d={BELL} size={18} color="#c9bfff" width={2} />
-        <Text style={styles.stopHereText}>{t("rt.stopHere")}</Text>
-      </Pressable>
       <TrialNote />
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </>
@@ -511,12 +558,6 @@ function useRemote() {
     // Polls fail quietly unless nothing else is being tried; a tap that couldn't be sent always says so.
     setFail((f) => (!ok ? (cmd === "status" && f ? f : { cmd, at }) : f && f.at <= at ? null : f));
   }, [target]);
-  // Opening the page: ask every phone in the family, to find the ones listening.
-  const tokens = members.map((p) => p.token).join(",");
-  useFocusEffect(useCallback(() => {
-    if (!tokens) return;
-    myToken().then((me) => sendData(tokens.split(","), { type: "cmd", cmd: "status", from: me })).catch(() => {});
-  }, [tokens]));
   // While this page is open, keep in step with the room shown: ask every 10 seconds.
   useFocusEffect(useCallback(() => {
     if (!target) return;
@@ -528,6 +569,19 @@ function useRemote() {
   return { room, send, waiting, noReply, lastCmd, fail: fail && Date.now() - fail.at < 120_000 ? fail : null, cmdLate, cmdOpen: cmdOpen && Date.now() - cmdOpen.at < 15000 ? cmdOpen.cmd : null };
 }
 type Remote = ReturnType<typeof useRemote>;
+
+/** While Monitor is open: ask every phone in the family what it's doing (now, then every 30 s), so roles stay in sync. */
+function useAskFamily() {
+  const { members } = useMonitor();
+  const tokens = members.map((p) => p.token).join(",");
+  useFocusEffect(useCallback(() => {
+    if (!tokens) return;
+    const ask = () => myToken().then((me) => sendData(tokens.split(","), { type: "cmd", cmd: "status", from: me })).catch(() => {});
+    ask();
+    const id = setInterval(ask, 30_000);
+    return () => clearInterval(id);
+  }, [tokens]));
+}
 
 const ago = (ms: number) => {
   const min = Math.round((Date.now() - ms) / 60_000);
@@ -725,6 +779,19 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  rxBell: { width: 84, height: 84, borderRadius: 42, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  rxSub: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", maxWidth: 170 },
+  remoteBtn: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 24, padding: 12, paddingRight: 16 },
+  remoteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
+  remoteBtnTitle: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
+  remoteBtnSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  remoteHead: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: -6 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  remoteTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.cream },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 24, padding: 12, paddingRight: 14 },
+  switchIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  switchTitle: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
+  switchSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   controlling: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: -6 },
   controllingText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach, flexShrink: 1 },
   headAdd: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
