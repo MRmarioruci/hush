@@ -54,7 +54,7 @@ export function MonitorScreen() {
         <>
           <RolePicker />
           <Rise key={listening ? "monitor" : "alerts"}>{listening ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
-          {(!listening || rooms.length > 0) && (
+          {!listening && (
             <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
               <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
               <View style={{ flex: 1 }}>
@@ -374,12 +374,9 @@ function ThisPhone() {
   const hears = status.top != null && (status.topScore ?? 0) > 0.1 ? heardLabel(status.top, YAMNET_LABELS[status.top]) : null;
   const clipSecs = m.cryClip ?? CRY_CLIP_SECONDS;
   const cycle = <T,>(xs: T[], v: T) => xs[(xs.indexOf(v) + 1) % xs.length];
-  // Listen-in: off -> on -> on with a clip on crying alerts (5 s, 10 s) -> off.
-  const listenStep = !m.allowListen ? 0 : clipSecs === 0 ? 1 : clipSecs === 5 ? 2 : 3;
-  const nextListen = () => {
-    const n = (listenStep + 1) % 4;
-    update(n === 0 ? { allowListen: false } : { allowListen: true, cryClip: [0, 0, 5, 10][n] });
-  };
+  // A recording with each alert needs listening in allowed; turning listening in off stops the recordings too.
+  const clipOn = !!m.allowListen && clipSecs > 0;
+  const nextClip = () => (!clipOn ? update({ allowListen: true, cryClip: 5 }) : clipSecs === 5 ? update({ cryClip: 10 }) : update({ cryClip: 0 }));
   const names = members.map((p, i) => p.name.trim() || t("fam.unnamed", { n: i + 2 })).join(", ");
   return (
     <>
@@ -388,18 +385,22 @@ function ThisPhone() {
         <Text style={styles.orbMeta} numberOfLines={1}>{hears ?? t("rt.ringHint")}</Text>
       </View>
 
+      <Text style={styles.othersGet}>{t("rt.othersGet", { names })}</Text>
       <View style={styles.toggles}>
-        <RoundBtn size={64} onPress={nextListen} bg={m.allowListen ? "#c9bfff" : colors.card}
-          label={listenStep === 0 ? t("rt.listenOff") : listenStep === 1 ? t("rt.listenOn") : t("rt.listenClip", { s: clipSecs })} a11y={t("listen.allow")}>
-          <Icon d={EAR} size={26} color={m.allowListen ? colors.bg : "#c9bfff"} width={2} />
-        </RoundBtn>
-        <RoundBtn size={64} onPress={() => update({ alertAfter: cycle(ALERT_AFTER.map(([v]) => v), m.alertAfter) })} bg="#c9bfff"
+        <RoundBtn size={60} onPress={() => update({ alertAfter: cycle(ALERT_AFTER.map(([v]) => v), m.alertAfter) })} bg="#c9bfff"
           label={m.alertAfter === 0 ? t("rt.alertNow") : t("rt.alertAfter", { after: t(`after.${m.alertAfter}`) })}>
-          <Icon d={BELL} size={26} color={colors.bg} width={2} />
+          <Icon d={BELL} size={24} color={colors.bg} width={2} />
         </RoundBtn>
-        <RoundBtn size={64} onPress={() => update({ sensitivity: cycle(["low", "medium", "high"] as Sensitivity[], m.sensitivity) })}
+        <RoundBtn size={60} onPress={nextClip} bg={clipOn ? "#c9bfff" : colors.card} label={clipOn ? t("rt.clipOn", { s: clipSecs }) : t("rt.clipOff")} a11y={t("listen.withCry")}>
+          <Icon d={WAVE} size={24} color={clipOn ? colors.bg : "#c9bfff"} width={2} />
+        </RoundBtn>
+        <RoundBtn size={60} onPress={() => update(m.allowListen ? { allowListen: false } : { allowListen: true })} bg={m.allowListen ? "#c9bfff" : colors.card}
+          label={m.allowListen ? t("rt.canListen") : t("rt.cantListen")} a11y={t("listen.allow")}>
+          <Icon d={EAR} size={24} color={m.allowListen ? colors.bg : "#c9bfff"} width={2} />
+        </RoundBtn>
+        <RoundBtn size={60} onPress={() => update({ sensitivity: cycle(["low", "medium", "high"] as Sensitivity[], m.sensitivity) })}
           label={t("rt.sensitivity", { level: t(`sens.${m.sensitivity}`) })}>
-          <Icon d={SLIDERS} size={26} color="#c9bfff" width={2} />
+          <Icon d={SLIDERS} size={24} color="#c9bfff" width={2} />
         </RoundBtn>
       </View>
 
@@ -411,6 +412,7 @@ function ThisPhone() {
 }
 
 const BELL = '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/>';
+const WAVE = '<path d="M4 12h1.5M7.5 8v8M11 5v14M14.5 9v6M18 7v10M20.5 12H20"/>';
 const SLIDERS = '<path d="M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4"/>';
 const BOLT = '<path d="M13 3 6 14h5l-1 7 7-11h-5z"/>';
 const MIC = '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>';
@@ -489,7 +491,6 @@ function PowerPill({ names }: { names: string }) {
       <Text style={[styles.powerText, low && { color: colors.rose }]} numberOfLines={1}>
         {plugged ? (pct != null ? t("rt.plugged", { pct }) : t("rt.pluggedNoPct")) : pct != null ? t("rt.onBattery", { pct }) : t("nursery.plugIn")}
       </Text>
-      {!!names && <Text style={styles.powerRight} numberOfLines={1}>{t("rt.alertsTo", { names })}</Text>}
     </View>
   );
 }
@@ -832,7 +833,8 @@ const xstyles = StyleSheet.create({
   roleChipText: { fontFamily: fonts.bodyBold, fontSize: 13, flexShrink: 1 },
   retry: { backgroundColor: colors.bg, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9 },
   retryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
-  toggles: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 8 },
+  toggles: { flexDirection: "row", justifyContent: "space-between" },
+  othersGet: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", marginTop: 6 },
   statusIcons: { flexDirection: "row", alignItems: "center", gap: 16 },
   statusIcon: { flexDirection: "row", alignItems: "center", gap: 5 },
   statusText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] },

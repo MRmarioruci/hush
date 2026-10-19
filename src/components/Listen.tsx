@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   notice: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },
   noticeText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 13.5, lineHeight: 19, color: colors.muted },
   roundRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
-  roundItem: { width: 88, alignItems: "center", gap: 8 },
+  roundItem: { width: 84, alignItems: "center", gap: 8 },
   roundBtn: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center" },
   roundLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", fontVariant: ["tabular-nums"] },
   listenHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
