@@ -1,7 +1,7 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import { cryDetector, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
 import * as Notifications from "expo-notifications";
@@ -43,6 +43,8 @@ type Monitor = {
   listening: boolean;
   /** Ask a listening phone for a few seconds of sound (default: the target). Returns when it was asked. */
   requestClip: (seconds?: number, to?: string | null) => Promise<{ at: number; ok: boolean }>;
+  /** Another phone wants to listen in but it's off here: ask on screen, and tell them if it's allowed. */
+  askAllow: (who: string, from: string) => void;
   /** Why listening last stopped (null while it hasn't). */
   lastStop: Stop | null;
   status: CryStatus;
@@ -125,6 +127,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       stopped: t("push.stopped", { name: baby }),
       listenTitle: t("push.listenTitle"),
       listenText: t("push.listenText", { name: baby }),
+      allowAsk: t("allow.notif", { who: "{who}" }),
     });
   }, [lang, baby]);
 
@@ -503,6 +506,20 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   /* ---------- "listen in": a parent asks for a few seconds of the room ---------- */
 
+  const asking = useRef(0);
+  const askAllow = useCallback((who: string, from: string) => {
+    if (mRef.current.allowListen || Date.now() - asking.current < 30_000) return;
+    asking.current = Date.now();
+    Alert.alert(t("allow.title", { who: who || t("rt.otherPhone") }), t("allow.body"), [
+      { text: t("allow.no"), style: "cancel" },
+      { text: t("allow.yes"), onPress: () => {
+        update({ allowListen: true });
+        // Their Listen button says they can try again now.
+        if (from) sendData([from], { type: "clip", at: Date.now(), error: "allowed", from: mRef.current.me ?? "" }).catch(() => {});
+      } },
+    ]);
+  }, [update]);
+
   // Baby's phone: record, upload, and send the parent a link (or say why not).
   const listeningRef = useRef(listening);
   listeningRef.current = listening;
@@ -512,6 +529,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const d = n.request.content.data as { type?: string; cmd?: string; from?: string; seconds?: number } | undefined;
       const cur = mRef.current;
       const secs = Math.max(5, Math.min(15, Math.round(Number(d?.seconds) || CLIP_SECONDS)));
+      // Asked to listen in while it's off here and hush is open: ask right away.
+      if (d?.type === "cmd" && d.cmd === "clip" && d.from && !cur.allowListen && AppState.currentState === "active") {
+        const asker = membersOf(cur.family, cur.me ?? "").find((p) => p.token === d.from);
+        if (asker) askAllow(asker.name.trim(), d.from);
+      }
       // Android answers natively (works with the screen locked); this is for iPhones.
       if (Platform.OS !== "ios" || d?.type !== "cmd" || d.cmd !== "clip" || !d.from) return;
       const parent = membersOf(cur.family, cur.me ?? "").find((p) => p.token === d.from);
@@ -521,7 +543,12 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const name = babyLabelIn(L, cur.babyName);
       const reply = (key: string, data: Record<string, unknown>) =>
         sendPush([parent.token], tIn(L, key, { name, s: secs }), { type: "clip", at: Date.now(), seconds: secs, ...data });
-      if (!cur.allowListen) return reply("listen.off", { error: "off" });
+      if (!cur.allowListen) {
+        if (AppState.currentState !== "active") Notifications.scheduleNotificationAsync({
+          content: { title: "hush", body: t("allow.notif", { who: parent.name }), data: { type: "allow-listen", who: parent.name, from: parent.token } }, trigger: null,
+        }).catch(() => {});
+        return reply("listen.off", { error: "off" });
+      }
       if (!listeningRef.current || !cryDetector) return reply("listen.notListening", { error: "notListening" });
       const where = newClip();
       if (!where) return reply("listen.failed", { error: "setup" });
@@ -542,7 +569,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       busy.current = false;
     });
     return () => sub.remove();
-  }, []);
+  }, [askAllow]);
 
   // Parent's phone: keep the latest clip (or the reason there's none).
   useEffect(() => {
@@ -585,7 +612,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
   );
 }
 

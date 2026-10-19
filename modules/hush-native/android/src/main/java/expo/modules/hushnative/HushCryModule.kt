@@ -80,6 +80,7 @@ class HushCryModule : Module() {
       texts["stopped"]?.let { CryEngine.txtStopped = it }
       texts["listenTitle"]?.let { CryEngine.txtListenTitle = it }
       texts["listenText"]?.let { CryEngine.txtListenText = it }
+      texts["allowAsk"]?.let { CryEngine.txtAllowAsk = it }
     }
 
     // Which app store installed hush ("com.android.vending" = Google Play), or "" if sideloaded.

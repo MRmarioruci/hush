@@ -174,7 +174,7 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
       {c.waiting && <Notice spin text={t("rt.waitingClip", { name: c.roomName, s: Math.round(c.elapsed / 1000) })} />}
       {c.sendFail && <Notice bad text={t("rt.sendFail")} />}
       {c.timedOut && <Notice bad text={t("rt.noClip", { name: c.roomName })} />}
-      {error && <Notice bad text={t(`listen.err.${error}`)} />}
+      {error && <Notice bad={error !== "allowed"} text={t(`listen.err.${error}`, { name: c.roomName })} />}
       {c.clip?.url ? (
         <View style={styles.clip}>
           <Pressable onPress={c.toggle} style={[styles.clipBtn, c.status.playing && { backgroundColor: colors.peach }]} accessibilityRole="button" accessibilityLabel={c.status.playing ? t("common.pause") : t("common.play")}>

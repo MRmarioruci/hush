@@ -48,7 +48,10 @@ object RoomCommands {
     fun text(key: String) = (parent[key] ?: key).replace("{s}", secs.toString())
     fun reply(key: String, extra: Map<String, Any>) =
       AlertSender.sendEach(listOf(to to text(key)), mapOf("type" to "clip", "at" to System.currentTimeMillis(), "seconds" to secs, "from" to CryEngine.myToken) + extra)
-    if (!CryEngine.allowListen) return reply("listenOff", mapOf("error" to "off"))
+    if (!CryEngine.allowListen) {
+      askAllow(context, parent["name"] ?: "", to)
+      return reply("listenOff", mapOf("error" to "off"))
+    }
     if (!CryEngine.running) return reply("listenNotListening", mapOf("error" to "notListening"))
     val (upload, download) = CryEngine.clipUrls() ?: return reply("listenFailed", mapOf("error" to "setup"))
     if (!busy.compareAndSet(false, true)) return
@@ -63,6 +66,33 @@ object RoomCommands {
         }
       } finally { busy.set(false) }
     }
+  }
+
+  private const val ASK = "hush-ask"
+  @Volatile private var lastAsk = 0L
+
+  /** Listening in is off here: ask whoever is near this phone to allow it (tap opens hush with the question). */
+  private fun askAllow(context: Context, who: String, from: String) {
+    if (System.currentTimeMillis() - lastAsk < 60_000) return
+    lastAsk = System.currentTimeMillis()
+    try {
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      // Pops up on screen but makes no sound: the baby may be asleep next to it.
+      if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(ASK) == null) {
+        nm.createNotificationChannel(android.app.NotificationChannel(ASK, "Requests from your phones", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+          setSound(null, null); enableVibration(false)
+        })
+      }
+      val uri = android.net.Uri.parse("hush://allow-listen?who=" + android.net.Uri.encode(who) + "&from=" + android.net.Uri.encode(from))
+      val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).setPackage(context.packageName)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      val pi = android.app.PendingIntent.getActivity(context, 4344, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+      val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, ASK)
+        else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
+      Diag.add("allow-listen asked by $who")
+      nm.notify(4344, builder.setSmallIcon(context.applicationInfo.icon).setContentTitle("hush")
+        .setContentText(CryEngine.txtAllowAsk.replace("{who}", who)).setContentIntent(pi).setAutoCancel(true).build())
+    } catch (_: Exception) {}
   }
 
   /** Nobody listens in unnoticed: a notice on the baby's phone. */

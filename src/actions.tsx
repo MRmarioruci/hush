@@ -53,9 +53,17 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   };
   const joinRef = useRef(mon.join);
   joinRef.current = mon.join;
+  const askRef = useRef(mon.askAllow);
+  askRef.current = mon.askAllow;
   const fromUrl = useCallback((url: string | null) => {
     const m = url?.match(/^hush:\/\/do\/(\w+)/);
     if (m) setTimeout(() => run.current(m[1]), 400); // let the app settle first
+    // Tapped "wants to listen in" on this phone.
+    if (url?.startsWith("hush://allow-listen")) setTimeout(() => {
+      go("Monitor");
+      const q = new URLSearchParams(url.split("?")[1] ?? "");
+      askRef.current(q.get("who") ?? "", q.get("from") ?? "");
+    }, 500);
     // An invite link from another phone in the family.
     if (url?.startsWith("hush://join")) setTimeout(async () => {
       go("Monitor");
@@ -73,7 +81,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     // Buttons on notifications; tapping a "listen in" clip plays it.
     const onResponse = (r: Notifications.NotificationResponse) => {
       if (r.actionIdentifier && r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) { fromUrl(`hush://do/${r.actionIdentifier}`); return; }
-      const d = r.notification.request.content.data as { type?: string; url?: string; at?: number; seconds?: number } | undefined;
+      const d = r.notification.request.content.data as { type?: string; url?: string; at?: number; seconds?: number; who?: string; from?: string } | undefined;
+      if (d?.type === "allow-listen") { setTimeout(() => { go("Monitor"); askRef.current(d.who ?? "", d.from ?? ""); }, 500); return; }
       if (d?.type === "clip" && d.url) {
         mon.update({ clip: { url: d.url, at: d.at ?? Date.now(), seconds: d.seconds, got: Date.now() } });
         setTimeout(() => { go("Monitor"); playFromOutside(d.url!); }, 400);
