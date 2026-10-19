@@ -19,7 +19,7 @@ import { Ring } from "../components/Ring";
 import { MoonFace } from "../components/MoonFace";
 import Svg, { Circle, SvgXml } from "react-native-svg";
 import { TRIAL_DAYS, useUnlock } from "../state/unlock";
-import { Card, ICONS, Icon, Label, Rise, Screen } from "../components/ui";
+import { Card, ICONS, Icon, Label, Rise, Screen, useAppActive } from "../components/ui";
 import { fmtTime, getLang, heardLabel, t, tIn, useT, babyLabel, babyLabelIn } from "../i18n";
 import { SOUNDS } from "../sounds";
 const PLUS = '<path d="M12 5v14M5 12h14"/>';
@@ -426,10 +426,12 @@ function ListeningOrb({ level, hot, crying, baby, onPress }: { level: number; ho
   const breathe = useRef(new Animated.Value(0)).current;
   const lvl = useRef(new Animated.Value(level)).current;
   useEffect(() => { Animated.timing(lvl, { toValue: level, duration: 350, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(); }, [level, lvl]);
+  const active = useAppActive();
   useEffect(() => {
+    if (!active) return;
     const dur = crying ? 1200 : 3200;
-    const ripple = (v: Animated.Value, delay: number) => Animated.loop(Animated.sequence([
-      Animated.delay(delay),
+    // Loops without a delay inside run entirely on the native side; the second ripple starts half a beat later.
+    const ripple = (v: Animated.Value) => Animated.loop(Animated.sequence([
       Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.out(Easing.quad), useNativeDriver: true }),
       Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
     ]));
@@ -437,10 +439,11 @@ function ListeningOrb({ level, hot, crying, baby, onPress }: { level: number; ho
       Animated.timing(breathe, { toValue: 1, duration: dur / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       Animated.timing(breathe, { toValue: 0, duration: dur / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
     ]));
-    const l1 = ripple(r1, 0), l2 = ripple(r2, dur / 2);
-    l1.start(); l2.start(); b.start();
-    return () => { l1.stop(); l2.stop(); b.stop(); };
-  }, [crying, r1, r2, breathe]);
+    const l1 = ripple(r1), l2 = ripple(r2);
+    l1.start(); b.start();
+    const later = setTimeout(() => l2.start(), dur / 2);
+    return () => { clearTimeout(later); l1.stop(); l2.stop(); b.stop(); };
+  }, [crying, r1, r2, breathe, active]);
   const C = 2 * Math.PI * 90;
   const ring = (v: Animated.Value) => ({
     position: "absolute" as const, width: 160, height: 160, borderRadius: 80, borderWidth: 2, borderColor: tone,

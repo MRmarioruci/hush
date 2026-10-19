@@ -3,18 +3,20 @@ import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { useT } from "../i18n";
+import { useAppActive } from "./ui";
 
 /** Two phones: the baby's phone by the crib hears crying, and an alert travels to the parent's phone. */
 export function MonitorHero({ baby, still }: { baby: string; still?: boolean }) {
   const tr = useT();
   const t = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  const active = useAppActive();
   useEffect(() => {
-    if (still) return;
+    if (still || !active) return;
     const travel = Animated.loop(
       Animated.sequence([
         Animated.timing(t, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.delay(900),
+        Animated.timing(t, { toValue: 1, duration: 900, useNativeDriver: true }), // hold, natively
         Animated.timing(t, { toValue: 0, duration: 0, useNativeDriver: true }),
       ])
     );
@@ -27,7 +29,7 @@ export function MonitorHero({ baby, still }: { baby: string; still?: boolean }) 
     travel.start();
     breathe.start();
     return () => { travel.stop(); breathe.stop(); };
-  }, [t, pulse, still]);
+  }, [t, pulse, still, active]);
 
   return (
     <View style={styles.wrap}>

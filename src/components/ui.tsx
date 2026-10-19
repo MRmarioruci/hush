@@ -1,5 +1,5 @@
-import { Children, useEffect, useRef, type ReactNode } from "react";
-import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Children, useEffect, useRef, useState, type ReactNode } from "react";
+import { AccessibilityInfo, Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
@@ -25,6 +25,14 @@ export function Screen({ title, eyebrow, right, children }: { title: string; eye
       {Children.toArray(children).map((c, i) => <Rise key={(c as { key?: string }).key ?? i} delay={Math.min(i, 6) * 60}>{c}</Rise>)}
     </ScrollView>
   );
+}
+
+/** Whether hush is on screen. Looping animations stop in the background: Android keeps queueing their
+ *  native steps while there's no screen to draw them on, which once ran the app out of memory. */
+export function useAppActive() {
+  const [on, setOn] = useState(AppState.currentState === "active");
+  useEffect(() => { const sub = AppState.addEventListener("change", (st) => setOn(st === "active")); return () => sub.remove(); }, []);
+  return on;
 }
 
 let reduceMotion = false;

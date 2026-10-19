@@ -123,6 +123,8 @@ object CryEngine {
   }
 
   /* ---------- "listen in": settings from the app ---------- */
+  @Volatile private var lowBatteryWarned = false
+  @Volatile private var lastLowBattery = 0L
   @Volatile var allowListen = false
   @Volatile var bucket = ""
   @Volatile var txtListenNotice = "{who} is listening to the room for {s} seconds"
@@ -317,7 +319,6 @@ object CryEngine {
       var lastAlert = 0L
       var peak = 0f
       var lastBatteryCheck = 0L
-      var lowBatterySent = false
       EventLog.add("listen_start")
       listenSince = System.currentTimeMillis()
       var lastReport = 0L
@@ -389,10 +390,12 @@ object CryEngine {
         if (System.currentTimeMillis() - lastBatteryCheck > 60_000) {
           lastBatteryCheck = System.currentTimeMillis()
           val (pct, plugged) = battery(context)
-          if (!plugged && pct in 1..15 && !lowBatterySent) {
-            lowBatterySent = true
+          // Once per low spell, even if listening is stopped and started again (at most every 30 minutes).
+          if (!plugged && pct in 1..15 && !lowBatteryWarned && System.currentTimeMillis() - lastLowBattery > 30 * 60_000) {
+            lowBatteryWarned = true
+            lastLowBattery = System.currentTimeMillis()
             alert("lowBattery", txtLowBattery, mapOf("type" to "battery", "baby" to babyName, "pct" to pct), pct)
-          } else if (plugged || pct > 25) lowBatterySent = false
+          } else if (plugged || pct > 25) lowBatteryWarned = false
         }
 
         // A crying spell starts on the first detection and lasts until there's been no
