@@ -37,11 +37,13 @@ export function MonitorScreen() {
         <FamilyStart />
       ) : listening ? (
         <>
+          <RoleChip monitor />
           <ThisPhone />
           {rooms.length > 0 && <OtherRooms alerts={alerts} />}
         </>
       ) : (
         <>
+          <RoleChip />
           <OtherRooms alerts={alerts} />
           <StartHere />
         </>
@@ -54,6 +56,19 @@ export function MonitorScreen() {
         </View>
       </Modal>
     </Screen>
+  );
+}
+
+/** Says what this phone is doing: the baby monitor by the crib, or a phone that gets the alerts. */
+function RoleChip({ monitor }: { monitor?: boolean }) {
+  const tone = monitor ? colors.sage : "#c9bfff";
+  return (
+    <View style={styles.roleChip} accessibilityRole="text">
+      <View style={[styles.chipIcon, { backgroundColor: tone }]}>
+        <Icon d={monitor ? ICONS.mic : BELL} size={14} color={colors.bg} width={2.2} />
+      </View>
+      <Text style={styles.roleChipText}>{monitor ? t("rt.roleMonitor") : t("rt.roleParent")}</Text>
+    </View>
   );
 }
 
@@ -674,6 +689,9 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
 
 const ORB = 184;
 const xstyles = StyleSheet.create({
+  roleChip: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 18, paddingLeft: 5, paddingRight: 14, height: 36, marginTop: -6, marginBottom: 12 },
+  chipIcon: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  roleChipText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
   retry: { backgroundColor: colors.bg, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9 },
   retryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach },
   toggles: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 8 },

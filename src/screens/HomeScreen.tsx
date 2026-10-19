@@ -56,10 +56,8 @@ export function HomeScreen() {
         </Pressable>
       }
     >
-      {stale && f.naps && <StillAsleep since={stale.since} guess={stale.guess} name={name} onPick={(at) => naps.wokeAt(at)} onYes={naps.stillAsleep} />}
-
       {/* ---- the moon: white noise ---- */}
-      {f.sounds && !stale && (
+      {f.sounds && (
         <View style={{ alignItems: "center" }}>
           <View>
             <Moon size={176} playing={sleep.playing} beat={sleep.beat} softBeat={sleep.soundId === "womb" && sleep.beat % 2 === 1} slow={sleep.soundId === "ocean"} still={sleep.still} onPress={sleep.toggle} />
@@ -89,9 +87,10 @@ export function HomeScreen() {
       )}
 
       {/* ---- three rings: sleep, next nap, the baby's room ---- */}
-      {!stale && (f.naps || f.monitor) && (
+      {(f.naps || f.monitor) && (
         <View style={styles.orbs}>
           {f.naps && (st.asleep ? (
+            stale ? <Orb big="?" label={t("orb.asleepQ")} color={colors.peach} progress={0} onPress={() => nav.navigate("Sleep")} /> :
             <Orb big={fmtDur(Math.max(0, now - st.since) / MIN)} label={t("orb.asleep")} color={colors.sage} progress={(now - st.since) / (90 * MIN)} onPress={() => nav.navigate("Sleep")} />
           ) : (
             <Orb big={st.awakeSince != null ? fmtDur(Math.max(0, now - st.awakeSince) / MIN) : "–"} label={t("orb.awake")} color={colors.peach}
@@ -106,6 +105,9 @@ export function HomeScreen() {
           {f.monitor && <RoomOrb onPress={() => nav.navigate("Monitor")} />}
         </View>
       )}
+
+      {/* ---- a gentle question when a sleep has gone on too long ---- */}
+      {f.naps && stale && <StillAsleep since={stale.since} guess={stale.guess} name={name} onPick={(at) => naps.wokeAt(at)} onYes={naps.stillAsleep} />}
 
       {/* ---- one button ---- */}
       {f.naps && !stale && (
@@ -179,24 +181,22 @@ function StillAsleep({ since, guess, name, onPick, onYes }: { since: number; gue
       },
     });
   };
+  const when = new Date(since).toDateString() === new Date().toDateString() ? fmtClock(since) : `${new Date(since).toLocaleDateString(dateLocale(), { weekday: "short" })} ${fmtClock(since)}`;
   return (
-    <View style={{ alignItems: "center", gap: 14, paddingTop: 6 }}>
-      <Ring size={200} stroke={5} progress={1} color={colors.peach} track={colors.card2}>
-        <MoonFace size={128} awake />
-      </Ring>
-      <Text style={styles.stillTitle}>{t("still.title", { name })}</Text>
-      <Text style={styles.stillSub}>{t("still.sub", { time: new Date(since).toDateString() === new Date().toDateString() ? fmtClock(since) : `${new Date(since).toLocaleDateString(dateLocale(), { weekday: "short" })} ${fmtClock(since)}`, name })}</Text>
-      <View style={{ alignSelf: "stretch", gap: 10 }}>
-        {guess && (
-          <Pressable onPress={() => onPick(guess)} style={[styles.main, { alignSelf: "stretch", justifyContent: "center" }]} accessibilityRole="button">
-            <Icon d={SUN} size={20} color={colors.bg} width={2} />
-            <Text style={styles.mainText}>{t("still.wokeAt", { time: fmtClock(guess) })}</Text>
-          </Pressable>
-        )}
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <Pressable onPress={pick} style={styles.second} accessibilityRole="button"><Text style={styles.secondText}>{t("still.pick")}</Text></Pressable>
-          <Pressable onPress={onYes} style={styles.second} accessibilityRole="button"><Text style={styles.secondText}>{t("still.yes")}</Text></Pressable>
+    <View style={styles.nudge}>
+      <View style={styles.nudgeHead}>
+        <MoonFace size={46} awake />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.nudgeTitle}>{t("still.title", { name })}</Text>
+          <Text style={styles.nudgeSub}>{t("still.since", { time: when })}</Text>
         </View>
+      </View>
+      <View style={styles.nudgeBtns}>
+        <Pressable onPress={guess ? () => onPick(guess) : pick} style={[styles.nudgeBtn, { backgroundColor: colors.peach }]} accessibilityRole="button">
+          <Text style={[styles.nudgeBtnText, { color: colors.bg }]}>{guess ? t("still.wokeAt", { time: fmtClock(guess) }) : t("still.wokeUp")}</Text>
+        </Pressable>
+        {guess && <Pressable onPress={pick} style={styles.nudgeBtn} accessibilityRole="button"><Text style={styles.nudgeBtnText}>{t("still.other")}</Text></Pressable>}
+        <Pressable onPress={onYes} style={styles.nudgeBtn} accessibilityRole="button"><Text style={styles.nudgeBtnText}>{t("still.yes")}</Text></Pressable>
       </View>
     </View>
   );
@@ -223,6 +223,13 @@ const styles = StyleSheet.create({
   mainText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.bg },
   second: { flex: 1, minHeight: 52, borderRadius: 99, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   secondText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
+  nudge: { backgroundColor: colors.card, borderRadius: 24, padding: 14, gap: 12 },
+  nudgeHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  nudgeTitle: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: colors.cream },
+  nudgeSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted, marginTop: 1 },
+  nudgeBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  nudgeBtn: { minHeight: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center", flexGrow: 1 },
+  nudgeBtnText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.cream },
   stillTitle: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.cream },
   stillSub: { fontFamily: fonts.body, fontSize: 14.5, color: colors.muted, textAlign: "center", paddingHorizontal: 20, marginTop: -6 },
 });
