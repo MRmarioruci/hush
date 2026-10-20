@@ -25,17 +25,7 @@ class CryListenerService : Service() {
         }
       )
     }
-    val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
-      PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-    }
-    val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(this)
-    val notification = builder
-      .setSmallIcon(NotifIcon.small(this)).setColor(NotifIcon.COLOR)
-      .setContentTitle(CryEngine.txtListenTitle)
-      .setContentText(CryEngine.fill(CryEngine.txtListenText))
-      .setOngoing(true)
-      .setContentIntent(open)
-      .build()
+    val notification = build(this)
 
     try {
       if (Build.VERSION.SDK_INT >= 29) {
@@ -67,5 +57,29 @@ class CryListenerService : Service() {
   companion object {
     private const val CHANNEL = "hush-listening"
     private const val ID = 4242
+
+    private fun build(ctx: Context): Notification {
+      val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
+        PendingIntent.getActivity(ctx, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+      }
+      val text = CryEngine.fill(CryEngine.txtListenText)
+      val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(ctx)
+      return builder
+        .setSmallIcon(NotifIcon.small(ctx)).setColor(NotifIcon.COLOR)
+        .setContentTitle(CryEngine.txtListenTitle)
+        .setContentText(text)
+        .setStyle(Notification.BigTextStyle().bigText(text))
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .setContentIntent(open)
+        .build()
+    }
+
+    /** The texts changed (paired phones, or why it's listening): update the ongoing notification. */
+    fun refresh(ctx: Context) {
+      if (!CryEngine.running) return
+      val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      try { nm.notify(ID, build(ctx)) } catch (_: Exception) {}
+    }
   }
 }

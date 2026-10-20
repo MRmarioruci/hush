@@ -200,6 +200,8 @@ export const de: Record<Key, string> = {
   "push.paired": "Verbunden mit dem Handy von {name}",
   "push.listenTitle": "hush hört zu",
   "push.listenText": "Verbundene Handys werden benachrichtigt, wenn {name} weint",
+  "push.listenAlone": "Hört auf {name}. Verbinde unter Babyfon ein Handy, um dort Alarme zu bekommen.",
+  "push.listenSound": "Macht das Rauschen lauter, wenn {name} weint",
   "push.night0": "Die Nacht von {name}: kein Weinen gehört",
   "push.night_one": "Die Nacht von {name}: einmal geweint, insgesamt {dur}",
   "push.night_other": "Die Nacht von {name}: {count}-mal geweint, insgesamt {dur}",

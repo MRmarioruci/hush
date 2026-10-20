@@ -17,10 +17,16 @@ import { addPushListener, sendData } from "../monitor";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
 import { Asset } from "expo-asset";
 
-// The picture on the playback notification and lock screen (a file:// copy of the app's moon).
+// The picture on the playback notification and lock screen. It must be a real URL: in Android
+// release builds a bundled image is only a resource name, which expo-audio rejects, and then the
+// player doesn't show at all. So: a file the native side writes, else the asset if it's a URL.
+const isUrl = (u?: string | null) => !!u && /^(file|https?):\/\//.test(u);
 let artwork: string | undefined;
-Asset.fromModule(require("../../assets/artwork.png")).downloadAsync()
-  .then((a) => { artwork = a.localUri ?? undefined; }).catch(() => {});
+try {
+  const art = Asset.fromModule(require("../../assets/artwork.png"));
+  if (isUrl(art.uri)) art.downloadAsync().then((a) => { if (isUrl(a.localUri)) artwork = a.localUri!; }).catch(() => {});
+  else { const f = cryDetector?.artworkFile(art.uri); if (isUrl(f)) artwork = f; } // a resource name ("assets_artwork")
+} catch {}
 
 export const TIMERS: [number, string][] = [[0, "Never"], [15, "15 min"], [30, "30 min"], [60, "1 hr"], [120, "2 hr"]];
 

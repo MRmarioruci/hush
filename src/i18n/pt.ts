@@ -200,6 +200,8 @@ export const pt: Record<Key, string> = {
   "push.paired": "Conectado ao celular de {name}",
   "push.listenTitle": "O hush está ouvindo",
   "push.listenText": "Os celulares conectados recebem um alerta se {name} chorar",
+  "push.listenAlone": "Ouvindo {name}. Conecte um celular em Babá para receber alertas nele.",
+  "push.listenSound": "Aumenta o ruído branco se {name} chorar",
   "push.night0": "A noite de {name}: nenhum choro ouvido",
   "push.night_one": "A noite de {name}: chorou uma vez, {dur} no total",
   "push.night_other": "A noite de {name}: chorou {count} vezes, {dur} no total",

@@ -26,6 +26,7 @@ type CryNative = {
   battery?(): [number, boolean];
   reportRoom?(): boolean;
   deviceName?(): string;
+  artworkFile?(resource: string): string;
   takeDeadTokens?(): string[];
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
@@ -74,6 +75,8 @@ export const cryDetector = cry
       /** The phone's own name as people know it ("Redmi Note 14", "Pixel 8"), or "" if unknown. */
       /** Push addresses the native side found dead (DeviceNotRegistered) since last asked. */
       takeDeadTokens: (): string[] => { try { return cry.takeDeadTokens?.() ?? []; } catch { return []; } },
+      /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */
+      artworkFile: (resource: string): string => { try { return cry.artworkFile?.(resource) ?? ""; } catch { return ""; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },
       battery: (): [number, boolean] | null => { try { return cry.battery?.() ?? null; } catch { return null; } },
       sendAlert: (tokens: string[], body: string, kind = "info") => cry.sendAlert(tokens, body, kind),

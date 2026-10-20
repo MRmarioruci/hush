@@ -200,6 +200,8 @@ export const zh: Record<Key, string> = {
   "push.paired": "已连接{name}的手机",
   "push.listenTitle": "hush 正在聆听",
   "push.listenText": "{name}一哭，已连接的手机就会收到提醒",
+  "push.listenAlone": "正在聆听{name}。在“监护”里配对一部手机，就能在那部手机上收到提醒。",
+  "push.listenSound": "{name}哭时调高白噪音",
   "push.night0": "{name}的夜晚：没有听到哭声",
   "push.night_one": "{name}的夜晚：哭了 1 次，共 {dur}",
   "push.night_other": "{name}的夜晚：哭了 {count} 次，共 {dur}",

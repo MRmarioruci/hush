@@ -200,6 +200,8 @@ export const es: Record<Key, string> = {
   "push.paired": "Conectado al móvil de {name}",
   "push.listenTitle": "hush está escuchando",
   "push.listenText": "Los móviles conectados recibirán un aviso si {name} llora",
+  "push.listenAlone": "Escuchando a {name}. Vincula un teléfono en Monitor para recibir avisos en él.",
+  "push.listenSound": "Sube el ruido blanco si {name} llora",
   "push.night0": "La noche de {name}: no se oyó llanto",
   "push.night_one": "La noche de {name}: lloró una vez, {dur} en total",
   "push.night_other": "La noche de {name}: lloró {count} veces, {dur} en total",

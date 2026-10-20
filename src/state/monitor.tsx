@@ -158,11 +158,17 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       still: t("push.still", { name: baby }),
       lowBattery: t("push.lowBattery", { name: baby, pct: "{pct}" }),
       stopped: t("push.stopped", { name: baby }),
-      listenTitle: t("push.listenTitle"),
-      listenText: t("push.listenText", { name: baby }),
       allowAsk: t("allow.notif", { who: "{who}" }),
     });
   }, [lang, baby]);
+  // The ongoing "listening" notification says why: alerts for the paired phones, a monitor with
+  // no phone paired yet, or only smart volume listening for crying.
+  useEffect(() => {
+    cryDetector?.setTexts({
+      listenTitle: t("push.listenTitle"),
+      listenText: t(!listening && soundWantsMic ? "push.listenSound" : members.length ? "push.listenText" : "push.listenAlone", { name: baby }),
+    });
+  }, [lang, baby, listening, soundWantsMic, members.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Each parent gets alerts in their own phone's language.
   useEffect(() => {

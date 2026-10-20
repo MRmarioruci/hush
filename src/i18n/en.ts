@@ -200,6 +200,8 @@ export const en = {
   "push.paired": "Connected to {name}'s phone",
   "push.listenTitle": "hush is listening",
   "push.listenText": "Paired phones get an alert if {name} cries",
+  "push.listenAlone": "Listening for {name}. Pair a phone in Monitor to get alerts on it.",
+  "push.listenSound": "Turns the white noise up if {name} cries",
   "push.night0": "{name}'s night: no crying heard",
   "push.night_one": "{name}'s night: cried once, {dur} in total",
   "push.night_other": "{name}'s night: cried {count} times, {dur} in total",

@@ -81,6 +81,7 @@ class HushCryModule : Module() {
       texts["listenTitle"]?.let { CryEngine.txtListenTitle = it }
       texts["listenText"]?.let { CryEngine.txtListenText = it }
       texts["allowAsk"]?.let { CryEngine.txtAllowAsk = it }
+      if (texts.containsKey("listenText")) appContext.reactContext?.let { CryListenerService.refresh(it) }
     }
 
     // Which app store installed hush ("com.android.vending" = Google Play), or "" if sideloaded.
@@ -92,6 +93,22 @@ class HushCryModule : Module() {
     }
 
     // The name people know the phone by: what's set in Settings > About phone, else maker and model.
+    // The app's moon as a file (file://…), for the playback notification's picture. In release builds
+    // bundled images are resources, not files, and expo-audio needs a URL it can open.
+    Function("artworkFile") { name: String ->
+      val ctx = appContext.reactContext ?: return@Function ""
+      try {
+        val out = java.io.File(ctx.cacheDir, "hush-$name.png")
+        if (!out.exists() || out.length() == 0L) {
+          val id = ctx.resources.getIdentifier(name, "drawable", ctx.packageName)
+          if (id == 0) return@Function ""
+          val bmp = android.graphics.BitmapFactory.decodeResource(ctx.resources, id) ?: return@Function ""
+          out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        "file://" + out.absolutePath
+      } catch (_: Exception) { "" }
+    }
+
     Function("deviceName") {
       val ctx = appContext.reactContext
       val set = try { ctx?.let { android.provider.Settings.Global.getString(it.contentResolver, "device_name") } } catch (_: Exception) { null }

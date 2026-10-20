@@ -200,6 +200,8 @@ export const el: Record<Key, string> = {
   "push.paired": "Συνδέθηκε με το κινητό: {name}",
   "push.listenTitle": "Το hush ακούει",
   "push.listenText": "Τα συνδεδεμένα κινητά ειδοποιούνται αν {name} κλάψει",
+  "push.listenAlone": "Ακούει για {name}. Σύνδεσε ένα κινητό στην Ακρόαση για να παίρνεις ειδοποιήσεις.",
+  "push.listenSound": "Δυναμώνει τον λευκό θόρυβο αν κλάψει {name}",
   "push.night0": "{name}: ήσυχη νύχτα, δεν ακούστηκε κλάμα",
   "push.night_one": "{name}: έκλαψε μία φορά τη νύχτα, {dur} συνολικά",
   "push.night_other": "{name}: έκλαψε {count} φορές τη νύχτα, {dur} συνολικά",
