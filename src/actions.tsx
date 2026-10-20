@@ -1,5 +1,6 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
+import { showMonitorMain } from "./monitorView";
 import { dialog } from "./components/Dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
@@ -32,11 +33,13 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
 
   /* ---------- doing things ---------- */
   const go = (screen: string) => { try { if (nav.isReady()) nav.navigate(screen as never); } catch {} };
+  /** The Monitor tab, on its main view (not Remote control or the phones list). */
+  const goMonitor = () => { go("Monitor"); showMonitorMain(); setTimeout(showMonitorMain, 300); };
   const run = useRef<(a: string) => void>(() => {});
   run.current = (a: string) => {
     switch (a as Action) {
       case "listen":
-        go("Monitor");
+        goMonitor();
         listenFromOutside(mon.m.clipSeconds ?? CLIP_SECONDS);
         break;
       case "listenBg":
@@ -87,7 +90,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       if (r.actionIdentifier === "onit") {
         const d = r.notification.request.content.data as { from?: string } | undefined;
         ackRef.current(d?.from);
-        setTimeout(() => go("Monitor"), 400);
+        setTimeout(goMonitor, 400);
         return;
       }
       if (r.actionIdentifier && r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) { fromUrl(`hush://do/${r.actionIdentifier}`); return; }
@@ -95,8 +98,11 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       if (d?.type === "allow-listen") { setTimeout(() => { go("Monitor"); askRef.current(d.who ?? "", d.from ?? ""); }, 500); return; }
       if (d?.type === "clip" && d.url) {
         mon.update({ clip: { url: d.url, at: d.at ?? Date.now(), seconds: d.seconds, got: Date.now() } });
-        setTimeout(() => { go("Monitor"); playFromOutside(d.url!); }, 400);
+        setTimeout(() => { goMonitor(); playFromOutside(d.url!); }, 400);
+        return;
       }
+      // Crying (and anything else about the baby's room): straight to where the cry and its recording are.
+      if (d?.type && ["cry", "clip", "ack", "stopped", "battery"].includes(d.type)) setTimeout(goMonitor, 400);
     };
     const c = Notifications.addNotificationResponseReceivedListener(onResponse);
     let last: Notifications.NotificationResponse | null = null;

@@ -744,6 +744,7 @@ export const zh: Record<Key, string> = {
   "smartSleep.off": "已关闭：只有点“醒了”或停止聆听时才结束睡眠。",
   "ack.button": "我去看",
   "ack.you": "你去看了，其他人已知道。",
+  "ack.youShort": "你去看了",
   "ack.other": "{who}去看了",
   "push.ackOther": "{who}去看{name}了",
   "push.acked": "{name}还在哭 · {who}去看了",

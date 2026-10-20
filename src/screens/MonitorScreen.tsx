@@ -1,3 +1,4 @@
+import { onShowMonitorMain } from "../monitorView";
 import { subscribeActs, type Act } from "../activity";
 import { dialog } from "../components/Dialog";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -39,6 +40,8 @@ export function MonitorScreen() {
   useAskFamily();
   // Changing what this phone does always lands on its own view.
   useEffect(() => { setRemote(false); }, [listening]);
+  // A crying notification was tapped: show the main view, where the cry and its recording are.
+  useEffect(() => onShowMonitorMain(() => { setRemote(false); setFam(false); setPair(null); }), []);
   return (
     <Screen title={t("monitor.title")} right={members.length ? <Avatars onPress={() => setFam("list")} onAdd={() => setPair("invite")} /> : undefined}>
       {members.length === 0 ? (
@@ -161,21 +164,27 @@ function Receiving({ alerts }: { alerts: AlertRecord[] }) {
           <Text style={styles.rxSub} numberOfLines={2}>{rooms.length ? t("rx.from", { names }) : t("rx.none")}</Text>
         </View>
       </View>
-      {crying && rooms.length > 0 && (ack && Date.now() < ack.until ? (
-        <View style={styles.ackPill}>
-          <Icon d={ICONS.check} size={16} color={colors.sage} width={2.4} />
-          <Text style={styles.ackText}>{ack.who === "me" ? t("ack.you") : t("ack.other", { who: ack.who })}</Text>
+      {rooms.length > 0 && (
+        <View style={{ alignSelf: "stretch" }}>
+          <ListenRound>
+            {/* "I'm on it", next to Listen while it's crying (or who's on it). */}
+            {crying && (ack && Date.now() < ack.until ? (
+              <RoundBtn onPress={() => {}} disabled bg={colors.card} label={ack.who === "me" ? t("ack.youShort") : t("ack.other", { who: ack.who })}>
+                <Icon d={ICONS.check} size={28} color={colors.sage} width={2.4} />
+              </RoundBtn>
+            ) : (
+              <RoundBtn onPress={() => ackCry()} bg={colors.rose} label={t("ack.button")}>
+                <Icon d={WALK} size={28} color={colors.bg} width={2} />
+              </RoundBtn>
+            ))}
+          </ListenRound>
         </View>
-      ) : (
-        <Pressable onPress={() => ackCry()} style={({ pressed }) => [styles.ackBtn, pressed && { opacity: 0.7 }]} accessibilityRole="button">
-          <Text style={styles.ackBtnText}>{t("ack.button")}</Text>
-        </Pressable>
-      ))}
-      {rooms.length > 0 && <View style={{ alignSelf: "stretch" }}><ListenRound /></View>}
+      )}
       <Tonight alerts={alerts} />
     </View>
   );
 }
+const WALK = '<circle cx="13" cy="4.5" r="2"/><path d="M10 21l2-6 3 3v4M9 12l2-4 3 1 2 3h3M11 8l-3 2-1 3"/>';
 const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13h.01M14 13h.01M10 16.5h.01M14 16.5h.01"/>';
 
 /** What this phone does, chosen explicitly: get the alerts, or be the baby monitor by the crib. */

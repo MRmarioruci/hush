@@ -744,6 +744,7 @@ export const en = {
   "smartSleep.off": "Off: a sleep ends only when you tap Woke up or stop listening.",
   "ack.button": "I'm on it",
   "ack.you": "You're on it. The others know.",
+  "ack.youShort": "You're on it",
   "ack.other": "{who} is on it",
   "push.ackOther": "{who} is going to {name}",
   "push.acked": "{name} is still crying · {who} is on it",

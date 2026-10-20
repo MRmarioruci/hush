@@ -744,6 +744,7 @@ export const el: Record<Key, string> = {
   "smartSleep.off": "Ανενεργή: ο ύπνος τελειώνει μόνο όταν πατάς Ξύπνησε ή σταματάς την ακρόαση.",
   "ack.button": "Πάω εγώ",
   "ack.you": "Πας εσύ. Οι άλλοι το ξέρουν.",
+  "ack.youShort": "Πας εσύ",
   "ack.other": "Πηγαίνει {who}",
   "push.ackOther": "{name}: πηγαίνει {who}",
   "push.acked": "{name} κλαίει ακόμα · πηγαίνει {who}",

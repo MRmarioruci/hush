@@ -744,6 +744,7 @@ export const fr: Record<Key, string> = {
   "smartSleep.off": "Désactivée : un sommeil se termine seulement avec Réveillé ou à l’arrêt de l’écoute.",
   "ack.button": "J’y vais",
   "ack.you": "Vous y allez. Les autres sont prévenus.",
+  "ack.youShort": "Vous y allez",
   "ack.other": "{who} y va",
   "push.ackOther": "{who} va voir {name}",
   "push.acked": "{name} pleure encore · {who} y va",
