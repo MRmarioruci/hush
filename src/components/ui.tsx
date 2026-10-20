@@ -1,4 +1,5 @@
-import { Children, useEffect, useRef, useState, type ReactNode } from "react";
+import { Children, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { NavigationContext } from "@react-navigation/native";
 import { AccessibilityInfo, Animated, AppState, Easing, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
@@ -32,7 +33,17 @@ export function Screen({ title, eyebrow, right, children }: { title: string; eye
 export function useAppActive() {
   const [on, setOn] = useState(AppState.currentState === "active");
   useEffect(() => { const sub = AppState.addEventListener("change", (st) => setOn(st === "active")); return () => sub.remove(); }, []);
-  return on;
+  // Tabs stay mounted when you switch away: a hidden tab counts as off screen too.
+  const nav = useContext(NavigationContext);
+  const [focused, setFocused] = useState(() => nav?.isFocused() ?? true);
+  useEffect(() => {
+    if (!nav) return;
+    setFocused(nav.isFocused());
+    const a = nav.addListener("focus", () => setFocused(true));
+    const b = nav.addListener("blur", () => setFocused(false));
+    return () => { a(); b(); };
+  }, [nav]);
+  return on && focused;
 }
 
 let reduceMotion = false;

@@ -82,22 +82,24 @@ export function GlobeScreen() {
     if (!clash) top3.add(v.sp.name);
   }
 
-  // A flick keeps it turning for a moment, then it settles (and stops redrawing).
-  useEffect(() => {
-    if (!live) return;
-    let raf = 0, last = Date.now();
+  // A flick keeps it turning for a moment, then it settles. The loop runs only while it spins
+  // (nothing ticks while the globe is still, or off screen).
+  const spin = useRef(0);
+  const stopSpin = () => { if (spin.current) cancelAnimationFrame(spin.current); spin.current = 0; };
+  const startSpin = () => {
+    stopSpin();
+    let last = Date.now();
     const step = () => {
       const t0 = Date.now(), dt = Math.min(50, t0 - last); last = t0;
-      if (!touching.current && vel.current !== 0) {
-        vel.current *= Math.pow(0.92, dt / 16);
-        if (Math.abs(vel.current) < 0.003) { vel.current = 0; setMoving(false); }
-        else setRot(([l, p]) => [l + vel.current * dt, p]);
-      }
-      raf = requestAnimationFrame(step);
+      vel.current *= Math.pow(0.92, dt / 16);
+      if (touching.current || Math.abs(vel.current) < 0.003) { vel.current = 0; spin.current = 0; setMoving(false); return; }
+      setRot(([l, p]) => [l + vel.current * dt, p]);
+      spin.current = requestAnimationFrame(step);
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [live]);
+    spin.current = requestAnimationFrame(step);
+  };
+  useEffect(() => { if (!live) { stopSpin(); vel.current = 0; setMoving(false); } }, [live]);
+  useEffect(() => () => { stopSpin(); if (frame.current) cancelAnimationFrame(frame.current); }, []);
 
   const start = useRef<[number, number]>([0, 0]);
   const want = useRef<[number, number] | null>(null);
@@ -107,7 +109,7 @@ export function GlobeScreen() {
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { touching.current = true; vel.current = 0; start.current = rotRef.current; want.current = null; setMoving(true); },
+    onPanResponderGrant: () => { stopSpin(); touching.current = true; vel.current = 0; start.current = rotRef.current; want.current = null; setMoving(true); },
     onPanResponderMove: (_e, g) => {
       const k = 180 / (Math.PI * r); // drag the surface under the finger
       want.current = [start.current[0] + g.dx * k, Math.max(-60, Math.min(60, start.current[1] - g.dy * k))];
@@ -116,10 +118,10 @@ export function GlobeScreen() {
     },
     onPanResponderRelease: (e, g) => {
       touching.current = false;
-      if (Math.abs(g.vx) < 0.05) setMoving(false);
       lastTouch.current = Date.now();
       const k = 180 / (Math.PI * r);
       vel.current = Math.max(-0.6, Math.min(0.6, g.vx * k)); // ° per ms
+      if (Math.abs(vel.current) >= 0.003) startSpin(); else setMoving(false);
       if (Math.abs(g.dx) + Math.abs(g.dy) < 6) {
         // A tap: the nearest moon under the finger.
         const { locationX: x, locationY: y } = e.nativeEvent;
