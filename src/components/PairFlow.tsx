@@ -66,12 +66,19 @@ export function PairFlow({ mode, onClose }: { mode: PairMode | null; onClose: ()
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<PairMode | "done">("start");
   useEffect(() => { if (mode) setStep(mode); }, [mode]);
+  const { listening, rooms } = useMonitor();
+  // "Which phone stays by the crib?" only on the inviting phone, only when the room was just made
+  // (its first other phone), and only if no phone is the baby monitor yet. Otherwise just close.
+  const invited = (first: boolean) => {
+    const hasMonitor = listening || rooms.length > 0; // rooms: other phones listening now
+    if (first && !hasMonitor) setStep("done"); else onClose();
+  };
   return (
     <Modal visible={!!mode} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.root, { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 18 }]}>
         {step === "start" && <View style={{ flex: 1, justifyContent: "center" }}><PairStart onPick={setStep} /></View>}
-        {step === "invite" && <Invite onClose={onClose} onDone={() => setStep("done")} />}
-        {step === "join" && <Join onClose={onClose} onDone={() => setStep("done")} />}
+        {step === "invite" && <Invite onClose={onClose} onDone={invited} />}
+        {step === "join" && <Join onClose={onClose} onDone={onClose} />}
         {step === "done" && <Done onClose={onClose} />}
       </View>
     </Modal>
@@ -112,7 +119,7 @@ function Problem({ title, body }: { title: string; body?: string }) {
 
 /* ---------------- the inviting phone ---------------- */
 
-function Invite({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: boolean) => void }) {
   const { invite, members, m } = useMonitor();
   const room = useRoom();
   const [inv, setInv] = useState<string | null>(null);
@@ -144,7 +151,7 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: () => void }
     return () => clearInterval(id);
   }, [code, make]);
   // Someone was let in: done.
-  useEffect(() => { if (members.length > count.current) onDone(); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (members.length > count.current) onDone(count.current === 0); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const left = code ? Math.max(0, code.exp - Date.now()) : 0;
   const frac = left / (CODE_MINUTES * 60_000);
