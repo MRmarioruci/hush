@@ -18,6 +18,7 @@ import { fmtTime, useT, babyLabel, dateLocale } from "../i18n";
 import { AgeGuide, SleepSheet, SUN } from "../components/Naps";
 import { stopLine } from "../stops";
 import { roomCmd } from "./MonitorScreen";
+import { WidgetNudge } from "../components/WidgetNudge";
 import type { ManualSleep } from "../nights";
 
 const MIN = 60_000;
@@ -126,6 +127,8 @@ export function HomeScreen() {
           {note && <Text style={styles.small}>{note}</Text>}
         </View>
       )}
+
+      <WidgetNudge name={name} />
 
       <SleepSheet value={sheet} onClose={() => setSheet(null)} />
       <AgeGuide visible={guide} onClose={() => setGuide(false)} />

@@ -10,6 +10,7 @@ import * as QuickActions from "expo-quick-actions";
 import { requestWidgetUpdate } from "react-native-android-widget";
 import { HushWidget } from "./widget/HushWidget";
 import { writeSnap, type Snap } from "./widget/snap";
+import { addPushListener } from "./monitor";
 import { onWidgetAction } from "./widget/bus";
 import { useSleep } from "./state/sleep";
 import { useMonitor } from "./state/monitor";
@@ -17,10 +18,10 @@ import { useNaps } from "./state/naps";
 import { listenFromOutside, playFromOutside } from "./components/Listen";
 import { roomCmd } from "./screens/MonitorScreen";
 import { getMyToken, CLIP_SECONDS } from "./monitor";
-import { fmtClock } from "./nights";
+import { fmtClock, fmtDur } from "./nights";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
 
-export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle";
+export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip";
 
 export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurrent<Record<string, object | undefined>> }) {
   const sleep = useSleep();
@@ -53,6 +54,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "woke": if (naps.state.asleep) naps.wokeUp(); break;
       case "sleepToggle": naps.state.asleep ? naps.wokeUp() : naps.fellAsleep(); break;
       case "monitor": go("Monitor"); mon.toggleListening(); break;
+      case "onit": mon.ackCry(); break;
+      case "playClip": goMonitor(); if (mon.m.clip?.url) setTimeout(() => playFromOutside(mon.m.clip!.url!), 400); break;
     }
   };
   const joinRef = useRef(mon.join);
@@ -142,27 +145,75 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   const [myToken, setMyToken] = useState<string | undefined>(undefined);
   useEffect(() => { if (mon.members.length) getMyToken().then(setMyToken).catch(() => {}); }, [mon.members.length]);
   const room = mon.room;
+  // Crying in the baby's room (parent's phone): the last crying alert that arrived.
+  const [cryAt, setCryAt] = useState(0);
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; at?: number } | undefined;
+      if (d?.type === "cry") setCryAt(Date.now());
+    });
+    return () => sub.remove();
+  }, []);
+  // Redraw now and then so times and "crying"/"ready" age out even when nothing else changes.
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => setTick((x) => x + 1), 60_000); return () => clearInterval(id); }, []);
   useEffect(() => {
     if (Platform.OS !== "android") return;
+    const now = Date.now();
     const st = naps.state;
     const asleep = st.asleep;
-    let status: string, tone: Snap["tone"], line: string | null = null, title: string;
+    const L = { listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"), asleep: t("qa.asleepShort"), woke: t("qa.wokeShort"), monitorOn: t("qa.monitorOnShort"), monitorOff: t("qa.monitorOffShort"),
+      empty: t("qa.empty"), fetching: t("listen.sending"), openApp: t("qa.openApp"), sent: t("qa.sent"), working: t("qa.working"), noAnswer: t("remote.noReplyShort"),
+      onit: t("ack.button"), onitDone: t("w.onit"), play: t("w.play"), retry: t("w.retry"), listening: t("w.listening"), arrives: t("w.arrives") };
+    let title: string, status: string, line: string | null = null, short: string, scene: Snap["scene"], tone: Snap["tone"];
+    let crying = false, ackBy: string | null = null, fetching: Snap["fetching"] = null, clipReady = false, noAnswer = false;
     if (role === "parent") {
-      title = t("remote.phoneOf", { name: mon.targetBaby ? babyLabel(mon.targetBaby) : mon.targetName });
-      const fresh = room && Date.now() - (room.got ?? room.at) < 25 * 60_000;
-      tone = !room ? "off" : !fresh && room.listening ? "warn" : room.listening ? "on" : "off";
-      status = asleep ? t("qa.asleepSince", { time: fmtClock(st.since) }) : !room ? t("remote.noState") : room.listening ? t("remote.listening") : t("remote.notListening");
-      line = room ? (room.playing ? t(`sound.${room.sound}`) : t("remote.noiseOff")) : null;
+      const rb = mon.targetBaby ? babyLabel(mon.targetBaby) : baby;
+      const roomName = mon.targetName || t("rt.otherPhone");
+      title = t("hero.room", { name: rb });
+      const fresh = room && now - (room.got ?? room.at) < 25 * 60_000;
+      const ack = mon.ack && now < mon.ack.until ? mon.ack : null;
+      crying = !!cryAt && now - cryAt < 10 * 60_000;
+      ackBy = ack ? (ack.who === "me" ? "" : ack.who) : null;
+      const asked = mon.clipAsked;
+      const clip = mon.m.clip;
+      const got = !!clip && (clip.got ?? clip.at) >= asked && asked > 0;
+      if (asked && !got && now - asked < 30_000) fetching = { at: asked };
+      noAnswer = !!asked && !got && now - asked >= 30_000 && now - asked < 5 * 60_000;
+      clipReady = !!clip?.url && now - (clip.got ?? clip.at) < 10 * 60_000;
+      const extra = room ? [room.playing ? t(`sound.${room.sound}`) : t("remote.noiseOff"), room.battery != null && room.battery >= 0 ? `${room.battery}%` : null].filter(Boolean).join(" · ") : null;
+      if (crying && ack) { status = ack.who === "me" ? t("ack.you") : t("ack.other", { who: ack.who }); short = status; tone = "lav"; scene = "cry"; line = t("w.cryingSince", { time: fmtClock(cryAt) }); }
+      else if (crying) { status = t("w.cryingSince", { time: fmtClock(cryAt) }); short = t("w.crying"); tone = "rose"; scene = "cry"; line = extra; }
+      else if (fetching) { status = t("w.recording", { s: mon.m.clipSeconds ?? CLIP_SECONDS }); short = status; tone = "peach"; scene = asleep ? "asleep" : "awake"; line = t("w.asking", { name: roomName }); }
+      else if (noAnswer) { status = t("w.noAnswer", { name: roomName }); short = t("w.noAnswerShort"); tone = "peach"; scene = "awake"; line = room ? t("w.lastHeard", { time: fmtClock(room.got ?? room.at) }) : null; }
+      else if (clipReady) { status = t("w.ready", { time: fmtClock(clip!.got ?? clip!.at) }); short = t("w.readyShort"); tone = "sage"; scene = asleep ? "asleep" : "awake"; line = t("w.readyLine", { s: clip!.seconds ?? CLIP_SECONDS }); }
+      else {
+        scene = asleep ? "asleep" : "awake";
+        tone = !room ? "muted" : !fresh && room.listening ? "peach" : room.listening ? "sage" : "muted";
+        status = asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : !room ? t("remote.noState") : room.listening ? t("remote.listening") : t("remote.notListening");
+        short = status;
+        line = extra;
+      }
+    } else if (role === "nursery") {
+      title = t("hero.room", { name: baby });
+      scene = mon.listening ? "mic" : asleep ? "asleep" : "awake";
+      tone = mon.status.crying ? "rose" : mon.listening ? "sage" : "muted";
+      const since = mon.listening ? (mon.room?.listenSince || null) : null;
+      status = mon.status.crying ? t("w.crying") : mon.listening ? (asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : t("remote.listening")) : t("remote.notListening");
+      short = status;
+      const names = mon.members.map((p) => p.name.trim()).filter(Boolean).join(", ");
+      line = mon.listening ? (names ? t("w.alertsTo", { names }) : null) : sleep.playing ? t(`sound.${sleep.soundId}`) : null;
+      void since;
     } else {
-      title = role === "nursery" ? t("hero.room", { name: baby }) : "hush";
-      tone = mon.status.crying ? "cry" : mon.listening ? "on" : "off";
-      status = asleep ? t("qa.asleepSince", { time: fmtClock(st.since) })
-        : role === "nursery" ? (mon.listening ? t("remote.listening") : t("remote.notListening"))
-        : sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff");
-      line = !asleep && st.target && f.naps ? t(st.bedtime ? "nap.bedAround" : "nap.around", { time: fmtClock(st.target) }) : (sleep.playing && role === "nursery" ? t(`sound.${sleep.soundId}`) : null);
+      title = baby;
+      scene = asleep ? "asleep" : "moon";
+      tone = sleep.playing ? "peach" : asleep ? "sage" : "muted";
+      status = asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff");
+      short = status;
+      line = !asleep && st.target && f.naps ? t(st.bedtime ? "nap.bedAround" : "nap.around", { time: fmtClock(st.target) }) : null;
     }
     const snap: Snap = {
-      role, title, status, tone, line,
+      role, title, status, line, short, scene, tone,
       playing: role === "parent" ? !!room?.playing : sleep.playing,
       asleep,
       monitorOn: mon.listening,
@@ -170,22 +221,23 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       showNoise: role === "parent" ? !!mon.target : f.sounds,
       showSleep: f.naps,
       showListen: role === "parent" && !!mon.target,
-      myToken, pairedToken: mon.target ?? undefined,
+      crying, ackBy, fetching, clipReady, noAnswer,
+      myToken, myName: mon.m.myName.trim(), pairedToken: mon.target ?? undefined,
       // So the widget can tell the other phones about sleep on its own.
-      peers: !f.monitor ? [] : mon.members.map((p) => { const L = p.lang ?? getLang(); const name = babyLabelIn(L, mon.m.babyName); return { token: p.token, asleep: tIn(L, "push.asleep", { name, time: "{time}" }), awake: tIn(L, "push.awake", { name, dur: "{dur}" }) }; }),
+      peers: !f.monitor ? [] : mon.members.map((p) => { const Lg = p.lang ?? getLang(); const name = babyLabelIn(Lg, mon.m.babyName); return { token: p.token, asleep: tIn(Lg, "push.asleep", { name, time: "{time}" }), awake: tIn(Lg, "push.awake", { name, dur: "{dur}" }) }; }),
       roomAsleep: asleep && !naps.fromSound && role === "parent",
-      labels: {
-        listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"),
-        asleep: t("qa.asleepShort"), woke: t("qa.wokeShort"), monitorOn: t("qa.monitorOnShort"), monitorOff: t("qa.monitorOffShort"),
-        empty: t("qa.empty"), fetching: t("listen.sending"), openApp: t("qa.openApp"), sent: t("qa.sent"),
-        working: t("qa.working"), noAnswer: t("remote.noReplyShort"),
-      },
+      labels: L,
     };
     const id = setTimeout(() => {
-      writeSnap(snap).then(() => requestWidgetUpdate({ widgetName: "Hush", renderWidget: () => <HushWidget snap={snap} /> })).catch(() => {});
+      writeSnap(snap).then(() => {
+        requestWidgetUpdate({ widgetName: "Hush", renderWidget: (w) => <HushWidget snap={snap} small={w.width < 220} /> }).catch(() => {});
+        requestWidgetUpdate({ widgetName: "HushSmall", renderWidget: () => <HushWidget snap={snap} small /> }).catch(() => {});
+      }).catch(() => {});
     }, 300);
-    return () => clearTimeout(id);
-  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.target, mon.targetBaby, mon.members, mon.m.clip?.got, room?.got, myToken, baby, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+    // While a recording is on its way, redraw so the ring keeps filling (and turns into Ready / No answer).
+    const again = fetching ? setTimeout(() => setTick((x) => x + 1), 1500) : undefined;
+    return () => { clearTimeout(id); if (again) clearTimeout(again); };
+  }, [role, room, naps.state, mon.listening, mon.status.crying, sleep.playing, sleep.soundId, f.naps, f.sounds, mon.target, mon.targetBaby, mon.targetName, mon.members, mon.m.clip?.got, mon.clipAsked, mon.ack, cryAt, room?.got, myToken, baby, lang, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

@@ -65,6 +65,8 @@ type Monitor = {
   syncSleep: (force?: boolean) => Promise<number>;
   /** "I'm on it" for crying in a room: quiets its alerts for a few minutes and tells the others. */
   ackCry: (room?: string) => Promise<void>;
+  /** When this phone last asked for a recording (0 = never, or sending failed). */
+  clipAsked: number;
   /** Someone is on the crying (this phone = "me"), until when. */
   ack: { who: string; until: number } | null;
   lastSync: number;
@@ -750,8 +752,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     let me = "";
     try { me = await getMyToken(); } catch {}
     const ok = await sendData([to], { type: "cmd", cmd: "clip", seconds, from: me });
+    setClipAsked(ok ? at : 0);
     return { at, ok };
   }, []);
+  const [clipAsked, setClipAsked] = useState(0);
 
   /* ---------- the room's shared history (src/activity.ts) ---------- */
   useEffect(() => {
@@ -813,7 +817,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked }}>{children}</Ctx.Provider>
   );
 }
 

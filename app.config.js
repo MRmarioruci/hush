@@ -71,6 +71,7 @@ module.exports = ({ config }) => ({
   plugins: [
     "./plugins/withReleaseSigning",
     "./plugins/withMediaIcon",
+    "./plugins/withWidgetFonts",
     // Google Play Billing / StoreKit for the one-time baby monitor unlock (src/state/unlock.tsx).
     "expo-iap",
     "expo-font",
@@ -103,7 +104,20 @@ module.exports = ({ config }) => ({
             updatePeriodMillis: 1800000,
             previewImage: "./assets/widget-preview.png",
           },
+          {
+            name: "HushSmall",
+            label: "hush (small)",
+            description: "Your baby's status and one button",
+            minWidth: "110dp",
+            minHeight: "110dp",
+            targetCellWidth: 2,
+            targetCellHeight: 2,
+            resizeMode: "horizontal|vertical",
+            updatePeriodMillis: 1800000,
+            previewImage: "./assets/widget-preview-small.png",
+          },
         ],
+
       },
     ],
     "expo-status-bar",
