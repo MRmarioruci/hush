@@ -6,9 +6,9 @@ Copy these into Play Console. Section names follow the console menu
 | What | Where it is |
 |---|---|
 | Listing text (7 languages) | `store/listings/<locale>/` (title, short description, full description) |
-| Phone screenshots (6 per language, 1080×1920) | `store/graphics/<locale>/` |
+| Phone screenshots (8 per language, 1080×1920) | `store/graphics/<locale>/phone-*.png` |
 | App icon 512×512 | `store/graphics/icon-512.png` |
-| Feature graphic 1024×500 | `store/graphics/feature-graphic.png` |
+| Feature graphic 1024×500 | `store/graphics/feature-graphic.png` (English default), `store/graphics/<locale>/feature-graphic.png` per language |
 | Privacy policy URL | https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md (works once `PRIVACY.md` is on `main`) |
 | App bundle | `hush-<version>-play.aab` on the GitHub release (built when the upload-key secrets are set) |
 
@@ -31,7 +31,7 @@ Copy these into Play Console. Section names follow the console menu
 ## Main store listing
 
 For each language, add a translation (Store listing → Manage translations →
-Add your own translations) and paste the three text files. Upload the six screenshots from that
+Add your own translations) and paste the three text files. Upload the eight screenshots and the feature graphic from that
 language's folder. The icon and feature graphic are the same for every language.
 
 Folders map to Play languages like this: en-US English (US), el-GR Greek, de-DE German,

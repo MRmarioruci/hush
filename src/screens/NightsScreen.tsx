@@ -154,7 +154,7 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onMod
       <View style={{ alignItems: "center", gap: 4 }}>
         <Text style={styles.pickTitle}>{dayTitle(n.key)}</Text>
         <Clock n={n}>
-          <Text style={styles.clockBig}>{fmtDur(n.sleptMin ?? 0)}</Text>
+          <Text style={[styles.clockBig, { fontSize: fitSize(fmtDur(n.sleptMin ?? 0)) }]} numberOfLines={1}>{fmtDur(n.sleptMin ?? 0)}</Text>
           <Text style={styles.clockSub}>{band?.total ? t("nights.sleptUsual", { range: t("age.rangeH", { lo: band.total[0], hi: band.total[1] }) }) : t("nights.sleptShort")}</Text>
         </Clock>
         <View style={styles.legend}>
@@ -491,6 +491,12 @@ function WhenChart({ nights, baby }: { nights: Night[]; baby: string }) {
       <Text style={styles.trend}>{t("nights.peak", { time: fmtClock(new Date(2000, 0, 1, peak).getTime()) })}</Text>
     </Card>
   );
+}
+
+/** The total in the middle of the clock: smaller for long wordings ("7 Std. 42 Min.", "7 小时 42 分") so it stays inside the ring. */
+function fitSize(text: string) {
+  const w = [...text].reduce((n, ch) => n + (/[\u3000-\u9fff]/.test(ch) ? 1.8 : 1), 0);
+  return w <= 7 ? 40 : Math.max(24, Math.round((40 * 7) / w));
 }
 
 const styles = StyleSheet.create({
