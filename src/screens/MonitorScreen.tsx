@@ -294,8 +294,16 @@ function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
 /* ---------------- the family: every phone that joined ---------------- */
 
 function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => void }) {
-  const { m, update, members, removeMember, leaveFamily, join, joining, baby } = useMonitor();
+  const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms } = useMonitor();
   const [showCode, setShowCode] = useState(false);
+  // What each phone does: the baby monitor (listening by the crib) or getting the alerts.
+  const role = (monitor: boolean) => (
+    <View style={styles.roleLine}>
+      <Icon d={monitor ? ICONS.mic : ICONS.bell} size={12} color={monitor ? colors.sage : colors.muted} width={2.2} />
+      <Text style={[styles.roleText, monitor && { color: colors.sage }]} numberOfLines={1}>{t(monitor ? "rx.asMonitor" : "rx.asAlerts")}</Text>
+    </View>
+  );
+  const monitorTokens = new Set(rooms.map((r) => r.token));
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -320,19 +328,25 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
           {t("fam.title")}
         </Label>
         <Pressable onPress={() => setEditing(true)} style={styles.person} accessibilityRole="button" accessibilityHint={t("fam.rename")}>
-          <View style={[styles.avatar, { backgroundColor: colors.sage }]}><Icon d={ICONS.mic} size={16} color={colors.bg} width={2} /></View>
+          <View style={[styles.avatar, { backgroundColor: listening ? colors.sage : "#c9bfff" }]}><Icon d={listening ? ICONS.mic : ICONS.bell} size={16} color={colors.bg} width={2} /></View>
           {editing ? (
             <TextInput autoFocus value={m.myName} onChangeText={(myName) => update({ myName })} onBlur={() => setEditing(false)} placeholder={t("fam.myName")} placeholderTextColor={colors.muted} style={[styles.input, { flex: 1, textAlign: "left", paddingVertical: 7 }]} maxLength={30} />
           ) : (
-            <Text style={styles.personName} numberOfLines={1}>{m.myName.trim() || t("fam.thisPhone")}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.personName} numberOfLines={1}>{m.myName.trim() || t("fam.thisPhone")}</Text>
+              {role(listening)}
+            </View>
           )}
           {!editing && <Icon d='<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>' size={16} color={colors.muted} width={2} />}
           <Text style={styles.youTag}>{t("fam.thisPhone")}</Text>
         </Pressable>
         {members.map((p, i) => (
           <View key={p.token} style={styles.person}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>{nameOf(p.name, i).slice(0, 1).toUpperCase()}</Text></View>
-            <Text style={styles.personName} numberOfLines={1}>{nameOf(p.name, i)}</Text>
+            <View style={[styles.avatar, monitorTokens.has(p.token) && { backgroundColor: colors.sage }]}><Text style={styles.avatarText}>{nameOf(p.name, i).slice(0, 1).toUpperCase()}</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.personName} numberOfLines={1}>{nameOf(p.name, i)}</Text>
+              {role(monitorTokens.has(p.token))}
+            </View>
             <Pressable
               onPress={() => dialog(nameOf(p.name, i), t("fam.removeAsk", { name: nameOf(p.name, i) }), [{ text: t("common.cancel"), style: "cancel" }, { text: t("fam.remove"), style: "destructive", onPress: () => removeMember(p.token) }])}
               hitSlop={12}
@@ -932,6 +946,8 @@ const styles = StyleSheet.create({
   stripItem: { alignItems: "center", gap: 5, width: 58 },
   stripIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(247,241,255,0.06)" },
   stripText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
+  roleLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
+  roleText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted },
   youTag: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   famLinks: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, paddingHorizontal: 2 },
   roomPicker: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 99, padding: 4, gap: 4 },
