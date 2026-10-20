@@ -62,6 +62,10 @@ object CryEngine {
   @Volatile var delayMs = 0L
   /** Pauses shorter than this don't end a crying spell (babies stop for breath). */
   private const val GAP_MS = 6000L
+  /** Talking: how sure the classifier must be, pauses that don't end it, and the shortest worth logging. */
+  private const val TALK_SCORE = 0.35f
+  private const val TALK_GAP_MS = 10_000L
+  private const val TALK_MIN_MS = 4000L
   @Volatile var babyName = "Baby"
 
   // Message templates in the app's language ({name}, {pct} are filled in here).
@@ -319,6 +323,11 @@ object CryEngine {
       var lastAlert = 0L
       var peak = 0f
       var lastBatteryCheck = 0L
+      // Grown-ups talking in the room: logged as "talk" spells, so the app can tell a waking
+      // (crying, then parents coming in) from a cry the baby settled from on their own.
+      val talkHistory = ArrayDeque<Boolean>()
+      var talkStart = 0L
+      var lastTalk = 0L
       EventLog.add("listen_start")
       listenSince = System.currentTimeMillis()
       var lastReport = 0L
@@ -330,6 +339,11 @@ object CryEngine {
         spellStart = 0L
         alerted = false
         peak = 0f
+      }
+      fun endTalk() {
+        if (talkStart == 0L) return
+        if (lastTalk - talkStart >= TALK_MIN_MS) EventLog.add("talk", mapOf("start" to talkStart, "end" to lastTalk))
+        talkStart = 0L
       }
 
       while (running && !Thread.currentThread().isInterrupted) {
@@ -374,6 +388,11 @@ object CryEngine {
         history.addLast(score >= threshold)
         if (history.size > 8) history.removeFirst()
         val now = history.count { it } >= 4
+        // Adult speech (not babbling or crying), for about 1.5 s of the last 4 s.
+        val adult = scores[SPEECH] + 0.5f * (scores[CONVERSATION] + scores[NARRATION])
+        talkHistory.addLast(adult >= TALK_SCORE && adult > cry && pitch.factor() <= 1f)
+        if (talkHistory.size > 8) talkHistory.removeFirst()
+        val talking = talkHistory.count { it } >= 3
 
         listener?.invoke(
           "status",
@@ -408,6 +427,12 @@ object CryEngine {
         } else if (spellStart != 0L && t - lastHeard > GAP_MS) {
           endSpell()
         }
+        if (talking) {
+          if (talkStart == 0L) talkStart = t
+          lastTalk = t
+        } else if (talkStart != 0L && t - lastTalk > TALK_GAP_MS) {
+          endTalk()
+        }
         if (spellStart != 0L && now) {
           val due = if (!alerted) t - spellStart >= delayMs else t - lastAlert >= REPEAT_MS
           if (due) {
@@ -423,6 +448,7 @@ object CryEngine {
         }
       }
       endSpell()
+      endTalk()
       cancelClip()
     } catch (e: Exception) {
       cancelClip()

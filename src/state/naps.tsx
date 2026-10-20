@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
-import { deleteSleep, endSleep, loadNights, openSleep, startSleep, type Night, type Sleep } from "../nights";
+import { deleteSleep, endSleep, loadManual, loadNights, openSleep, startSleep, upsertSleep, type Night, type Sleep } from "../nights";
 import { napState, type NapState } from "../naps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { INFO_CHANNEL, addPushListener, getMyToken, sendData, sendPush } from "../monitor";
@@ -23,6 +23,9 @@ type NapsCtx = {
   /** The sleep in progress was started by the sound; undo removes it. */
   fromSound: boolean;
   undoSound: () => Promise<void>;
+  /** The sleep just ended because the white noise was turned off (with an undo on Home). */
+  endedBySound: boolean;
+  undoEnd: () => Promise<void>;
   /** A sleep that has gone on far longer than makes sense (someone forgot "woke up"), and a guess
    * of when it really ended (white noise turned off, monitor stopped). */
   stale: { since: number; guess: number | null } | null;
@@ -61,8 +64,9 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => { AsyncStorage.getItem(PEER).then((r) => r && setPeer(JSON.parse(r))).catch(() => {}); }, []);
 
+  const [loadedAt, setLoadedAt] = useState(0); // when `nights` was computed (an open sleep ends then)
   const reload = useCallback(() => {
-    loadNights().then(setNights).catch(() => {});
+    loadNights().then((n) => { setNights(n); setLoadedAt(Date.now()); }).catch(() => {});
     openSleep().then((o) => { setOpenFrom(o?.from ?? null); if (!o) setSoundSleep(null); }).catch(() => {});
     setNow(Date.now());
   }, []);
@@ -96,8 +100,12 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   const [awakeAt, setAwakeAt] = useState(0);
   useEffect(() => { setListenStart(mon.listening ? Date.now() : 0); setAwakeAt(0); }, [mon.listening]);
 
+  // The listening phone heard the baby wake (a long cry, or crying with grown-ups talking; see
+  // wakings in nights.ts): the sleep it was counting ended, and no new one has begun since.
+  const heardAwake = s.features.monitor && mon.listening && listenStart > 0 && loadedAt - listenStart > 5 * 60_000
+    && !sleeps.some((x) => !x.logged && x.to >= loadedAt - 2 * 60_000);
   // Asleep: logged on this phone, or this baby's phone is listening, or the baby's phone says so.
-  const monitorAsleep = s.features.monitor && mon.listening && !(awakeAt > listenStart);
+  const monitorAsleep = s.features.monitor && mon.listening && !(awakeAt > listenStart) && !heardAwake;
   const room = mon.room;
   const roomAsleep = s.features.monitor && !mon.listening && !!room?.listening && now - (room?.at ?? 0) < 45 * 60_000
     // …unless the baby's phone said "woke up" after it started listening
@@ -105,7 +113,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   // A paired phone said the baby fell asleep (and hasn't said awake since).
   const peerAsleep = !!peer?.asleep && now - peer.at < 16 * 3600_000;
   const since = openFrom
-    ?? (monitorAsleep || roomAsleep ? (sleeps.filter((x) => x.to >= now - 3 * 60_000).at(-1)?.from ?? mon.room?.at ?? now) : null)
+    ?? (monitorAsleep || roomAsleep ? (sleeps.filter((x) => x.to >= Math.min(now, loadedAt) - 3 * 60_000).at(-1)?.from ?? mon.room?.at ?? now) : null)
     ?? (peerAsleep ? peer!.since : null);
   const state = useMemo(() => napState(sleeps, s.birthday, since, now), [sleeps, s.birthday, since, now]);
 
@@ -214,6 +222,59 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [peers, savePeer]);
 
+  // The listening phone heard a waking, or the baby settling again: tell the parents.
+  const heardRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!mon.listening || !loadedAt) { heardRef.current = null; return; }
+    if (heardRef.current === null || heardRef.current === heardAwake) { heardRef.current = heardAwake; return; }
+    heardRef.current = heardAwake;
+    if (awakeAt > listenStart) return; // "Woke up" was tapped; they already know
+    const last = sleeps.filter((x) => !x.logged).at(-1);
+    if (heardAwake) notify("awake", last?.to ?? Date.now(), { dur: last ? (last.to - last.from) / 60_000 : 0 });
+    else notify("asleep", last?.from ?? Date.now());
+  }, [heardAwake, mon.listening, loadedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // White noise turned off by hand (here or from a paired phone): the sleep is probably over too.
+  // Not when the timer ran out or a call took the audio. Home offers an undo.
+  const [ended, setEnded] = useState<{ id?: string; at: number; since: number } | null>(null);
+  const mountedAt = useRef(Date.now());
+  useEffect(() => {
+    const st = lastStop;
+    if (!st || st.at < mountedAt.current || Date.now() - st.at > 60_000 || (st.why !== "you" && st.why !== "remote")) return;
+    if (!s.features.naps || !s.soundStartsSleep || !state.asleep) return;
+    const since = state.since;
+    (async () => {
+      if (openFrom) {
+        const o = await openSleep();
+        await endSleep(st.at);
+        setEnded({ id: o?.id, at: st.at, since });
+      } else if (monitorAsleep) {
+        setAwakeAt(st.at);
+        setEnded({ at: st.at, since });
+      } else return;
+      reload();
+      notify("awake", st.at, { dur: (st.at - since) / 60_000 });
+    })().catch(() => {});
+  }, [lastStop?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  const endedBySound = !!ended && !state.asleep && now - ended.at < 15 * 60_000;
+  const undoEnd = useCallback(async () => {
+    const e = ended;
+    if (!e) return;
+    if (e.id) {
+      const x = (await loadManual()).list.find((y) => y.id === e.id);
+      if (x) await upsertSleep({ ...x, to: null });
+    } else setAwakeAt(0);
+    setEnded(null);
+    reload();
+    // Quietly put the parents' phones back to "asleep".
+    const to = peers().map((p) => p.token);
+    if (to.length) {
+      let me = "";
+      try { me = await getMyToken(); } catch {}
+      sendData(to, { type: "sleep", asleep: true, since: e.since, from: me }).catch(() => {});
+    }
+  }, [ended, reload, peers]);
+
   // Starting a sound usually means it's sleep time: start a sleep (with an undo on Home).
   useEffect(() => {
     if (!starts) return;
@@ -254,5 +315,5 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     })();
   }, [s.features.naps, s.napReminders, state.asleep, state.asleep ? 0 : state.sweet?.[0], lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload, fromSound: !!soundSleep && openFrom != null, undoSound, stale, wokeAt, stillAsleep }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ nights, sleeps, state, fellAsleep, wokeUp, reload, fromSound: !!soundSleep && openFrom != null, undoSound, endedBySound, undoEnd, stale, wokeAt, stillAsleep }}>{children}</Ctx.Provider>;
 }

@@ -118,6 +118,8 @@ export function HomeScreen() {
           </Pressable>
           {st.asleep && naps.fromSound ? (
             <Text style={styles.small}>{t("nap.fromSound")} <Text onPress={naps.undoSound} style={styles.link}>{t("nap.undo")}</Text></Text>
+          ) : naps.endedBySound ? (
+            <Text style={styles.small}>{t("nap.endedBySound")} <Text onPress={naps.undoEnd} style={styles.link}>{t("nap.undo")}</Text></Text>
           ) : (
             <Text onPress={() => setSheet("new")} style={styles.link}>{t("nap.addSleep")}</Text>
           )}

@@ -64,6 +64,10 @@ final class CryEngine {
   private var pitch = PitchTracker()
   private var history: [Bool] = []
   private var spellStart: Int64 = 0
+  // Grown-ups talking in the room, logged as "talk" spells (see the Android engine).
+  private var talkHistory: [Bool] = []
+  private var talkStart: Int64 = 0
+  private var lastTalk: Int64 = 0
   private var lastHeard: Int64 = 0
   private var alerted = false
   private var lastAlert: Int64 = 0
@@ -205,6 +209,7 @@ final class CryEngine {
     observers.removeAll()
     queue.async {
       self.endSpell()
+      self.endTalk()
       self.cancelClip()
       EventLog.add("listen_stop")
     }
@@ -280,7 +285,7 @@ final class CryEngine {
       running = false
       listener?("status", ["error": error.localizedDescription])
       reportUnexpectedStop()
-      queue.async { self.endSpell(); EventLog.add("listen_stop") }
+      queue.async { self.endSpell(); self.endTalk(); EventLog.add("listen_stop") }
     }
   }
 
@@ -354,6 +359,10 @@ final class CryEngine {
     history.append(score >= threshold)
     if history.count > 8 { history.removeFirst() }
     let crying = history.filter { $0 }.count >= 4
+    let adult = scores[SPEECH] + 0.5 * (scores[CONVERSATION] + scores[NARRATION])
+    talkHistory.append(adult >= 0.35 && adult > cry && pitch.factor() <= 1)
+    if talkHistory.count > 8 { talkHistory.removeFirst() }
+    let talking = talkHistory.filter { $0 }.count >= 3
 
     listener?("status", ["score": Double(score), "level": levelDb, "crying": crying, "top": top, "topScore": Double(scores[top]), "noiseDb": Double(denoiser.noiseDb)])
 
@@ -377,6 +386,12 @@ final class CryEngine {
     } else if spellStart != 0 && t - lastHeard > GAP_MS {
       endSpell()
     }
+    if talking {
+      if talkStart == 0 { talkStart = t }
+      lastTalk = t
+    } else if talkStart != 0 && t - lastTalk > 10_000 {
+      endTalk()
+    }
     if spellStart != 0 && crying {
       let due = !alerted ? t - spellStart >= delayMs : t - lastAlert >= REPEAT_MS
       if due {
@@ -390,6 +405,12 @@ final class CryEngine {
         sendCryClip(t)
       }
     }
+  }
+
+  private func endTalk() {
+    if talkStart == 0 { return }
+    if lastTalk - talkStart >= 4000 { EventLog.add("talk", ["start": talkStart, "end": lastTalk]) }
+    talkStart = 0
   }
 
   private func endSpell() {

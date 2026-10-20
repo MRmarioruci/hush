@@ -8,7 +8,9 @@ import { dateLocale, t } from "./i18n";
 export type HushEvent =
   | { type: "listen_start" | "listen_stop" | "noise_start" | "noise_stop"; t: number }
   | { type: "alert"; t: number; first?: boolean }
-  | { type: "cry"; t: number; start: number; end: number; peak: number; alerted?: boolean };
+  | { type: "cry"; t: number; start: number; end: number; peak: number; alerted?: boolean }
+  /** Grown-ups talking in the room (logged by the listening phone). */
+  | { type: "talk"; t: number; start: number; end: number };
 
 /** One sleep: a listening session or a logged one. Times are the whole sleep, even across midnight. */
 export type Sleep = { from: number; to: number; kind: "night" | "nap"; cries: number; cryMin: number; id?: string; note?: string; logged?: boolean };
@@ -193,6 +195,7 @@ function sleepSpans(a: number, b: number): [number, number][] {
 }
 
 type Cry = Extract<HushEvent, { type: "cry" }>;
+type Talk = Extract<HushEvent, { type: "talk" }>;
 
 export const kindOf = (a: number, b: number): "night" | "nap" => (nightOverlap(a, b) >= 2 * HOUR ? "night" : "nap");
 
@@ -216,9 +219,61 @@ function sleepsOf(evs: HushEvent[], now: number, manual: ManualSleep[] = []): Sl
   return dedupe([...sessions, ...logged]);
 }
 
+/** Crying this long in one go means the baby is up. */
+const WAKE_CRY = 10 * 60_000;
+/** …or this much crying with grown-ups talking (someone went in to them). */
+const WAKE_CRY_TALK = 2 * 60_000, WAKE_TALK = 60_000;
+/** Back asleep once the room has been quiet this long. */
+const SETTLE = 20 * 60_000;
+/** Shorter pieces of sleep between wakings aren't counted. */
+const MIN_PIECE = 10 * 60_000;
+
+/**
+ * When the baby was awake during [a, b], judged from the room: a waking is a long cry, or a cry
+ * with grown-ups talking. At night it lasts until the room has been quiet for 20 minutes (the baby
+ * went back to sleep at the last sound); otherwise, or if that hasn't happened yet, they're up.
+ */
+export function wakings(evs: HushEvent[], a: number, b: number, now: number): [number, number][] {
+  const acts = evs
+    .filter((e): e is Cry | Talk => (e.type === "cry" || e.type === "talk") && e.end >= a && e.start <= b)
+    .map((e) => ({ s: e.start, e: Math.max(e.end, e.start + 1000), cry: e.type === "cry" }))
+    .sort((p, q) => p.s - q.s);
+  // Sounds closer than SETTLE belong to one episode.
+  const eps: { s: number; e: number; cry: number; talk: number }[] = [];
+  for (const x of acts) {
+    const last = eps[eps.length - 1];
+    const ep = last && x.s - last.e < SETTLE ? last : (eps.push({ s: x.s, e: x.e, cry: 0, talk: 0 }), eps[eps.length - 1]);
+    ep.e = Math.max(ep.e, x.e);
+    if (x.cry) ep.cry += x.e - x.s; else ep.talk += x.e - x.s;
+  }
+  const end = Math.min(b, now);
+  return eps
+    .filter((ep) => ep.cry >= WAKE_CRY || (ep.cry >= WAKE_CRY_TALK && ep.talk >= WAKE_TALK))
+    // Back to sleep only after a night waking, once a quiet SETTLE has passed while still listening.
+    // A morning or nap waking is the end: a quiet room then usually means everyone left it.
+    .map((ep) => [ep.s, nightTime(ep.s) && end - ep.e >= SETTLE ? ep.e : b] as [number, number]);
+}
+
+/** 7 pm to 5:30 am: a waking then is usually a feed, and the night goes on. */
+const nightTime = (t: number) => { const d = new Date(t); const h = d.getHours() + d.getMinutes() / 60; return h >= 19 || h < 5.5; };
+
+/** [a, b] minus the wakings, in pieces long enough to count as sleep. */
+function minus(a: number, b: number, gaps: [number, number][], now: number): [number, number][] {
+  const out: [number, number][] = [];
+  let cur = a;
+  for (const [s, e] of mergeSpans(gaps)) {
+    if (s > cur) out.push([cur, Math.min(s, b)]);
+    cur = Math.max(cur, e);
+  }
+  if (cur < b) out.push([cur, b]);
+  return out.filter(([s, e]) => e - s >= MIN_PIECE || (e === b && b >= now - 60_000));
+}
+
 function sessionsOf(evs: HushEvent[], now: number): Sleep[] {
   const cries = evs.filter((e): e is Cry => e.type === "cry");
-  return spans(evs, "listen_start", "listen_stop", now).flatMap(([s, e]) => sleepSpans(s, e)).map(([a, b]) => {
+  return spans(evs, "listen_start", "listen_stop", now)
+    .flatMap(([s, e]) => minus(s, e, wakings(evs, s, e, now), now))
+    .flatMap(([s, e]) => sleepSpans(s, e)).map(([a, b]) => {
     const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
     return {
       from: a,
