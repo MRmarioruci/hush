@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors, fonts } from "../theme";
 import { Card, ICONS, Icon, Label, Screen } from "../components/ui";
@@ -173,6 +173,7 @@ function NightView({ nights, selected, onSelect, baby, naps: napsOn, edit, onMod
       </View>
 
       {sleeps.length > 0 && <Sleeps n={n} edit={edit} />}
+      {napsOn && <SmartSleep />}
       {heard && (
         <View style={styles.tiles}>
           <Tile value={String(n.cries)} label={t("nights.cried", { count: n.cries })} />
@@ -450,6 +451,27 @@ function Timeline({ n }: { n: Night }) {
 }
 
 /** Each sleep this day: night or nap, when, and how much crying. Logged ones on this phone can be edited. */
+/** Smart sleep detection: what it does, and the switch for it, where its results show. */
+function SmartSleep() {
+  const { s, set } = useSleep();
+  const on = s.smartSleep;
+  return (
+    <Card style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <View style={[styles.smartIcon, !on && { backgroundColor: colors.card2 }]}>
+        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={on ? colors.bg : colors.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l1.8 1.8M16.2 16.2 18 18M6 18l1.8-1.8M16.2 7.8 18 6" />
+          <Circle cx={12} cy={12} r={2.6} fill={on ? colors.bg : colors.muted} stroke="none" />
+        </Svg>
+      </View>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={styles.smartTitle}>{t("smartSleep.title")}</Text>
+        <Text style={styles.smartSub}>{t(on ? "smartSleep.on" : "smartSleep.off")}</Text>
+      </View>
+      <Switch value={on} onValueChange={(smartSleep) => set({ smartSleep })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("smartSleep.title")} />
+    </Card>
+  );
+}
+
 function Sleeps({ n, edit, onAdd }: { n: Night; edit: (s: Sleep) => (() => void) | undefined; onAdd?: () => void }) {
   const list = n.sleeps ?? [];
   return (
@@ -538,6 +560,9 @@ const styles = StyleSheet.create({
   clockHour: { position: "absolute", width: 24, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 11, color: "#8f86bf" },
   roundRow: { flexDirection: "row", gap: 10, justifyContent: "center", alignItems: "center" },
   roundBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
+  smartIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" },
+  smartTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.cream },
+  smartSub: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted },
   softBtn: { flex: 1, height: 50, borderRadius: 25, paddingHorizontal: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   headAdd: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
   softBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },

@@ -149,6 +149,15 @@ export function SettingsScreen() {
             <Switch value={s.soundStartsSleep} onValueChange={(soundStartsSleep) => set({ soundStartsSleep })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("settings.soundSleep")} />
           </View>
         )}
+        {s.features.naps && (
+          <View style={styles.row}>
+            <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
+              <Text style={styles.rowLabel}>{t("smartSleep.title")}</Text>
+              <Text style={styles.rowSub}>{t("smartSleep.short")}</Text>
+            </View>
+            <Switch value={s.smartSleep} onValueChange={(smartSleep) => set({ smartSleep })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("smartSleep.title")} />
+          </View>
+        )}
         {s.features.sounds && <Row label={t("settings.distances")}>
           <View style={styles.seg}>
             {(["m", "ft"] as const).map((u) => (

@@ -269,10 +269,14 @@ function minus(a: number, b: number, gaps: [number, number][], now: number): [nu
   return out.filter(([s, e]) => e - s >= MIN_PIECE || (e === b && b >= now - 60_000));
 }
 
+/** Smart sleep detection (Settings, on by default): split listening sessions at the wakings heard. */
+let smart = true;
+export const setSmartSleep = (on: boolean) => { smart = on; };
+
 function sessionsOf(evs: HushEvent[], now: number): Sleep[] {
   const cries = evs.filter((e): e is Cry => e.type === "cry");
   return spans(evs, "listen_start", "listen_stop", now)
-    .flatMap(([s, e]) => minus(s, e, wakings(evs, s, e, now), now))
+    .flatMap(([s, e]) => (smart ? minus(s, e, wakings(evs, s, e, now), now) : [[s, e] as [number, number]]))
     .flatMap(([s, e]) => sleepSpans(s, e)).map(([a, b]) => {
     const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
     return {

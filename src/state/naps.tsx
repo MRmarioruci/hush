@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
-import { deleteSleep, endSleep, loadManual, loadNights, openSleep, startSleep, upsertSleep, type Night, type Sleep } from "../nights";
+import { deleteSleep, endSleep, loadManual, loadNights, openSleep, setSmartSleep, startSleep, upsertSleep, type Night, type Sleep } from "../nights";
 import { napState, type NapState } from "../naps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { INFO_CHANNEL, addPushListener, getMyToken, sendData, sendPush } from "../monitor";
@@ -71,6 +71,12 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     setNow(Date.now());
   }, []);
   useEffect(reload, [reload, mon.nightsVersion, mon.listening]);
+  // Smart sleep detection changes how listening turns into sleeps: recount.
+  const firstSmart = useRef(true);
+  useEffect(() => {
+    setSmartSleep(s.smartSleep);
+    if (firstSmart.current) firstSmart.current = false; else reload();
+  }, [s.smartSleep, reload]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     // Coming back to hush: pick up "asleep / awake" notifications that arrived meanwhile.
@@ -102,7 +108,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
 
   // The listening phone heard the baby wake (a long cry, or crying with grown-ups talking; see
   // wakings in nights.ts): the sleep it was counting ended, and no new one has begun since.
-  const heardAwake = s.features.monitor && mon.listening && listenStart > 0 && loadedAt - listenStart > 5 * 60_000
+  const heardAwake = s.smartSleep && s.features.monitor && mon.listening && listenStart > 0 && loadedAt - listenStart > 5 * 60_000
     && !sleeps.some((x) => !x.logged && x.to >= loadedAt - 2 * 60_000);
   // Asleep: logged on this phone, or this baby's phone is listening, or the baby's phone says so.
   const monitorAsleep = s.features.monitor && mon.listening && !(awakeAt > listenStart) && !heardAwake;
@@ -241,7 +247,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const st = lastStop;
     if (!st || st.at < mountedAt.current || Date.now() - st.at > 60_000 || (st.why !== "you" && st.why !== "remote")) return;
-    if (!s.features.naps || !s.soundStartsSleep || !state.asleep) return;
+    if (!s.features.naps || !s.smartSleep || !state.asleep) return;
     const since = state.since;
     (async () => {
       if (openFrom) {
