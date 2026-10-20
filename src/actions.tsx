@@ -56,6 +56,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   joinRef.current = mon.join;
   const askRef = useRef(mon.askAllow);
   askRef.current = mon.askAllow;
+  const ackRef = useRef(mon.ackCry);
+  ackRef.current = mon.ackCry;
   const fromUrl = useCallback((url: string | null) => {
     const m = url?.match(/^hush:\/\/do\/(\w+)/);
     if (m) setTimeout(() => run.current(m[1]), 400); // let the app settle first
@@ -81,6 +83,13 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     const b = QuickActions.addListener((act) => fromUrl(`hush://do/${act.id}`));
     // Buttons on notifications; tapping a "listen in" clip plays it.
     const onResponse = (r: Notifications.NotificationResponse) => {
+      // "I'm on it" on a crying alert: for the room that sent it.
+      if (r.actionIdentifier === "onit") {
+        const d = r.notification.request.content.data as { from?: string } | undefined;
+        ackRef.current(d?.from);
+        setTimeout(() => go("Monitor"), 400);
+        return;
+      }
       if (r.actionIdentifier && r.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) { fromUrl(`hush://do/${r.actionIdentifier}`); return; }
       const d = r.notification.request.content.data as { type?: string; url?: string; at?: number; seconds?: number; who?: string; from?: string } | undefined;
       if (d?.type === "allow-listen") { setTimeout(() => { go("Monitor"); askRef.current(d.who ?? "", d.from ?? ""); }, 500); return; }
@@ -107,6 +116,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       { identifier: "noise", buttonTitle: t("qa.noiseToggle"), options: { opensAppToForeground: true } },
     ]).catch(() => {});
     Notifications.setNotificationCategoryAsync("hush-cry", [
+      { identifier: "onit", buttonTitle: t("ack.button"), options: { opensAppToForeground: true } },
       { identifier: "listen", buttonTitle: t("qa.listen"), options: { opensAppToForeground: true } },
     ]).catch(() => {});
   }, [lang]);

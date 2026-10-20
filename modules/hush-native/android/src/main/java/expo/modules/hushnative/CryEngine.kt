@@ -94,12 +94,21 @@ object CryEngine {
   @Volatile var targets: List<Map<String, String>> = emptyList()
 
   /** Send one kind of alert, in each parent's language when known. */
-  private fun alert(kind: String, fallback: String, data0: Map<String, Any>, pct: Int = 0) {
+  /** A parent tapped "I'm on it": until then, crying alerts go out quietly, saying who's on it. */
+  @Volatile var ackUntil = 0L
+  @Volatile var ackBy = ""
+  @Volatile var txtAcked = "{name} is still crying · {who} is on it"
+
+  private fun alert(kind0: String, fallback0: String, data1: Map<String, Any>, pct: Int = 0) {
+    val acked = (kind0 == "crying" || kind0 == "still") && System.currentTimeMillis() < ackUntil
+    val kind = if (acked) "acked" else kind0
+    val fallback = if (acked) txtAcked else fallback0
+    val data0 = if (acked) data1 + mapOf("quiet" to true, "by" to ackBy) else data1
     val data = data0 + ("from" to myToken)
     Diag.add("alert sent: $kind")
     val list = targets.filter { !it["token"].isNullOrEmpty() && it["token"] != myToken }
-    if (list.isEmpty()) { AlertSender.send(tokens.filter { it != myToken }, fill(fallback, pct), data); return }
-    AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct) }, data)
+    if (list.isEmpty()) { AlertSender.send(tokens.filter { it != myToken }, fill(fallback, pct).replace("{who}", ackBy), data); return }
+    AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct).replace("{who}", ackBy) }, data)
   }
 
   /** Receives "status" and "cry" events; set by the JS-facing module. */

@@ -62,11 +62,18 @@ type Monitor = {
   micOn: boolean;
   /** Share this phone's sleep days with the connected phones and ask for theirs. Returns how many phones. */
   syncSleep: (force?: boolean) => Promise<number>;
+  /** "I'm on it" for crying in a room: quiets its alerts for a few minutes and tells the others. */
+  ackCry: (room?: string) => Promise<void>;
+  /** Someone is on the crying (this phone = "me"), until when. */
+  ack: { who: string; until: number } | null;
   lastSync: number;
 };
 
 const Ctx = createContext<Monitor | null>(null);
 export const useMonitor = () => useContext(Ctx)!;
+
+/** How long "I'm on it" quiets the crying alerts. */
+const ACK_MS = 5 * 60_000;
 
 export function MonitorProvider({ children }: { children: ReactNode }) {
   const [m, setM] = useState<MonitorSettings>(MONITOR_DEFAULTS);
@@ -159,6 +166,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       lowBattery: t("push.lowBattery", { name: baby, pct: "{pct}" }),
       stopped: t("push.stopped", { name: baby }),
       allowAsk: t("allow.notif", { who: "{who}" }),
+      acked: t("push.acked", { name: baby, who: "{who}" }),
     });
   }, [lang, baby]);
   // The ongoing "listening" notification says why: alerts for the paired phones, a monitor with
@@ -179,6 +187,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         token: p.token,
         crying: tIn(L, "push.crying", { name }),
         still: tIn(L, "push.still", { name }),
+        acked: tIn(L, "push.acked", { name, who: "{who}" }),
         lowBattery: tIn(L, "push.lowBattery", { name, pct: "{pct}" }),
         stopped: tIn(L, "push.stopped", { name }),
         name: p.name,
@@ -738,6 +747,34 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return { at, ok };
   }, []);
 
+  /* ---------- "I'm on it" ---------- */
+  const [ack, setAck] = useState<{ who: string; until: number } | null>(null);
+  const ackCry = useCallback(async (room0?: string) => {
+    const cur = mRef.current;
+    let me = "";
+    try { me = await getMyToken(); } catch {}
+    const room = room0 || target;
+    if (!room || !me) return;
+    const until = Date.now() + ACK_MS;
+    const name = cur.myName.trim() || t("rt.otherPhone");
+    setAck({ who: "me", until });
+    // The baby's phone sends its next cries quietly; the other parents hear who's going.
+    sendData([room], { type: "cmd", cmd: "ack", from: me, name, until }).catch(() => {});
+    for (const p of membersOf(cur.family, me).filter((x) => x.token !== room)) {
+      const L = p.lang ?? getLang();
+      sendPush([p.token], tIn(L, "push.ackOther", { who: name, name: babyLabelIn(L, cur.babyName) }), { type: "ack", room, from: me, by: name, until }).catch(() => {});
+    }
+    // This phone's crying alert is handled.
+    Notifications.dismissNotificationAsync(`hush-room-${room.slice(-12)}`).catch(() => {});
+  }, [target]);
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string; by?: string; until?: number } | undefined;
+      if (d?.type === "ack" && d.from && peersOf(mRef.current).includes(d.from)) setAck({ who: d.by ?? "", until: Math.min(d.until ?? 0, Date.now() + 15 * 60_000) });
+    });
+    return () => sub.remove();
+  }, []);
+
   // Another phone asked for our days.
   useEffect(() => {
     const replied = new Map<string, number>();
@@ -753,7 +790,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack }}>{children}</Ctx.Provider>
   );
 }
 

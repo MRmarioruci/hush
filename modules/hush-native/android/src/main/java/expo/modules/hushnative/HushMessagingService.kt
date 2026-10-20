@@ -26,7 +26,8 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
       val data = remoteMessage.data
       val body = data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() }
       val type = body?.optString("type")
-      if (type in setOf("cry", "stopped", "test") || data["channelId"]?.startsWith("baby-alarm") == true) alarmBuzz(applicationContext)
+      val quiet = body?.optBoolean("quiet") == true
+      if (!quiet && (type in setOf("cry", "stopped", "test") || data["channelId"]?.startsWith("baby-alarm") == true)) alarmBuzz(applicationContext)
       // Requests from a paired parent, answered here so they work with the screen locked.
       if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
     } catch (_: Exception) {}
@@ -44,6 +45,7 @@ private fun withTopic(m: RemoteMessage): RemoteMessage {
     val from = body.optString("from").takeLast(12).ifEmpty { "room" }
     val topic = when (body.optString("type")) {
       "cry", "stopped", "battery" -> "hush-room-$from"
+      "ack" -> "hush-room-" + body.optString("room").takeLast(12)
       "clip" -> "hush-clip-$from"
       "sleep" -> "hush-sleep-$from"
       "test" -> "hush-test"
@@ -67,6 +69,13 @@ object RoomCommands {
     when (body.optString("cmd")) {
       "status" -> CryEngine.reportRoom(context, listOf(from))
       "clip" -> clip(context, from, parent, body.optInt("seconds", 10).coerceIn(5, 15))
+      // "I'm on it": crying alerts go out quietly for a few minutes, naming who's going.
+      "ack" -> {
+        val until = body.optLong("until").coerceAtMost(System.currentTimeMillis() + 15 * 60_000L)
+        CryEngine.ackBy = body.optString("name").ifEmpty { parent["name"] ?: "" }
+        CryEngine.ackUntil = until
+        Diag.add("on it: ${CryEngine.ackBy}")
+      }
     }
   }
 

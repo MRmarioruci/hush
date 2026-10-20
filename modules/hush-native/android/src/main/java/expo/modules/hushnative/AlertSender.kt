@@ -83,6 +83,7 @@ object AlertSender {
     val from = (data["from"] as? String).orEmpty().takeLast(12).ifEmpty { "room" }
     return when (data["type"]) {
       "cry", "stopped", "battery" -> "hush-room-$from"
+      "ack" -> "hush-room-" + (data["room"] as? String).orEmpty().takeLast(12)
       "clip" -> "hush-clip-$from"
       "sleep" -> "hush-sleep-$from"
       "test" -> "hush-test"
@@ -105,7 +106,8 @@ object AlertSender {
             put("title", "hush")
             put("body", body)
             // Crying (and a stopped monitor) ring like an alarm; the rest are normal notifications.
-            val alarm = data["type"] in setOf("cry", "stopped", "test")
+            // …except crying someone is already on ("I'm on it"): a normal notification then.
+            val alarm = data["type"] in setOf("cry", "stopped", "test") && data["quiet"] != true
             put("sound", if (alarm) "alert.wav" else "default")
             put("priority", "high")
             put("channelId", if (alarm) "baby-alarm-3" else "hush-info-2")

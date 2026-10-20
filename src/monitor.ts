@@ -292,6 +292,7 @@ export function topicOf(data: Record<string, unknown>): string | null {
   const from = String(data.from ?? "").slice(-12) || "room";
   switch (data.type) {
     case "cry": case "stopped": case "battery": return `hush-room-${from}`;
+    case "ack": return `hush-room-${String(data.room ?? "").slice(-12)}`;
     case "clip": return `hush-clip-${from}`;
     case "sleep": return `hush-sleep-${from}`;
     case "test": return "hush-test";

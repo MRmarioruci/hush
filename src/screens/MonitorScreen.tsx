@@ -140,7 +140,7 @@ function Avatars({ onPress, onAdd }: { onPress: () => void; onAdd: () => void })
 
 /** This phone gets the alerts: one calm circle saying so, and from which phones. */
 function Receiving({ alerts }: { alerts: AlertRecord[] }) {
-  const { rooms } = useMonitor();
+  const { rooms, ack, ackCry } = useMonitor();
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
   const last = alerts[0];
@@ -159,6 +159,16 @@ function Receiving({ alerts }: { alerts: AlertRecord[] }) {
           <Text style={styles.rxSub} numberOfLines={2}>{rooms.length ? t("rx.from", { names }) : t("rx.none")}</Text>
         </View>
       </View>
+      {crying && rooms.length > 0 && (ack && Date.now() < ack.until ? (
+        <View style={styles.ackPill}>
+          <Icon d={ICONS.check} size={16} color={colors.sage} width={2.4} />
+          <Text style={styles.ackText}>{ack.who === "me" ? t("ack.you") : t("ack.other", { who: ack.who })}</Text>
+        </View>
+      ) : (
+        <Pressable onPress={() => ackCry()} style={({ pressed }) => [styles.ackBtn, pressed && { opacity: 0.7 }]} accessibilityRole="button">
+          <Text style={styles.ackBtnText}>{t("ack.button")}</Text>
+        </Pressable>
+      ))}
       {rooms.length > 0 && <View style={{ alignSelf: "stretch" }}><ListenRound /></View>}
       <Tonight alerts={alerts} />
     </View>
@@ -828,6 +838,10 @@ const xstyles = StyleSheet.create({
   roleOptTitle: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   roleOptSub: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   rxBell: { width: 84, height: 84, borderRadius: 42, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  ackPill: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 10, marginTop: -8 },
+  ackText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
+  ackBtn: { backgroundColor: colors.rose, borderRadius: 99, paddingHorizontal: 26, paddingVertical: 12, marginTop: -8 },
+  ackBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.bg },
   rxSub: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, textAlign: "center", maxWidth: 170 },
   remoteBtn: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 24, padding: 12, paddingRight: 16 },
   remoteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.peach, alignItems: "center", justifyContent: "center" },
