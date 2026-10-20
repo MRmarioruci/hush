@@ -1,6 +1,7 @@
 // Nap timing state: all known sleeps (any phone), the sleep in progress, and the next-nap guess.
 // Also keeps the "nap due soon" reminder scheduled on this phone, and tells the paired phones
 // when the baby falls asleep, wakes up, or white noise starts on the baby's phone.
+import { logAct } from "../activity";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
@@ -165,6 +166,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     await startSleep(at);
     reload();
     notify("asleep", at);
+    logAct("asleep");
     return null;
   }, [reload, notify]);
 
@@ -183,6 +185,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       return null;
     }
     if (openFrom) await endSleep(at);
+    if (state.asleep) logAct("awake", skip ? { why: "remote", asker: who } : {});
     if (mon.listening) setAwakeAt(at); // the monitor keeps listening; this sleep is over
     reload();
     if (state.asleep) notify("awake", at, { dur: slept, skip });
@@ -238,6 +241,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     const last = sleeps.filter((x) => !x.logged).at(-1);
     if (heardAwake) notify("awake", last?.to ?? Date.now(), { dur: last ? (last.to - last.from) / 60_000 : 0 });
     else notify("asleep", last?.from ?? Date.now());
+    logAct(heardAwake ? "awake" : "asleep", { why: "smart" });
   }, [heardAwake, mon.listening, loadedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // White noise turned off by hand (here or from a paired phone): the sleep is probably over too.
@@ -260,6 +264,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       } else return;
       reload();
       notify("awake", st.at, { dur: (st.at - since) / 60_000 });
+      logAct("awake", { why: "sound" });
     })().catch(() => {});
   }, [lastStop?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   const endedBySound = !!ended && !state.asleep && now - ended.at < 15 * 60_000;
@@ -296,6 +301,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       setSoundSleep(o?.id ?? null);
       reload();
       notify("asleepSound", at);
+      logAct("asleep", { why: "sound" });
     })().catch(() => {});
   }, [starts]); // eslint-disable-line react-hooks/exhaustive-deps
   const undoSound = useCallback(async () => {

@@ -1,3 +1,4 @@
+import { subscribeActs, type Act } from "../activity";
 import { dialog } from "../components/Dialog";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Animated, AppState, Easing, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View, Platform, Switch, ActivityIndicator } from "react-native";
@@ -66,6 +67,7 @@ export function MonitorScreen() {
               <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
             </Pressable>
           )}
+          <RoomActivity />
           <TrialNote />
         </>
       )}
@@ -178,10 +180,16 @@ const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="1
 
 /** What this phone does, chosen explicitly: get the alerts, or be the baby monitor by the crib. */
 function RolePicker() {
-  const { listening, toggleListening, lastStop } = useMonitor();
+  const { listening, toggleListening, rooms } = useMonitor();
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const last = !listening ? stopLine(lastStop, t, fmtTime) : null;
+  const acts = useActs();
+  const actName = useActName();
+  // No phone is the baby monitor right now: say when it last stopped, and on which phone (shared
+  // by the whole room, so every phone tells the same story).
+  const lastMon = acts.find((a) => a.k === "monOn" || a.k === "monOff");
+  const last = !listening && !rooms.length && lastMon?.k === "monOff" && Date.now() - lastMon.at < 12 * 3600_000
+    ? `${actText(lastMon)} · ${fmtTime(lastMon.at)} · ${actName(lastMon)}` : null;
   const pick = async (monitor: boolean) => {
     if (busy || monitor === listening) return;
     setBusy(true); setMsg(await toggleListening()); setBusy(false);
@@ -206,6 +214,59 @@ function RolePicker() {
       {last && <Text style={[styles.meta, { textAlign: "center" }]}>{last}</Text>}
       {msg && <Text style={styles.msg}>{msg}</Text>}
     </View>
+  );
+}
+
+/* ---------------- the room's shared history ---------------- */
+
+function useActs() {
+  const [list, setList] = useState<Act[]>([]);
+  useEffect(() => subscribeActs(setList), []);
+  return list;
+}
+/** Which phone it happened on, by its current name in the family. */
+function useActName() {
+  const { me, m, members } = useMonitor();
+  return (a: Act) => {
+    if (!a.by || a.by === me) return m.myName.trim() || t("fam.thisPhone");
+    return members.find((p) => p.token === a.by)?.name.trim() || a.name || t("rt.otherPhone");
+  };
+}
+function actText(a: Act, babyName = ""): string {
+  const baby = babyLabel(babyName);
+  switch (a.k) {
+    case "monOn": return t("act.monOn");
+    case "monOff": return t(a.why === "system" ? "act.monOffSystem" : a.why === "error" ? "act.monOffError" : "act.monOff");
+    case "noiseOn": return t("act.noiseOn", { sound: t(`sound.${a.sound ?? "womb"}`) });
+    case "noiseOff": return t(a.why === "timer" ? "act.noiseOffTimer" : a.why === "woke" ? "act.noiseOffWoke" : "act.noiseOff");
+    case "asleep": return t("act.asleep", { name: baby });
+    case "awake": return t("act.awake", { name: baby });
+    case "onit": return t("act.onit");
+  }
+}
+
+function RoomActivity() {
+  const acts = useActs();
+  const actName = useActName();
+  const { m } = useMonitor();
+  const list = acts.filter((a) => Date.now() - a.at < 24 * 3600_000).slice(0, 6);
+  if (!list.length) return null;
+  return (
+    <Card style={{ gap: 2 }}>
+      <Label>{t("act.title")}</Label>
+      {list.map((a) => {
+        const how = a.asker ? t("act.asked", { who: a.asker }) : a.why === "smart" ? t("act.smart") : a.why === "sound" ? t("act.sound") : null;
+        return (
+          <View key={a.id} style={styles.actRow}>
+            <Text style={styles.actTime}>{fmtTime(a.at)}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actText} numberOfLines={1}>{actText(a, m.babyName)}</Text>
+              <Text style={styles.actSub} numberOfLines={1}>{actName(a)}{how ? ` · ${how}` : ""}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </Card>
   );
 }
 
@@ -946,6 +1007,10 @@ const styles = StyleSheet.create({
   stripItem: { alignItems: "center", gap: 5, width: 58 },
   stripIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(247,241,255,0.06)" },
   stripText: { fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.muted },
+  actRow: { flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 6 },
+  actTime: { width: 64, fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"], paddingTop: 1 },
+  actText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
+  actSub: { fontFamily: fonts.body, fontSize: 12.5, color: colors.muted },
   roleLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
   roleText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.muted },
   youTag: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },

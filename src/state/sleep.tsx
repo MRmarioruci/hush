@@ -1,5 +1,6 @@
 // Everything about the white noise: what's playing, the sleep timer, and the safe volume.
 // Lives above the screens so it keeps running whatever tab is open.
+import { logAct } from "../activity";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
@@ -122,6 +123,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     setLastStop(st);
     saveStops({ sound: st });
     addEvent({ type: "noise_stop", t: Date.now() });
+    logAct("noiseOff", { why, asker: who });
     return true;
   }, [cancelResume]);
   // Quick at first, then every 30 s for as long as it takes (until someone turns it off).
@@ -176,9 +178,12 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
       wasPlaying.current = true;
       return;
     }
+    const why = stopWhy.current;
     stopWhy.current = null;
     wasPlaying.current = playing;
     addEvent({ type: playing ? "noise_start" : "noise_stop", t: Date.now() });
+    if (playing) logAct("noiseOn", { sound: soundRef.current.id });
+    else logAct("noiseOff", { why: why?.why, asker: why?.who });
   }, [playing]);
 
   /* ---------- phone volume + safety ---------- */

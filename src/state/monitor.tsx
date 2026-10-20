@@ -1,5 +1,6 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
+import { logAct, receiveAct, setActTransport, type Act } from "../activity";
 import { dialog } from "../components/Dialog";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
@@ -126,7 +127,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [listening, setListeningRaw] = useState(() => cryDetector?.isListening() ?? false);
   const [lastStop, setLastStop] = useState<Stop | null>(null);
   // Every change of the switch goes through here, so a stop always has a reason.
+  const listeningNow = useRef(cryDetector?.isListening() ?? false);
   const setListening = useCallback((on: boolean, why: StopWhy = "you", detail?: string) => {
+    const was = listeningNow.current;
+    listeningNow.current = on;
+    if (was !== on) logAct(on ? "monOn" : "monOff", on ? {} : { why });
     setListeningRaw((was) => {
       if (was && !on) {
         const stop: Stop = { at: Date.now(), why, detail };
@@ -140,13 +145,14 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     loadStops().then((st) => {
       // hush was listening last time, but isn't any more: the phone closed it.
       if (st.wasListening && cryDetector && !cryDetector.isListening()) {
+        logAct("monOff", { why: "system" });
         const stop: Stop = { at: Date.now(), why: "system" };
         saveStops({ listen: stop, wasListening: false });
         setLastStop(stop);
       } else setLastStop(st.listen ?? null);
     });
     // The switch says on, but the listener isn't running: the phone stopped it.
-    const check = () => { if (cryDetector && !cryDetector.isListening()) setListeningRaw((on) => { if (on) { const stop: Stop = { at: Date.now(), why: "system" }; setLastStop(stop); saveStops({ listen: stop, wasListening: false }); } return false; }); };
+    const check = () => { if (cryDetector && !cryDetector.isListening()) setListeningRaw((on) => { if (on) { if (listeningNow.current) { listeningNow.current = false; logAct("monOff", { why: "system" }); } const stop: Stop = { at: Date.now(), why: "system" }; setLastStop(stop); saveStops({ listen: stop, wasListening: false }); } return false; }); };
     const app = AppState.addEventListener("change", (st) => st === "active" && setTimeout(check, 1500));
     return () => app.remove();
   }, []);
@@ -747,6 +753,22 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return { at, ok };
   }, []);
 
+  /* ---------- the room's shared history (src/activity.ts) ---------- */
+  useEffect(() => {
+    let me = "";
+    getMyToken().then((x) => { me = x; }).catch(() => {});
+    setActTransport({
+      me: () => me || mRef.current.me || "",
+      myName: () => mRef.current.myName.trim(),
+      send: (a) => { const to = peersOf(mRef.current); if (to.length) sendData(to, { type: "act", act: a, from: me }).catch(() => {}); },
+    });
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string; act?: Act } | undefined;
+      if (d?.type === "act" && d.act && d.from && peersOf(mRef.current).includes(d.from)) receiveAct({ ...d.act, by: d.from });
+    });
+    return () => { sub.remove(); setActTransport(null); };
+  }, []);
+
   /* ---------- "I'm on it" ---------- */
   const [ack, setAck] = useState<{ who: string; until: number } | null>(null);
   const ackCry = useCallback(async (room0?: string) => {
@@ -758,6 +780,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const until = Date.now() + ACK_MS;
     const name = cur.myName.trim() || t("rt.otherPhone");
     setAck({ who: "me", until });
+    logAct("onit");
     // The baby's phone sends its next cries quietly; the other parents hear who's going.
     sendData([room], { type: "cmd", cmd: "ack", from: me, name, until }).catch(() => {});
     for (const p of membersOf(cur.family, me).filter((x) => x.token !== room)) {
