@@ -803,6 +803,8 @@ export const en = {
   "globe.asleepThere": "babies asleep right now",
   "globe.nappingThere": "babies napping right now",
   "globe.estimate": "Estimated from births and the time of day. Drag to spin, tap a moon.",
+  "globe.privacy": "No GPS or location is ever used. Only your time zone, anonymously.",
+  "globe.yourBaby": "Your baby",
   "globe.setting": "Show {name} on the globe",
   "globe.settingSub": "Anonymous: only your time zone, never your location or name",
   "settings.title": "Settings",

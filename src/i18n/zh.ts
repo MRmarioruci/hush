@@ -803,6 +803,8 @@ export const zh: Record<Key, string> = {
   "globe.asleepThere": "个宝宝正在睡觉",
   "globe.nappingThere": "个宝宝正在小睡",
   "globe.estimate": "根据出生人数和当地时间估算。拖动旋转，点一个月亮。",
+  "globe.privacy": "从不使用 GPS 或位置信息，只匿名使用你的时区。",
+  "globe.yourBaby": "你的宝宝",
   "globe.setting": "在地球上显示{name}",
   "globe.settingSub": "匿名：只用时区，从不使用位置或名字",
   "settings.title": "设置",

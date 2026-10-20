@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { geoCircle, geoDistance, geoGraticule10, geoOrthographic, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
+import { presimplify, simplify } from "topojson-simplify";
 import type { Topology } from "topojson-specification";
 import landTopo from "world-atlas/land-110m.json";
 import { colors, fonts } from "../theme";
@@ -18,7 +19,11 @@ import { useSleep } from "../state/sleep";
 import { useAppActive } from "../components/ui";
 import { estimate, myArea, short, subsolar, type Spot } from "../globe/estimate";
 
-const LAND = feature(landTopo as unknown as Topology, (landTopo as unknown as Topology).objects.land);
+// Coastlines thinned out once (to about 40% of the points): plenty for a phone-sized globe,
+// and much less to redraw while it spins.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TOPO = simplify(presimplify(landTopo as any), 0.5) as unknown as Topology;
+const LAND = feature(TOPO, TOPO.objects.land);
 const GRAT = geoGraticule10();
 const TILT = -12;
 
@@ -45,6 +50,9 @@ export function GlobeScreen() {
   const naps = useNaps();
   const baby = babyLabel(m.babyName);
   const showMe = s.globe !== false;
+  // The tag on this phone's area: the baby's name, or "Your baby".
+  const tag = (m.babyName.trim() || t("globe.yourBaby")).slice(0, 18);
+  const tagW = 16 + tag.length * 5.6;
 
   // Rotation: start facing this phone's side of the world.
   const [rot, setRot] = useState<[number, number]>(() => [-(mine?.lon ?? 20), -Math.max(-40, Math.min(40, (mine?.lat ?? 30) - 8))]);
@@ -58,7 +66,7 @@ export function GlobeScreen() {
   const size = Math.min(width - 24, 380);
   const r = size / 2 - 6;
   const proj = useMemo(() => geoOrthographic().scale(r).translate([size / 2, size / 2]).rotate([rot[0], rot[1], TILT]).clipAngle(90), [r, size, rot]);
-  const path = useMemo(() => geoPath(proj), [proj]);
+  const path = useMemo(() => geoPath(proj).digits(1), [proj]);
   const [slon, slat] = subsolar(now);
   const nightPath = useMemo(() => path(geoCircle().center([slon + 180, -slat]).radius(90)()) ?? "", [path, slon, slat]);
   const center: [number, number] = [-rot[0], -rot[1]];
@@ -74,18 +82,16 @@ export function GlobeScreen() {
     if (!clash) top3.add(v.sp.name);
   }
 
-  // Gentle spin after a flick, and a slow drift when nobody's touching (only while on screen).
+  // A flick keeps it turning for a moment, then it settles (and stops redrawing).
   useEffect(() => {
     if (!live) return;
     let raf = 0, last = Date.now();
     const step = () => {
       const t0 = Date.now(), dt = Math.min(50, t0 - last); last = t0;
-      if (!touching.current) {
-        const idle = t0 - lastTouch.current > 2500;
-        vel.current *= Math.pow(0.94, dt / 16);
-        const drift = idle ? 0.004 : 0; // ° per ms
-        const v = vel.current + drift;
-        if (Math.abs(v) > 0.0005) setRot(([l, p]) => [l + v * dt, p]);
+      if (!touching.current && vel.current !== 0) {
+        vel.current *= Math.pow(0.92, dt / 16);
+        if (Math.abs(vel.current) < 0.003) { vel.current = 0; setMoving(false); }
+        else setRot(([l, p]) => [l + vel.current * dt, p]);
       }
       raf = requestAnimationFrame(step);
     };
@@ -94,17 +100,23 @@ export function GlobeScreen() {
   }, [live]);
 
   const start = useRef<[number, number]>([0, 0]);
+  const want = useRef<[number, number] | null>(null);
+  const frame = useRef(0);
+  const [moving, setMoving] = useState(false);
   const pan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { touching.current = true; vel.current = 0; start.current = rotRef.current; },
+    onPanResponderGrant: () => { touching.current = true; vel.current = 0; start.current = rotRef.current; want.current = null; setMoving(true); },
     onPanResponderMove: (_e, g) => {
       const k = 180 / (Math.PI * r); // drag the surface under the finger
-      setRot([start.current[0] + g.dx * k, Math.max(-60, Math.min(60, start.current[1] - g.dy * k))]);
+      want.current = [start.current[0] + g.dx * k, Math.max(-60, Math.min(60, start.current[1] - g.dy * k))];
+      // At most one redraw per frame, however many touch events arrive.
+      if (!frame.current) frame.current = requestAnimationFrame(() => { frame.current = 0; if (want.current) setRot(want.current); });
     },
     onPanResponderRelease: (e, g) => {
       touching.current = false;
+      if (Math.abs(g.vx) < 0.05) setMoving(false);
       lastTouch.current = Date.now();
       const k = 180 / (Math.PI * r);
       vel.current = Math.max(-0.6, Math.min(0.6, g.vx * k)); // ° per ms
@@ -117,7 +129,7 @@ export function GlobeScreen() {
         if (hit && hit.dist < 30) setPicked(hit.v.sp);
       }
     },
-    onPanResponderTerminate: () => { touching.current = false; lastTouch.current = Date.now(); },
+    onPanResponderTerminate: () => { touching.current = false; lastTouch.current = Date.now(); setMoving(false); },
   }), [r]);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
@@ -125,7 +137,7 @@ export function GlobeScreen() {
   const stars = useMemo(() => {
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    return Array.from({ length: Math.round(size / 4) }, () => ({ x: rnd() * size, y: rnd() * size, r: 0.5 + rnd() * 0.9, o: 0.2 + rnd() * 0.45 }));
+    return Array.from({ length: Math.round(size / 8) }, () => ({ x: rnd() * size, y: rnd() * size, r: 0.5 + rnd() * 0.9, o: 0.2 + rnd() * 0.45 }));
   }, [size]);
 
   return (
@@ -148,10 +160,10 @@ export function GlobeScreen() {
           <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#atm)" />
           <Circle cx={size / 2} cy={size / 2} r={r} fill="url(#sea)" />
           <G clipPath="url(#sph)">
-            <Path d={path(GRAT) ?? ""} fill="none" stroke="#fff" strokeOpacity={0.05} strokeWidth={1} />
+            {!moving && <Path d={path(GRAT) ?? ""} fill="none" stroke="#fff" strokeOpacity={0.05} strokeWidth={1} />}
             <Path d={path(LAND) ?? ""} fill="#7a6cc4" />
             <Path d={nightPath} fill="#0f0b28" opacity={0.6} />
-            <G clipPath="url(#nt)">{stars.map((st, i) => <Circle key={i} cx={st.x} cy={st.y} r={st.r} fill="#fff4d6" opacity={st.o} />)}</G>
+            {!moving && <G clipPath="url(#nt)">{stars.map((st, i) => <Circle key={i} cx={st.x} cy={st.y} r={st.r} fill="#fff4d6" opacity={st.o} />)}</G>}
             <Path d={nightPath} fill="none" stroke={colors.peach} strokeOpacity={0.3} strokeWidth={1.2} />
             <Circle cx={size / 2} cy={size / 2} r={r} fill="url(#shine)" />
           </G>
@@ -173,7 +185,7 @@ export function GlobeScreen() {
                   </>
                 )}
                 {sel && <Circle cx={x} cy={y} r={rr * 2.4} fill="none" stroke={colors.cream} strokeWidth={1.8} />}
-                {top3.has(sp.name) && !sel && (
+                {!moving && top3.has(sp.name) && !sel && (
                   <G>
                     <Rect x={x - 22} y={y - rr - 22} width={44} height={16} rx={8} fill="#140f33" opacity={0.85} />
                     <SvgText x={x} y={y - rr - 10.5} textAnchor="middle" fontFamily={fonts.bodyBold} fontSize={10.5} fill={sp.night ? colors.peach : "#fff"}>{short(sp.n)}</SvgText>
@@ -181,8 +193,8 @@ export function GlobeScreen() {
                 )}
                 {showMe && mine?.name === sp.name && (
                   <G>
-                    <Rect x={x - 20} y={y + rr + 4} width={40} height={16} rx={8} fill={colors.sage} />
-                    <SvgText x={x} y={y + rr + 15.5} textAnchor="middle" fontFamily={fonts.bodyBold} fontSize={9.5} fill="#1e4a39">{t("globe.you")}</SvgText>
+                    <Rect x={x - tagW / 2} y={y + rr + 4} width={tagW} height={16} rx={8} fill={colors.sage} />
+                    <SvgText x={x} y={y + rr + 15.5} textAnchor="middle" fontFamily={fonts.bodyBold} fontSize={9.5} fill="#1e4a39">{tag}</SvgText>
                   </G>
                 )}
               </G>
@@ -202,7 +214,11 @@ export function GlobeScreen() {
           <Text style={styles.cardSub}>{t(mine.night ? "globe.nearNight" : "globe.nearDay", { place: mine.name })}</Text>
         </View>
       )}
-      <Text style={[styles.note, { marginBottom: insets.bottom + 96 }]}>{t("globe.estimate")}</Text>
+      <Text style={styles.note}>{t("globe.estimate")}</Text>
+      <View style={[styles.privacy, { marginBottom: insets.bottom + 96 }]}>
+        <Svg width={14} height={14} viewBox="0 0 24 24"><Path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z" fill="none" stroke="#8f86bf" strokeWidth={2} strokeLinejoin="round" /><Path d="M9 12l2 2 4-4" fill="none" stroke="#8f86bf" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
+        <Text style={styles.privacyText}>{t("globe.privacy")}</Text>
+      </View>
 
       <Modal visible={!!picked} transparent animationType="slide" onRequestClose={() => setPicked(null)}>
         <Pressable style={styles.sheetBack} onPress={() => setPicked(null)} accessibilityLabel={t("common.close")} />
@@ -243,6 +259,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.cream },
   cardSub: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted },
   note: { fontFamily: fonts.body, fontSize: 12, color: "#8f86bf", textAlign: "center", marginTop: 10 },
+  privacy: { flexDirection: "row", gap: 6, justifyContent: "center", alignItems: "center", marginTop: 8 },
+  privacyText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#8f86bf", flexShrink: 1, textAlign: "center" },
   sheetBack: { flex: 1, backgroundColor: "rgba(12,8,32,0.35)" },
   sheet: { backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 22, paddingTop: 12, gap: 16 },
   grab: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.card2, alignSelf: "center", marginBottom: 4 },

@@ -803,6 +803,8 @@ export const de: Record<Key, string> = {
   "globe.asleepThere": "Babys schlafen gerade",
   "globe.nappingThere": "Babys machen gerade Nickerchen",
   "globe.estimate": "Geschätzt aus Geburten und Tageszeit. Ziehen zum Drehen, Mond antippen.",
+  "globe.privacy": "Kein GPS, kein Standort. Nur deine Zeitzone, anonym.",
+  "globe.yourBaby": "Dein Baby",
   "globe.setting": "{name} auf dem Globus zeigen",
   "globe.settingSub": "Anonym: nur deine Zeitzone, nie Ort oder Name",
   "settings.title": "Einstellungen",

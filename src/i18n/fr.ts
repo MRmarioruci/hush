@@ -803,6 +803,8 @@ export const fr: Record<Key, string> = {
   "globe.asleepThere": "bébés dorment en ce moment",
   "globe.nappingThere": "bébés font la sieste",
   "globe.estimate": "Estimation à partir des naissances et de l’heure. Faites tourner, touchez une lune.",
+  "globe.privacy": "Aucun GPS ni position n’est utilisé. Seulement votre fuseau horaire, anonymement.",
+  "globe.yourBaby": "Votre bébé",
   "globe.setting": "Montrer {name} sur le globe",
   "globe.settingSub": "Anonyme : seulement votre fuseau horaire, jamais votre position ni votre nom",
   "settings.title": "Réglages",
