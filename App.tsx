@@ -25,6 +25,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { SleepScreen } from "./src/screens/SleepScreen";
 import { MonitorScreen } from "./src/screens/MonitorScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { GlobeScreen } from "./src/screens/GlobeScreen";
 import { NightsScreen } from "./src/screens/NightsScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -101,6 +102,7 @@ function Shell() {
         {f.sounds && <Tab.Screen name="Sounds" component={SleepScreen} />}
         {f.monitor && <Tab.Screen name="Monitor" component={MonitorScreen} />}
         {(f.naps || f.monitor) && <Tab.Screen name="Nights" component={NightsScreen} />}
+        <Tab.Screen name="Globe" component={GlobeScreen} />
         <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>

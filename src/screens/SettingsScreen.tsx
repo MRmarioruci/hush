@@ -2,7 +2,7 @@ import { Children, useCallback, useState, type ReactNode } from "react";
 import { AppState, Linking, Platform, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { cryDetector, diag } from "../../modules/hush-native/src";
-import { useT } from "../i18n";
+import { babyLabel, useT } from "../i18n";
 import { IS_STORE_BUILD, TRIAL_DAYS, useUnlock } from "../state/unlock";
 import { LanguagePicker, useLangLabel } from "../components/LanguagePicker";
 import Constants from "expo-constants";
@@ -151,6 +151,13 @@ export function SettingsScreen() {
             <Switch value={s.soundStartsSleep} onValueChange={(soundStartsSleep) => set({ soundStartsSleep })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("settings.soundSleep")} />
           </View>
         )}
+        <View style={styles.row}>
+          <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>
+            <Text style={styles.rowLabel}>{t("globe.setting", { name: babyLabel(m.babyName) })}</Text>
+            <Text style={styles.rowSub}>{t("globe.settingSub")}</Text>
+          </View>
+          <Switch value={s.globe !== false} onValueChange={(globe) => set({ globe })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("globe.setting", { name: babyLabel(m.babyName) })} />
+        </View>
         {s.features.naps && (
           <View style={styles.row}>
             <View style={{ flex: 1, gap: 2, paddingVertical: 10 }}>

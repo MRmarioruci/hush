@@ -25,12 +25,14 @@ export type Settings = {
   /** Smart sleep detection: end a sleep when the white noise is turned off, or when the
    *  listening phone hears a waking (a long cry, or crying with grown-ups talking). */
   smartSleep: boolean;
+  /** Count this baby (anonymously, by time zone) on the "Sleeping now" globe. */
+  globe: boolean;
   /** Tell the paired phones when the baby falls asleep, wakes up, or white noise starts. */
   notifyOthers: boolean;
 };
 export type Features = { sounds: boolean; naps: boolean; monitor: boolean };
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true, soundStartsSleep: true, smartSleep: true, notifyOthers: true };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true, soundStartsSleep: true, smartSleep: true, globe: true, notifyOthers: true };
 
 export async function loadSettings(): Promise<Settings> {
   try {
