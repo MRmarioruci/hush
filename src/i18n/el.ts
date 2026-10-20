@@ -763,6 +763,8 @@ export const el: Record<Key, string> = {
   "act.asked": "από {who}",
   "act.smart": "το άκουσε το hush",
   "act.sound": "με τον ήχο",
+  "w.playing": "Παίζει…",
+  "w.stop": "Στοπ",
   "w.onit": "Πηγαίνει",
   "w.play": "Άκου",
   "w.retry": "Ξανά",

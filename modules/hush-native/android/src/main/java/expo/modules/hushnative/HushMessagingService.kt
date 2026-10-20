@@ -30,6 +30,8 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
       if (!quiet && (type in setOf("cry", "stopped", "test") || data["channelId"]?.startsWith("baby-alarm") == true)) alarmBuzz(applicationContext)
       // Requests from a paired parent, answered here so they work with the screen locked.
       if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
+      // A recording from the baby's room: keep it for the widget (and redraw it) right away.
+      if (type == "clip" && body != null) ClipStore.save(applicationContext, body)
     } catch (_: Exception) {}
   }
 }

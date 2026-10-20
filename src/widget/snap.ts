@@ -29,6 +29,11 @@ export type Snap = {
   /** A recording was asked for at this time and hasn't arrived yet: the Listen ring fills. */
   fetching?: { at: number } | null;
   clipReady?: boolean; // a recording arrived recently: Play
+  clipUrl?: string;
+  clipGot?: number; // when it arrived here
+  clipSeconds?: number;
+  /** The widget is playing the recording until about then (Stop instead of Play). */
+  playingUntil?: number;
   noAnswer?: boolean; // asked, nothing came back
   /** Parent's phone: lets the widget talk to the baby's phone without opening hush. */
   myToken?: string;
@@ -46,6 +51,7 @@ export type Snap = {
     listen: string; noiseOn: string; noiseOff: string; asleep: string; woke: string; monitorOn: string; monitorOff: string;
     empty: string; fetching: string; openApp: string; sent: string; working: string; noAnswer: string;
     onit: string; onitDone: string; play: string; retry: string; listening: string; arrives: string;
+    ready: string; readyShort: string; readyLine: string; playing: string; stop: string;
   };
 };
 

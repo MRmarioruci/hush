@@ -21,7 +21,7 @@ import { getMyToken, CLIP_SECONDS } from "./monitor";
 import { fmtClock, fmtDur } from "./nights";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
 
-export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip";
+export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip" | "syncClip";
 
 export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurrent<Record<string, object | undefined>> }) {
   const sleep = useSleep();
@@ -55,7 +55,13 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "sleepToggle": naps.state.asleep ? naps.wokeUp() : naps.fellAsleep(); break;
       case "monitor": go("Monitor"); mon.toggleListening(); break;
       case "onit": mon.ackCry(); break;
-      case "playClip": goMonitor(); if (mon.m.clip?.url) setTimeout(() => playFromOutside(mon.m.clip!.url!), 400); break;
+      case "syncClip": mon.syncClip(); break;
+      case "playClip": {
+        goMonitor();
+        const url = mon.syncClip()?.url ?? mon.m.clip?.url;
+        if (url) setTimeout(() => playFromOutside(url), 400);
+        break;
+      }
     }
   };
   const joinRef = useRef(mon.join);
@@ -164,7 +170,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     const asleep = st.asleep;
     const L = { listen: t("qa.listen"), noiseOn: t("qa.noiseOn"), noiseOff: t("qa.noiseOff"), asleep: t("qa.asleepShort"), woke: t("qa.wokeShort"), monitorOn: t("qa.monitorOnShort"), monitorOff: t("qa.monitorOffShort"),
       empty: t("qa.empty"), fetching: t("listen.sending"), openApp: t("qa.openApp"), sent: t("qa.sent"), working: t("qa.working"), noAnswer: t("remote.noReplyShort"),
-      onit: t("ack.button"), onitDone: t("w.onit"), play: t("w.play"), retry: t("w.retry"), listening: t("w.listening"), arrives: t("w.arrives") };
+      onit: t("ack.button"), onitDone: t("w.onit"), play: t("w.play"), retry: t("w.retry"), listening: t("w.listening"), arrives: t("w.arrives"),
+      ready: t("w.ready", { time: "{time}" }), readyShort: t("w.readyShort"), readyLine: t("w.readyLine", { s: "{s}" }), playing: t("w.playing"), stop: t("w.stop") };
     let title: string, status: string, line: string | null = null, short: string, scene: Snap["scene"], tone: Snap["tone"];
     let crying = false, ackBy: string | null = null, fetching: Snap["fetching"] = null, clipReady = false, noAnswer = false;
     if (role === "parent") {
@@ -190,7 +197,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       else {
         scene = asleep ? "asleep" : "awake";
         tone = !room ? "muted" : !fresh && room.listening ? "peach" : room.listening ? "sage" : "muted";
-        status = asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : !room ? t("remote.noState") : room.listening ? t("remote.listening") : t("remote.notListening");
+        status = asleep ? t("qa.asleepSince", { time: fmtClock(st.since) }) : !room ? t("remote.noState") : room.listening ? t("remote.listening") : t("remote.notListening");
         short = status;
         line = extra;
       }
@@ -199,7 +206,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       scene = mon.listening ? "mic" : asleep ? "asleep" : "awake";
       tone = mon.status.crying ? "rose" : mon.listening ? "sage" : "muted";
       const since = mon.listening ? (mon.room?.listenSince || null) : null;
-      status = mon.status.crying ? t("w.crying") : mon.listening ? (asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : t("remote.listening")) : t("remote.notListening");
+      status = mon.status.crying ? t("w.crying") : mon.listening ? (asleep ? t("qa.asleepSince", { time: fmtClock(st.since) }) : t("remote.listening")) : t("remote.notListening");
       short = status;
       const names = mon.members.map((p) => p.name.trim()).filter(Boolean).join(", ");
       line = mon.listening ? (names ? t("w.alertsTo", { names }) : null) : sleep.playing ? t(`sound.${sleep.soundId}`) : null;
@@ -208,7 +215,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       title = baby;
       scene = asleep ? "asleep" : "moon";
       tone = sleep.playing ? "peach" : asleep ? "sage" : "muted";
-      status = asleep ? t("w.asleepFor", { dur: fmtDur((now - st.since) / 60_000) }) : sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff");
+      status = asleep ? t("qa.asleepSince", { time: fmtClock(st.since) }) : sleep.playing ? t(`sound.${sleep.soundId}`) : t("remote.noiseOff");
       short = status;
       line = !asleep && st.target && f.naps ? t(st.bedtime ? "nap.bedAround" : "nap.around", { time: fmtClock(st.target) }) : null;
     }
@@ -222,6 +229,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       showSleep: f.naps,
       showListen: role === "parent" && !!mon.target,
       crying, ackBy, fetching, clipReady, noAnswer,
+      clipUrl: role === "parent" ? mon.m.clip?.url : undefined, clipGot: mon.m.clip?.got, clipSeconds: mon.m.clip?.seconds,
       myToken, myName: mon.m.myName.trim(), pairedToken: mon.target ?? undefined,
       // So the widget can tell the other phones about sleep on its own.
       peers: !f.monitor ? [] : mon.members.map((p) => { const Lg = p.lang ?? getLang(); const name = babyLabelIn(Lg, mon.m.babyName); return { token: p.token, asleep: tIn(Lg, "push.asleep", { name, time: "{time}" }), awake: tIn(Lg, "push.awake", { name, dur: "{dur}" }) }; }),

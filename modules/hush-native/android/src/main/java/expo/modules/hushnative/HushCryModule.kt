@@ -121,6 +121,13 @@ class HushCryModule : Module() {
 
     Function("takeDeadTokens") { AlertSender.takeDead() }
 
+    // The latest recording that arrived (JSON, "" if none), and playing it without hush's screens.
+    Function("lastClip") { appContext.reactContext?.let { ClipStore.last(it) } ?: "" }
+    Function("playClip") { url: String -> ClipStore.play(url) }
+    Function("stopClip") { ClipStore.stop() }
+    Function("clipPlaying") { ClipStore.isPlaying() }
+    Function("refreshWidgets") { appContext.reactContext?.let { ClipStore.refreshWidgets(it) }; Unit }
+
     Function("battery") {
       val ctx = appContext.reactContext ?: return@Function listOf(-1, false)
       val (pct, plugged) = CryEngine.battery(ctx)

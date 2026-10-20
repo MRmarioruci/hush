@@ -763,6 +763,8 @@ export const fr: Record<Key, string> = {
   "act.asked": "demandé par {who}",
   "act.smart": "entendu par hush",
   "act.sound": "avec le son",
+  "w.playing": "Lecture…",
+  "w.stop": "Arrêter",
   "w.onit": "Y va",
   "w.play": "Écouter",
   "w.retry": "Réessayer",

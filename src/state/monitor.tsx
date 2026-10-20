@@ -67,6 +67,8 @@ type Monitor = {
   ackCry: (room?: string) => Promise<void>;
   /** When this phone last asked for a recording (0 = never, or sending failed). */
   clipAsked: number;
+  /** Pick up a recording the native side got meanwhile; returns the latest. */
+  syncClip: () => { url?: string } | null;
   /** Someone is on the crying (this phone = "me"), until when. */
   ack: { who: string; until: number } | null;
   lastSync: number;
@@ -729,6 +731,18 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [askAllow]);
 
+  /** The latest recording the native side kept (it arrives there even with hush's screens asleep). */
+  const syncClip = useCallback(() => {
+    const c = cryDetector?.lastClip();
+    if (!c || !c.at) return mRef.current.clip ?? null;
+    if ((mRef.current.clip?.at ?? 0) >= c.at && (mRef.current.clip?.got ?? 0) >= c.got) return mRef.current.clip ?? null;
+    const clip = { url: c.url || undefined, at: c.at, error: c.error || undefined, seconds: c.seconds, got: c.got, auto: !!c.auto };
+    update({ clip });
+    return clip;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const syncClipRef = useRef(syncClip);
+  syncClipRef.current = syncClip;
+
   // Parent's phone: keep the latest clip (or the reason there's none).
   useEffect(() => {
     const take = (n: Notifications.Notification) => {
@@ -739,7 +753,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       update({ clip: { url: d.url, at, error: d.error, detail: d.detail, seconds: d.seconds, got: Date.now(), auto: !!d.auto } });
     };
     const sub = addPushListener(take);
-    const catchUp = () => Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {});
+    const catchUp = () => { syncClipRef.current(); Notifications.getPresentedNotificationsAsync().then((l) => l.forEach(take)).catch(() => {}); };
     catchUp();
     const app = AppState.addEventListener("change", (st) => st === "active" && catchUp());
     return () => { sub.remove(); app.remove(); };
@@ -817,7 +831,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [sendOwnDays]);
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip }}>{children}</Ctx.Provider>
   );
 }
 

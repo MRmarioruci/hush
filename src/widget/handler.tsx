@@ -7,6 +7,27 @@ import { HushWidget } from "./HushWidget";
 import { readSnap, writeSnap, type Snap } from "./snap";
 import { widgetAction } from "./bus";
 import { endSleep, openSleep, startSleep } from "../nights";
+import { cryDetector } from "../../modules/hush-native/src";
+
+const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+/**
+ * A recording that reached this phone (kept natively, so it's known even with hush's screens
+ * asleep): show Ready / Play, or what went wrong, instead of "Recording…" forever.
+ */
+function withClip(s: Snap): { snap: Snap; changed: boolean } {
+  const c = cryDetector?.lastClip();
+  if (!c || !c.got || c.got <= (s.clipGot ?? 0)) return { snap: s, changed: false };
+  const base = { ...s, clipGot: c.got, fetching: null, busy: s.busy?.action === "listen" ? undefined : s.busy };
+  if (!c.url) return { snap: { ...base, noAnswer: true, clipReady: false, note: { text: s.labels.noAnswer, at: Date.now() } }, changed: true };
+  return {
+    snap: {
+      ...base, clipReady: true, noAnswer: false, clipUrl: c.url, clipSeconds: c.seconds ?? 10, tone: s.crying ? s.tone : "sage",
+      status: s.crying ? s.status : s.labels.ready.replace("{time}", fmtClock(c.got)), short: s.crying ? s.short : s.labels.readyShort,
+      line: s.crying ? s.line : s.labels.readyLine.replace("{s}", String(c.seconds ?? 10)),
+    },
+    changed: true,
+  };
+}
 
 const PUSH = "https://exp.host/--/api/v2/push/send";
 const post = (messages: object[]) => fetch(PUSH, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) }).catch(() => null);
@@ -64,6 +85,30 @@ export async function widgetTaskHandler({ widgetAction: event, clickAction, rend
   let snap = await readSnap();
   const small = widgetInfo?.widgetName === "HushSmall" || (widgetInfo?.width ?? 999) < 220;
   const draw = (s: Snap | null) => renderWidget(<HushWidget snap={s} small={small} />);
+  // Anything new from the baby's room? (Also tells the running app, so both agree.)
+  if (snap) {
+    const r = withClip(snap);
+    if (r.changed) { snap = r.snap; await writeSnap(snap); widgetAction("syncClip"); }
+  }
+  // Play / Stop the recording right here, without opening hush.
+  if (event === "WIDGET_CLICK" && snap && (clickAction === "playClip" || clickAction === "stopClip")) {
+    if (clickAction === "stopClip" || !snap.clipUrl) {
+      cryDetector?.stopClip();
+      snap = { ...snap, playingUntil: undefined, note: undefined };
+      await writeSnap(snap); draw(snap); return;
+    }
+    const ok = cryDetector?.playClip(snap.clipUrl) ?? false;
+    const until = Date.now() + ((snap.clipSeconds ?? 10) + 4) * 1000;
+    snap = ok ? { ...snap, playingUntil: until, note: { text: snap.labels.playing, at: Date.now() } } : { ...snap, note: { text: snap.labels.openApp, at: Date.now() } };
+    await writeSnap(snap); draw(snap);
+    if (!ok) return;
+    // Back to Play once it's done (or after its length, whatever comes first).
+    await sleep(2500);
+    while (Date.now() < until && cryDetector?.clipPlaying()) await sleep(1000);
+    const cur = (await readSnap()) ?? snap;
+    snap = { ...cur, playingUntil: undefined, note: undefined };
+    await writeSnap(snap); draw(snap); return;
+  }
   if (event === "WIDGET_CLICK" && clickAction && snap && clickAction !== "OPEN_APP" && clickAction !== "NOOP" && clickAction !== "OPEN_URI") {
     // 1. Show the loader on that button right away.
     const at = Date.now();
@@ -78,7 +123,8 @@ export async function widgetTaskHandler({ widgetAction: event, clickAction, rend
       const until = at + (remote ? 34_000 : 6_000);
       while (Date.now() < until) {
         await sleep(1200);
-        const cur = await readSnap();
+        let cur = await readSnap();
+        if (cur) { const r = withClip(cur); if (r.changed) { cur = r.snap; await writeSnap(cur); widgetAction("syncClip"); } }
         if (cur && !working(cur)) { draw(cur); return; }
         if (cur) draw(cur);
       }
@@ -90,9 +136,14 @@ export async function widgetTaskHandler({ widgetAction: event, clickAction, rend
       await writeSnap(snap);
       if (snap.fetching) {
         // The recording comes as a notification; fill the ring for a while, then say so.
-        const until = Date.now() + 18_000;
-        while (Date.now() < until) { await sleep(1200); draw(snap); }
-        snap = { ...snap, fetching: null, note: { text: snap.labels.arrives, at: Date.now() } };
+        const until = Date.now() + 30_000;
+        while (Date.now() < until) {
+          await sleep(1200);
+          const r = withClip(snap);
+          if (r.changed) { snap = r.snap; break; }
+          draw(snap);
+        }
+        if (snap.fetching) snap = { ...snap, fetching: null, note: { text: snap.labels.arrives, at: Date.now() } };
       }
     }
     await writeSnap(snap);

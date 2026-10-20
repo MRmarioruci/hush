@@ -27,6 +27,11 @@ type CryNative = {
   reportRoom?(): boolean;
   deviceName?(): string;
   artworkFile?(resource: string): string;
+  lastClip?(): string;
+  playClip?(url: string): boolean;
+  stopClip?(): void;
+  clipPlaying?(): boolean;
+  refreshWidgets?(): void;
   takeDeadTokens?(): string[];
   sendAlert(tokens: string[], body: string, kind: string): Promise<{ ok: boolean; detail: string }>;
   recordClip(seconds: number, uploadUrl: string): Promise<{ ok: boolean; detail: string }>;
@@ -75,6 +80,15 @@ export const cryDetector = cry
       /** The phone's own name as people know it ("Redmi Note 14", "Pixel 8"), or "" if unknown. */
       /** Push addresses the native side found dead (DeviceNotRegistered) since last asked. */
       takeDeadTokens: (): string[] => { try { return cry.takeDeadTokens?.() ?? []; } catch { return []; } },
+      /** The latest recording that reached this phone (kept natively, also with hush's screens asleep). */
+      lastClip: (): { url?: string; at: number; seconds?: number; error?: string; auto?: boolean; got: number } | null => {
+        try { const r = cry.lastClip?.() ?? ""; return r ? JSON.parse(r) : null; } catch { return null; }
+      },
+      /** Play a recording natively (the widget's Play), and stop it. */
+      playClip: (url: string): boolean => { try { return cry.playClip?.(url) ?? false; } catch { return false; } },
+      stopClip: () => { try { cry.stopClip?.(); } catch {} },
+      clipPlaying: (): boolean => { try { return cry.clipPlaying?.() ?? false; } catch { return false; } },
+      refreshWidgets: () => { try { cry.refreshWidgets?.(); } catch {} },
       /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */
       artworkFile: (resource: string): string => { try { return cry.artworkFile?.(resource) ?? ""; } catch { return ""; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },

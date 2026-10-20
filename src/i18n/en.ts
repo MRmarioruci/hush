@@ -763,6 +763,8 @@ export const en = {
   "act.asked": "asked by {who}",
   "act.smart": "heard by hush",
   "act.sound": "when the sound changed",
+  "w.playing": "Playing…",
+  "w.stop": "Stop",
   "w.onit": "On it",
   "w.play": "Play",
   "w.retry": "Try again",

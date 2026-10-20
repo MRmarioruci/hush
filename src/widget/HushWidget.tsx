@@ -88,7 +88,8 @@ function buttonsOf(s: Snap): Btn[] {
     if (s.crying && s.ackBy == null) list = [{ action: "onit", label: L.onit, icon: "walk", kind: "rose" }, listen, noise];
     else if (s.crying) list = [{ action: "NOOP", label: L.onitDone, icon: "check", kind: "done" }, listen, noise];
     else if (fetching == null && s.noAnswer) list = [{ action: "listen", label: L.retry, icon: "retry", kind: "peach" }, noise, sleep];
-    else if (fetching == null && s.clipReady) list = [{ action: "OPEN_URI", uri: "hush://do/playClip", label: L.play, icon: "play", kind: "sage" }, noise, sleep];
+    else if (fetching == null && s.playingUntil && Date.now() < s.playingUntil) list = [{ action: "stopClip", label: L.stop ?? L.play, icon: "stop", kind: "sage" }, noise, sleep];
+    else if (fetching == null && s.clipReady && s.clipUrl) list = [{ action: "playClip", label: L.play, icon: "play", kind: "sage" }, noise, sleep];
     else list = [listen, noise, sleep];
     if (fetching != null) list = list.map((b) => (b.icon === "ear" ? b : { ...b, dim: true }));
   } else if (s.role === "nursery") {

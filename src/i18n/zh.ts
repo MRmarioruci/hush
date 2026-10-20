@@ -763,6 +763,8 @@ export const zh: Record<Key, string> = {
   "act.asked": "由{who}操作",
   "act.smart": "hush 听到的",
   "act.sound": "随声音变化",
+  "w.playing": "正在播放…",
+  "w.stop": "停止",
   "w.onit": "已去看",
   "w.play": "播放",
   "w.retry": "重试",
