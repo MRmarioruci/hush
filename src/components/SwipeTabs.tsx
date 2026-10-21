@@ -10,12 +10,12 @@ const HIDDEN = new Set(["Settings"]); // opens from the gear on Home, not part o
 export function SwipeArea({ children, routeName, navigation }: { children: ReactNode; routeName: string; navigation: Nav }) {
   const pan = useMemo(() => PanResponder.create({
     // Only a clearly sideways move, and only if nothing inside wanted the touch.
-    onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 28 && Math.abs(g.dx) > Math.abs(g.dy) * 2.2,
+    onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 18 && Math.abs(g.dx) > Math.abs(g.dy) * 1.8,
     onPanResponderTerminationRequest: () => true,
     onShouldBlockNativeResponder: () => false,
     onPanResponderRelease: (_e, g) => {
-      const far = Math.abs(g.dx) > 70 || Math.abs(g.vx) > 0.45;
-      if (!far || Math.abs(g.dx) < Math.abs(g.dy) * 1.5) return;
+      const far = Math.abs(g.dx) > 45 || Math.abs(g.vx) > 0.3;
+      if (!far || Math.abs(g.dx) < Math.abs(g.dy) * 1.3) return;
       const order = navigation.getState().routes.map((r) => r.name).filter((n) => !HIDDEN.has(n));
       const i = order.indexOf(routeName);
       if (i < 0) return;
