@@ -2,7 +2,7 @@
 // and each place glows with how many babies are asleep there right now (an estimate from births
 // and the local hour, until hush has real anonymous counts). Tap a moon for that place.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
@@ -36,7 +36,7 @@ function useNow(ms: number, on: boolean) {
 export function GlobeScreen() {
   useT();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const focused = useIsFocused();
   const active = useAppActive();
   const live = focused && active;
@@ -63,7 +63,9 @@ export function GlobeScreen() {
   const lastTouch = useRef(0);
   const [picked, setPicked] = useState<Spot | null>(null);
 
-  const size = Math.min(width - 24, 380);
+  // As big as fits between the header and the cards below it (they need about 470 pt).
+  const size = Math.max(230, Math.min(width - 24, 380, height - insets.top - insets.bottom - 470));
+  const [scroll, setScroll] = useState(true);
   const r = size / 2 - 6;
   const proj = useMemo(() => geoOrthographic().scale(r).translate([size / 2, size / 2]).rotate([rot[0], rot[1], TILT]).clipAngle(90), [r, size, rot]);
   const path = useMemo(() => geoPath(proj).digits(1), [proj]);
@@ -119,7 +121,7 @@ export function GlobeScreen() {
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { stopSpin(); touching.current = true; vel.current = 0; start.current = rotRef.current; want.current = null; setMoving(true); },
+    onPanResponderGrant: () => { setScroll(false); stopSpin(); touching.current = true; vel.current = 0; start.current = rotRef.current; want.current = null; setMoving(true); },
     onPanResponderMove: (_e, g) => {
       const k = 180 / (Math.PI * r); // drag the surface under the finger
       want.current = [start.current[0] + g.dx * k, Math.max(-60, Math.min(60, start.current[1] - g.dy * k))];
@@ -127,6 +129,7 @@ export function GlobeScreen() {
       if (!frame.current) frame.current = requestAnimationFrame(() => { frame.current = 0; if (want.current) setRot(want.current); });
     },
     onPanResponderRelease: (e, g) => {
+      setScroll(true);
       touching.current = false;
       lastTouch.current = Date.now();
       const k = 180 / (Math.PI * r);
@@ -141,7 +144,7 @@ export function GlobeScreen() {
         if (hit && hit.dist < 30) setPicked(hit.v.sp);
       }
     },
-    onPanResponderTerminate: () => { touching.current = false; lastTouch.current = Date.now(); setMoving(false); },
+    onPanResponderTerminate: () => { setScroll(true); touching.current = false; lastTouch.current = Date.now(); setMoving(false); },
   }), [r]);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
@@ -153,7 +156,7 @@ export function GlobeScreen() {
   }, [size]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
+    <ScrollView style={styles.root} scrollEnabled={scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 20 }}>
       <Text style={styles.title}>{t("globe.title")}</Text>
       <View style={{ alignItems: "center", marginTop: 6 }}>
         <Text style={styles.big}>{t("globe.about", { n: short(total) })}</Text>
@@ -255,12 +258,12 @@ export function GlobeScreen() {
           </View>
         )}
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 20 },
+  root: { flex: 1, backgroundColor: colors.bg },
   title: { fontFamily: fonts.display, fontSize: 30, color: colors.cream },
   big: { fontFamily: fonts.display, fontSize: 36, color: colors.peach },
   sub: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted, marginTop: 2 },

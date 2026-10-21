@@ -26,6 +26,7 @@ import { SleepScreen } from "./src/screens/SleepScreen";
 import { MonitorScreen } from "./src/screens/MonitorScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { GlobeScreen } from "./src/screens/GlobeScreen";
+import { SwipeArea } from "./src/components/SwipeTabs";
 import { NightsScreen } from "./src/screens/NightsScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -96,7 +97,9 @@ function Shell() {
       <QuickActionsHub nav={navRef} />
       <Tab.Navigator
         tabBar={(props) => <TabBar {...props} />}
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" }, animation: "fade" }}
+        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" }, animation: "shift" }}
+        // Swipe left / right to move between tabs.
+        screenLayout={({ children, route, navigation }) => <SwipeArea routeName={route.name} navigation={navigation as never}>{children}</SwipeArea>}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
         {f.sounds && <Tab.Screen name="Sounds" component={SleepScreen} />}
