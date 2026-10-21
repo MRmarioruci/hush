@@ -1,7 +1,7 @@
 // Nap timing UI: the next-nap card, the add/edit sleep sheet, the age guide and the
 // "typical for this age" card on the Sleep tab.
 import { useEffect, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, AppState } from "react-native";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
@@ -62,7 +62,7 @@ export function NapCard({ big }: { big?: boolean }) {
   const [guide, setGuide] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [, setTick] = useState(0);
-  useEffect(() => { const id = setInterval(() => setTick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => { if (AppState.currentState === "active") setTick((x) => x + 1); }, 30_000); return () => clearInterval(id); }, []);
   const now = Date.now(); // read on every render, so a sleep that just ended never shows as in the future
   const name = babyLabel(mon.m.babyName);
   const months = ageMonths(s.birthday, now);

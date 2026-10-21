@@ -243,7 +243,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     // Rise quickly when crying starts, settle slowly.
     const cur = smartDb.current;
     smartDb.current = target.db > cur ? Math.min(target.db, cur + 2) : Math.max(target.db, cur - 0.2);
-    setSmartView({ phase: target.phase, db: smartDb.current, nextChange: target.nextChange, hearing: mon.micOn });
+    // (Only redrawn on screen; see the timer tick below for why.)
+    if (AppState.currentState === "active") setSmartView({ phase: target.phase, db: smartDb.current, nextChange: target.nextChange, hearing: mon.micOn });
     return Math.pow(10, (smartDb.current - LIMIT_DB) / 20);
   }, [isSmart, mon.micOn]);
 
@@ -283,7 +284,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   useEffect(checkTimer, [appGain, status.currentTime, checkTimer]); // status updates keep arriving while locked
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => { checkTimer(); force((n) => n + 1); }, 1000);
+    // The countdown on screen ticks every second, but only while it's on screen: Android keeps
+    // every redraw made with the screen off and applies them all on unlock (an hour of white
+    // noise was enough to get hush killed). The timer itself keeps working either way.
+    const id = setInterval(() => { checkTimer(); if (AppState.currentState === "active") force((n) => n + 1); }, 1000);
     return () => clearInterval(id);
   }, [playing, checkTimer]);
 
@@ -291,6 +295,16 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     set({ timer: m });
     stopAt.current = m && player.playing ? Date.now() + m * 60000 : 0;
   }, [set, player]);
+
+  // For the diagnostics report: how long hush was in the background, and whether sound played.
+  useEffect(() => {
+    let since = 0;
+    const sub = AppState.addEventListener("change", (st) => {
+      if (st === "background") { since = Date.now(); diag.mark(`background (sound ${player.playing ? "on" : "off"})`); }
+      else if (st === "active" && since) { diag.mark(`back after ${Math.round((Date.now() - since) / 60000)} min (sound ${player.playing ? "on" : "off"})`); since = 0; }
+    });
+    return () => sub.remove();
+  }, [player]);
 
   /* ---------- ripples in time with the sound ---------- */
   const [beat, setBeat] = useState(-1);
@@ -363,13 +377,14 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
 
   const timerLeft = playing && stopAt.current ? Math.max(0, stopAt.current - Date.now()) : null;
 
-  return (
-    <Ctx.Provider
-      value={{ s, set, soundId, sound, playing, toggle, stop, lastStop, starts, timerLeft, setTimer, dev, setStep, safeDist, level, beat, still, smart: isSmart && playing ? smartView : null }}
-    >
-      {children}
-    </Ctx.Provider>
+  // The player reports its position about twice a second (also with the screen off). Only hand
+  // the screens a new value when something they show changed, so those reports don't redraw them.
+  const smart = isSmart && playing ? smartView : null;
+  const value = useMemo(
+    () => ({ s, set, soundId, sound, playing, toggle, stop, lastStop, starts, timerLeft, setTimer, dev, setStep, safeDist, level, beat, still, smart }),
+    [s, set, soundId, sound, playing, toggle, stop, lastStop, starts, timerLeft == null ? null : Math.round(timerLeft / 1000), setTimer, dev, setStep, safeDist, level, beat, still, smart], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const fmtLeft = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, AppState } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Svg, { Circle } from "react-native-svg";
 import { SvgXml } from "react-native-svg";
@@ -35,7 +35,7 @@ export function HomeScreen() {
   const [sheet, setSheet] = useState<ManualSleep | "new" | null>(null);
   const [guide, setGuide] = useState(false);
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => { if (AppState.currentState === "active") tick((x) => x + 1); }, 30_000); return () => clearInterval(id); }, []);
   // Watching another room: ask how it is when Home opens.
   useEffect(() => { if (mon.role === "parent" && mon.target) roomCmd(mon.target, "status"); }, [mon.role, mon.target]); // eslint-disable-line react-hooks/exhaustive-deps
   const soundScroll = useRef<ScrollView>(null);

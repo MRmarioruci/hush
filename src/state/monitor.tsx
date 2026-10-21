@@ -219,13 +219,21 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!cryDetector) return;
+    // The mic reports twice a second. With the screen off, keep the latest without redrawing:
+    // Android saves every redraw made in the background and applies them all at once on unlock,
+    // which after an hour or so is enough to get hush killed (and the white noise with it).
+    let shown: CryStatus = {};
+    const apply = (st: CryStatus) => { shown = st; setStatus(st); };
+    const appSub = AppState.addEventListener("change", (s) => { if (s === "active" && latest) apply(latest); });
+    let latest: CryStatus | null = null;
     const a = cryDetector.onStatus((st) => {
-      setStatus(st);
+      latest = st;
+      if (AppState.currentState === "active" || !!st.crying !== !!shown.crying || st.error) apply(st);
       if (st.crying) setCryHeardAt(Date.now());
       if (st.error) { setListening(false, "error", st.error); setMicOn(false); }
     });
     const b = cryDetector.onCry((e) => setLastCry(e.at));
-    return () => { a.remove(); b.remove(); };
+    return () => { a.remove(); b.remove(); appSub.remove(); };
   }, []);
 
   /* ---------- night stats ---------- */

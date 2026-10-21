@@ -147,7 +147,7 @@ function Avatars({ onPress, onAdd }: { onPress: () => void; onAdd: () => void })
 function Receiving({ alerts }: { alerts: AlertRecord[] }) {
   const { rooms, ack, ackCry } = useMonitor();
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => { if (AppState.currentState === "active") tick((x) => x + 1); }, 30_000); return () => clearInterval(id); }, []);
   const last = alerts[0];
   const crying = !!last && Date.now() - last.at < 15 * 60_000;
   const tone = crying ? colors.rose : "#c9bfff";
@@ -741,7 +741,7 @@ function RoomCircle({ r, lastAlert, onSound }: { r: Remote; lastAlert: AlertReco
   const idx = members.findIndex((p) => p.token === target);
   const phone = targetName.trim() || t("fam.unnamed", { n: idx + 2 });
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(id); }, []);
+  useEffect(() => { const id = setInterval(() => { if (AppState.currentState === "active") tick((x) => x + 1); }, 30_000); return () => clearInterval(id); }, []);
   const checking = r.waiting && !r.cmdOpen;
   // It reports every 10 minutes while listening; much longer than that means something's wrong.
   const heard = room?.got ?? room?.at ?? 0;
