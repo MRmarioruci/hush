@@ -73,6 +73,9 @@ class HushCryModule : Module() {
       CryEngine.targets = list
     }
 
+    // Baby monitor, or only smart volume's ears (then nothing is sent to the other phones).
+    Function("setMonitor") { on: Boolean -> CryEngine.setMonitor(on) }
+
     Function("setTexts") { texts: Map<String, String> ->
       texts["crying"]?.let { CryEngine.txtCrying = it }
       texts["still"]?.let { CryEngine.txtStill = it }

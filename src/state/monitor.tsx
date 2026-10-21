@@ -574,6 +574,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   // Start or stop the mic when either the monitor or smart white noise needs it.
   const wantMic = listening || soundWantsMic;
+  // Only the baby monitor alerts the other phones; smart volume just listens for itself.
+  useEffect(() => { cryDetector?.setMonitor(listening); }, [listening]);
   useEffect(() => {
     if (!cryDetector) return;
     let cancelled = false;
@@ -584,6 +586,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           const ok = await hasMic();
           if (!ok || cancelled) return;
         }
+        cryDetector.setMonitor(listening);
         cryDetector.configure(THRESHOLDS[mRef.current.sensitivity], mRef.current.babyName.trim(), membersOf(mRef.current.family, mRef.current.me ?? "").map((p) => p.token), mRef.current.alertAfter);
         if (cryDetector.start()) setMicOn(true);
         else {

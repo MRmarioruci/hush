@@ -310,6 +310,31 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     reload();
   }, [soundSleep, reload]);
 
+  // A daytime sleep still going after 4 hours: probably someone forgot to tap Woke up. One gentle
+  // notification, on the phone that's tracking it, with "Woke up" and "Fix the time". A night
+  // (started 6 pm–6 am) is left alone: long is normal then.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const ID = "still-asleep";
+    Notifications.cancelScheduledNotificationAsync(ID).catch(() => {});
+    if (!state.asleep) { Notifications.dismissNotificationAsync(ID).catch(() => {}); return; }
+    if (!s.features.naps || !(openFrom != null || monitorAsleep)) return;
+    const h = new Date(state.since).getHours();
+    if (h < 6 || h >= 18) return;
+    const at = state.since + 4 * 3600_000;
+    if (at <= Date.now() + 30_000) return; // already past: the card on Home asks instead
+    Notifications.scheduleNotificationAsync({
+      identifier: ID,
+      content: {
+        title: "hush",
+        body: t("still.notif", { name: babyLabel(mon.m.babyName), time: clockIn(getLang(), state.since) }),
+        categoryIdentifier: "hush-still",
+        data: { type: "still", since: state.since },
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(at), channelId: INFO_CHANNEL },
+    }).catch(() => {});
+  }, [state.asleep, state.asleep ? state.since : 0, openFrom, monitorAsleep, s.features.naps, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // "Nap due soon": 10 minutes before the sweet spot opens.
   useEffect(() => {
     if (Platform.OS === "web") return;
