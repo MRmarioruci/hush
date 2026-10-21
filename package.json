@@ -8,7 +8,6 @@
     "android": "expo run:android",
     "sounds": "node scripts/generate-sounds.js",
     "icons": "node scripts/generate-icons.js",
-    "store-art": "node scripts/generate-store-art.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
