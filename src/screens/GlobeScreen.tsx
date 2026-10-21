@@ -99,6 +99,16 @@ export function GlobeScreen() {
     spin.current = requestAnimationFrame(step);
   };
   useEffect(() => { if (!live) { stopSpin(); vel.current = 0; setMoving(false); } }, [live]);
+  // A slow drift when nobody's touching it (a full turn in about 90 s): only while the World tab
+  // is on screen, 20 steps a second, paused while a finger or a flick is moving it.
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(() => {
+      if (touching.current || spin.current || Date.now() - lastTouch.current < 2500) return;
+      setRot(([l, p]) => [l + 0.2, p]);
+    }, 50);
+    return () => clearInterval(id);
+  }, [live]);
   useEffect(() => () => { stopSpin(); if (frame.current) cancelAnimationFrame(frame.current); }, []);
 
   const start = useRef<[number, number]>([0, 0]);
