@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useAppActive } from "./ui";
 
 type Star = { x: number; y: number; r: number; delay: number; dur: number; anim: Animated.Value };
 
@@ -19,26 +20,27 @@ export function Sky({ still }: { still: boolean }) {
     [width, height]
   );
 
+  const active = useAppActive();
   useEffect(() => {
-    if (still) return;
+    if (still || !active) return;
+    // Each star's loop runs entirely on the native side (no delay inside it), started after its own offset.
     const loops = stars.map((s) =>
       Animated.loop(
         Animated.sequence([
-          Animated.delay(s.delay),
           Animated.timing(s.anim, { toValue: 1, duration: s.dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
           Animated.timing(s.anim, { toValue: 0.2, duration: s.dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         ])
       )
     );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [stars, still]);
+    const timers = loops.map((l, i) => setTimeout(() => l.start(), stars[i].delay));
+    return () => { timers.forEach(clearTimeout); loops.forEach((l) => l.stop()); };
+  }, [stars, still, active]);
 
   // Shooting star every 20–40 s.
   const shoot = useRef(new Animated.Value(0)).current;
   const shootPos = useRef({ x: 0, y: 0 });
   useEffect(() => {
-    if (still) return;
+    if (still || !active) return;
     let timer: ReturnType<typeof setTimeout>;
     const run = () => {
       timer = setTimeout(() => {
@@ -49,7 +51,7 @@ export function Sky({ still }: { still: boolean }) {
     };
     run();
     return () => clearTimeout(timer);
-  }, [still, width, height, shoot]);
+  }, [still, active, width, height, shoot]);
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

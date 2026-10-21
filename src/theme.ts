@@ -1,19 +1,19 @@
 export const colors = {
-  bg: "#1b1727",
-  card: "#241f33",
-  card2: "#2f2943",
-  cream: "#f5eee3",
-  muted: "#a49bb6",
-  peach: "#f6c7b0",
-  moon: "#f6e2b0",
-  moonDeep: "#e4c483",
-  sage: "#a9d6bd",
-  rose: "#f2a597",
+  bg: "#221b45",
+  card: "#2e2558",
+  card2: "#3a3070",
+  cream: "#f7f1ff",
+  muted: "#b7aee0",
+  peach: "#ffd68c",
+  moon: "#ffe3a3",
+  moonDeep: "#f2be5c",
+  sage: "#9ee6c4",
+  rose: "#ff9db0",
 };
 
 export const fonts = {
   display: "Fredoka_500Medium",
   displayBold: "Fredoka_600SemiBold",
-  body: "Nunito_600SemiBold",
-  bodyBold: "Nunito_700Bold",
+  body: "Quicksand_600SemiBold",
+  bodyBold: "Quicksand_700Bold",
 };

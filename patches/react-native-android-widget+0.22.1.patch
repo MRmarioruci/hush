@@ -1,0 +1,24 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+index 5650d1e..2f05466 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+@@ -34,6 +34,8 @@ import java.util.ArrayList;
+ import java.util.List;
+ 
+ public class RNWidget {
++    private static final java.util.concurrent.atomic.AtomicInteger NEXT_REQUEST_CODE = new java.util.concurrent.atomic.AtomicInteger((int) (System.currentTimeMillis() & 0xFFFFFF));
++
+     private final ReactApplicationContext appContext;
+     private final ReadableMap config;
+     private final String widgetName;
+@@ -207,7 +209,9 @@ public class RNWidget {
+         intent.putExtra("clickActionData", Arguments.toBundle(clickableView.getClickActionData()));
+         PendingIntent pendingIntent = PendingIntent.getBroadcast(
+             appContext,
+-            (int) System.currentTimeMillis(),
++            // hush: a distinct request code per button. With the time in ms, buttons built in the
++            // same millisecond shared a code and FLAG_CANCEL_CURRENT cancelled all but the last.
++            NEXT_REQUEST_CODE.incrementAndGet(),
+             intent,
+             PendingIntent.FLAG_CANCEL_CURRENT
+                 | PendingIntent.FLAG_MUTABLE

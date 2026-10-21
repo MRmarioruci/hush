@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "410528778789",
+    "project_id": "hush-20c75",
+    "storage_bucket": "hush-20c75.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410528778789:android:290c0fbddfe6e1e4f28dcc",
+        "android_client_info": {
+          "package_name": "com.mrmarioruci.hush"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJ7opjlKCtoXK88YADQHPsnSWPn5pYNy4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

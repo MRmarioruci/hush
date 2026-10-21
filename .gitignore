@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# downloaded at build time (see .github/workflows/android-apk.yml)
+modules/hush-native/android/src/main/assets/yamnet.tflite
+modules/hush-native/ios/assets/yamnet.tflite

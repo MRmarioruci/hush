@@ -1,0 +1,86 @@
+name: iOS
+
+# Builds the iPhone app on a Mac runner.
+# - Always: a simulator build, which proves the app (and the Swift cry detector) compiles.
+# - When the App Store Connect secrets exist: a signed build uploaded to TestFlight.
+#   Secrets (see store/APP_STORE.md): APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64.
+on:
+  push:
+    branches: [main, monitor]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download cry-detection model (YAMNet, Apache 2.0)
+        run: scripts/get-model.sh modules/hush-native/ios/assets/yamnet.tflite
+
+      - name: Pick the newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - name: Generate iOS project
+        run: |
+          npx expo prebuild --platform ios --no-install
+          cd ios && pod install
+
+      - name: Simulator build (compile check)
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/hush.xcworkspace -scheme hush -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning: .*hush-native|BUILD (SUCCEEDED|FAILED)" || true
+          if ! grep -q "BUILD SUCCEEDED" build.log; then
+            grep -E "error:" build.log | sort -u | head -12 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          fi
+
+      - name: Signed build to TestFlight
+        if: env.ASC_KEY_ID != '' && env.APPLE_TEAM_ID != ''
+        run: |
+          set -o pipefail
+          KEY="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -workspace ios/hush.xcworkspace -scheme hush -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/hush.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic "${AUTH[@]}" archive 2>&1 | tee archive.log | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+          grep -q "ARCHIVE SUCCEEDED" archive.log || { grep -E "error:" archive.log | sort -u | head -12 | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/hush.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}" 2>&1 | tee export.log | tail -5
+          grep -qE "EXPORT SUCCEEDED|Upload succeeded|Uploaded" export.log || { grep -E "error" export.log | head -8 | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+          echo "::notice::Uploaded to App Store Connect. It shows up in TestFlight after Apple processes it (10–30 min)."
