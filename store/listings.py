@@ -3,7 +3,7 @@
 import os
 L = {}
 
-L["en-US"] = ("hush: white noise & monitor",
+L["en-US"] = ("hush: Baby Monitor & Sleep",
 "White noise, nap times by age and a two-phone baby monitor. No subscription.",
 """No white noise machine or baby monitor? You don't need one. hush turns the phones you already have into all your baby-sleep helpers: calm white noise kept gentle at the crib, nap times suggested for your baby's age, and a baby monitor that alerts your phone when your baby cries. Use one, or all three. Pick what you need on each phone.
 

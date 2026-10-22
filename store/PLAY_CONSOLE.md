@@ -16,7 +16,7 @@ Copy these into Play Console. Section names follow the console menu
 
 ## Create app
 
-- App name: **hush: white noise & monitor**
+- App name: **hush: Baby Monitor & Sleep**
 - Default language: **English (United States) – en-US**
 - App or game: **App**
 - Free or paid: **Free**. Once an app is free it can't become paid.
