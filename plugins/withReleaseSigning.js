@@ -29,10 +29,15 @@ module.exports = function withReleaseSigning(config) {
         }`
     );
 
-    // Point the release build type at the upload key when it exists.
+    // Point the release build type at the upload key when it exists. Templates write
+    // either `signingConfig signingConfigs.debug` or `signingConfig = signingConfigs.debug`.
+    const release = /(release\s*\{[^}]*?)signingConfig\s*=?\s*signingConfigs\.debug/;
+    if (!release.test(g)) {
+      throw new Error("withReleaseSigning: couldn't find the release signingConfig in app/build.gradle");
+    }
     g = g.replace(
-      /(release\s*\{[^}]*?)signingConfig\s+signingConfigs\.debug/,
-      `$1signingConfig System.getenv("HUSH_UPLOAD_STORE_FILE") ? signingConfigs.upload : signingConfigs.debug`
+      release,
+      `$1signingConfig = System.getenv("HUSH_UPLOAD_STORE_FILE") ? signingConfigs.upload : signingConfigs.debug`
     );
 
     cfg.modResults.contents = g;

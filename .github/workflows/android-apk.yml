@@ -75,6 +75,17 @@ jobs:
         working-directory: android
         run: ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64
 
+      # Play rejects debug-signed bundles; fail here instead of at upload.
+      - name: Check the bundle is signed with the upload key
+        if: env.HUSH_UPLOAD_STORE_FILE != ''
+        run: |
+          SIGNER=$(keytool -printcert -jarfile android/app/build/outputs/bundle/release/app-release.aab | grep -m1 "Owner:")
+          echo "$SIGNER"
+          if echo "$SIGNER" | grep -q "CN=Android Debug"; then
+            echo "::error::The Play bundle is signed with the debug key, not the upload key."
+            exit 1
+          fi
+
       - name: Name the APK
         run: |
           VERSION=$(node -p "require('./package.json').version")
