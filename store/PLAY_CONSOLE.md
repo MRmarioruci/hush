@@ -9,7 +9,7 @@ Copy these into Play Console. Section names follow the console menu
 | Phone screenshots (8 per language, 1080×1920) | `store/graphics/<locale>/phone-*.png` |
 | App icon 512×512 | `store/graphics/icon-512.png` |
 | Feature graphic 1024×500 | `store/graphics/feature-graphic.png` (English default), `store/graphics/<locale>/feature-graphic.png` per language |
-| Privacy policy URL | https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md (works once `PRIVACY.md` is on `main`) |
+| Privacy policy URL | https://hush.marioruci.com/privacy (the website, from the `hush-landing` repo) |
 | App bundle | `hush-<version>-play.aab` on the GitHub release (built when the upload-key secrets are set) |
 
 ---
@@ -25,8 +25,8 @@ Copy these into Play Console. Section names follow the console menu
 
 - App category: **Parenting**
 - Tags (pick up to 5): Baby, Sleep, White noise, Baby monitor, Parenting
-- Contact email: an address you're happy to show publicly (Play requires one)
-- Website (optional): https://github.com/MRmarioruci/hush
+- Contact email: contact@marioruci.com (shown publicly; Play requires one)
+- Website: https://hush.marioruci.com
 
 ## Main store listing
 
@@ -42,7 +42,7 @@ fr-FR French (France), es-ES Spanish (Spain), pt-BR Portuguese (Brazil), zh-CN C
 ## App content
 
 ### Privacy policy
-https://github.com/MRmarioruci/hush/blob/main/PRIVACY.md
+https://hush.marioruci.com/privacy
 
 ### App access
 **All functionality is available without any access restrictions.** Add this note:
