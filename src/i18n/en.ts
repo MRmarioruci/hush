@@ -807,6 +807,8 @@ export const en = {
   "globe.yourBaby": "Your baby",
   "globe.setting": "Show {name} on the globe",
   "globe.settingSub": "Anonymous: only your time zone, never your location or name",
+  "still.notif": "Is {name} still asleep? Asleep since {time}, over 4 hours ago. Tap if they woke up.",
+  "still.fix": "Fix the time",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

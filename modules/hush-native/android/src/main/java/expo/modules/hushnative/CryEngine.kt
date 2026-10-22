@@ -99,7 +99,24 @@ object CryEngine {
   @Volatile var ackBy = ""
   @Volatile var txtAcked = "{name} is still crying · {who} is on it"
 
+  /**
+   * True when this phone is the baby monitor. False when the mic only serves smart volume on a
+   * phone that plays white noise: then nothing goes to the other phones (no crying, low battery
+   * or "stopped" alerts, no room reports as a listening phone) and nothing counts as monitoring.
+   */
+  @Volatile var monitorMode = true
+    private set
+  fun setMonitor(on: Boolean) {
+    if (on == monitorMode) return
+    monitorMode = on
+    if (running) {
+      EventLog.add(if (on) "listen_start" else "listen_stop")
+      listenSince = if (on) System.currentTimeMillis() else 0L
+    }
+  }
+
   private fun alert(kind0: String, fallback0: String, data1: Map<String, Any>, pct: Int = 0) {
+    if (!monitorMode) return
     val acked = (kind0 == "crying" || kind0 == "still") && System.currentTimeMillis() < ackUntil
     val kind = if (acked) "acked" else kind0
     val fallback = if (acked) txtAcked else fallback0
@@ -130,7 +147,7 @@ object CryEngine {
   fun reportRoom(context: Context, to: List<String> = targets.mapNotNull { it["token"] }.ifEmpty { tokens }) {
     val (pct, plugged) = battery(context)
     AlertSender.sendData(to, mapOf(
-      "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to running, "playing" to roomPlaying, "sound" to roomSound,
+      "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to (running && monitorMode), "playing" to roomPlaying, "sound" to roomSound,
       "listenSince" to listenSince, "battery" to pct, "charging" to plugged, "at" to System.currentTimeMillis(),
     ))
   }
@@ -337,21 +354,21 @@ object CryEngine {
       val talkHistory = ArrayDeque<Boolean>()
       var talkStart = 0L
       var lastTalk = 0L
-      EventLog.add("listen_start")
-      listenSince = System.currentTimeMillis()
+      if (monitorMode) EventLog.add("listen_start")
+      listenSince = if (monitorMode) System.currentTimeMillis() else 0L
       var lastReport = 0L
 
       // A spell is recorded once it's over (or when listening stops).
       fun endSpell() {
         if (spellStart == 0L) return
-        EventLog.add("cry", mapOf("start" to spellStart, "end" to lastHeard, "peak" to peak.toDouble(), "alerted" to alerted))
+        if (monitorMode) EventLog.add("cry", mapOf("start" to spellStart, "end" to lastHeard, "peak" to peak.toDouble(), "alerted" to alerted))
         spellStart = 0L
         alerted = false
         peak = 0f
       }
       fun endTalk() {
         if (talkStart == 0L) return
-        if (lastTalk - talkStart >= TALK_MIN_MS) EventLog.add("talk", mapOf("start" to talkStart, "end" to lastTalk))
+        if (monitorMode && lastTalk - talkStart >= TALK_MIN_MS) EventLog.add("talk", mapOf("start" to talkStart, "end" to lastTalk))
         talkStart = 0L
       }
 
@@ -449,10 +466,10 @@ object CryEngine {
             alerted = true
             lastAlert = t
             listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
-            EventLog.add("alert", mapOf("first" to first))
+            if (monitorMode) EventLog.add("alert", mapOf("first" to first))
             if (first) alert("crying", txtCrying, mapOf("type" to "cry", "baby" to babyName, "at" to t))
             else alert("still", txtStill, mapOf("type" to "cry", "baby" to babyName, "at" to t))
-            sendCryClip(t)
+            if (monitorMode) sendCryClip(t)
           }
         }
       }
@@ -465,7 +482,7 @@ object CryEngine {
       listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
       reportUnexpectedStop()
     } finally {
-      EventLog.add("listen_stop")
+      if (monitorMode) EventLog.add("listen_stop")
       try { rec?.stop() } catch (_: Exception) {}
       rec?.release()
       model?.close()

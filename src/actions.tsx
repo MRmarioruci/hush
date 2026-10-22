@@ -21,7 +21,7 @@ import { getMyToken, CLIP_SECONDS } from "./monitor";
 import { fmtClock, fmtDur } from "./nights";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
 
-export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip" | "syncClip";
+export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip" | "syncClip" | "fixEnd";
 
 export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurrent<Record<string, object | undefined>> }) {
   const sleep = useSleep();
@@ -55,6 +55,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "sleepToggle": naps.state.asleep ? naps.wokeUp() : naps.fellAsleep(); break;
       case "monitor": go("Monitor"); mon.toggleListening(); break;
       case "onit": mon.ackCry(); break;
+      case "fixEnd": go("Home"); break; // Home asks when they woke (the "still asleep?" card)
       case "syncClip": mon.syncClip(); break;
       case "playClip": {
         goMonitor();
@@ -110,6 +111,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
         setTimeout(() => { goMonitor(); playFromOutside(d.url!); }, 400);
         return;
       }
+      // "Still asleep?": Home, where it asks when they woke.
+      if (d?.type === "still") { setTimeout(() => go("Home"), 400); return; }
       // Crying (and anything else about the baby's room): straight to where the cry and its recording are.
       if (d?.type && ["cry", "clip", "ack", "stopped", "battery"].includes(d.type)) setTimeout(goMonitor, 400);
     };
@@ -129,6 +132,11 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     Notifications.setNotificationCategoryAsync("hush-sleep", [
       { identifier: "listen", buttonTitle: t("qa.listen"), options: { opensAppToForeground: true } },
       { identifier: "noise", buttonTitle: t("qa.noiseToggle"), options: { opensAppToForeground: true } },
+    ]).catch(() => {});
+    // "Is Sebastian still asleep?" after a long daytime sleep.
+    Notifications.setNotificationCategoryAsync("hush-still", [
+      { identifier: "woke", buttonTitle: t("qa.wokeShort"), options: { opensAppToForeground: true } },
+      { identifier: "fixEnd", buttonTitle: t("still.fix"), options: { opensAppToForeground: true } },
     ]).catch(() => {});
     Notifications.setNotificationCategoryAsync("hush-cry", [
       { identifier: "onit", buttonTitle: t("ack.button"), options: { opensAppToForeground: true } },

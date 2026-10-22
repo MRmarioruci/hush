@@ -193,7 +193,7 @@ final class CryEngine {
     }
     running = true
     queue.async { self.resetState() }
-    EventLog.add("listen_start")
+    if monitorMode { EventLog.add("listen_start") }
     UIDevice.current.isBatteryMonitoringEnabled = true
     observe()
     return true
@@ -211,7 +211,7 @@ final class CryEngine {
       self.endSpell()
       self.endTalk()
       self.cancelClip()
-      EventLog.add("listen_stop")
+      if self.monitorMode { EventLog.add("listen_stop") }
     }
   }
 
@@ -270,7 +270,7 @@ final class CryEngine {
     })
     observers.append(nc.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
       guard let self, self.running else { return }
-      EventLog.add("listen_stop")
+      if self.monitorMode { EventLog.add("listen_stop") }
       self.reportUnexpectedStop(wait: true)
     })
   }
@@ -285,7 +285,7 @@ final class CryEngine {
       running = false
       listener?("status", ["error": error.localizedDescription])
       reportUnexpectedStop()
-      queue.async { self.endSpell(); self.endTalk(); EventLog.add("listen_stop") }
+      queue.async { self.endSpell(); self.endTalk(); if self.monitorMode { EventLog.add("listen_stop") } }
     }
   }
 
@@ -451,7 +451,16 @@ final class CryEngine {
 
   /* ---------- alerts ---------- */
 
+  /** True when this phone is the baby monitor (false: the mic only serves smart volume; nothing is sent). */
+  var monitorMode = true
+  func setMonitor(_ on: Bool) {
+    if on == monitorMode { return }
+    monitorMode = on
+    if running { EventLog.add(on ? "listen_start" : "listen_stop") }
+  }
+
   private func alert(_ kind: String, _ fallback: String, _ data: [String: Any], pct: Int = 0, wait: Bool = false) {
+    if !monitorMode { return }
     let list = targets.compactMap { t -> (String, String)? in
       guard let token = t["token"], !token.isEmpty else { return nil }
       return (token, fill(t[kind] ?? fallback, pct))

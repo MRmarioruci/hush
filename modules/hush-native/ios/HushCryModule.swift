@@ -49,6 +49,8 @@ public class HushCryModule: Module, NotificationDelegate {
       CryEngine.shared.targets = list
     }
 
+    Function("setMonitor") { (on: Bool) in CryEngine.shared.setMonitor(on) }
+
     Function("setTexts") { (texts: [String: String]) in
       let e = CryEngine.shared
       if let v = texts["crying"] { e.txtCrying = v }

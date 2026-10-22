@@ -807,6 +807,8 @@ export const el: Record<Key, string> = {
   "globe.yourBaby": "Το μωρό σου",
   "globe.setting": "{name} στην υδρόγειο",
   "globe.settingSub": "Ανώνυμα: μόνο η ζώνη ώρας, ποτέ τοποθεσία ή όνομα",
+  "still.notif": "{name} κοιμάται ακόμα; Κοιμάται από τις {time}, πάνω από 4 ώρες. Πάτα αν ξύπνησε.",
+  "still.fix": "Διόρθωση ώρας",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

@@ -807,6 +807,8 @@ export const de: Record<Key, string> = {
   "globe.yourBaby": "Dein Baby",
   "globe.setting": "{name} auf dem Globus zeigen",
   "globe.settingSub": "Anonym: nur deine Zeitzone, nie Ort oder Name",
+  "still.notif": "Schläft {name} noch? Schläft seit {time}, über 4 Stunden. Tippe, falls wach.",
+  "still.fix": "Zeit korrigieren",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

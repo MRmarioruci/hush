@@ -807,6 +807,8 @@ export const zh: Record<Key, string> = {
   "globe.yourBaby": "你的宝宝",
   "globe.setting": "在地球上显示{name}",
   "globe.settingSub": "匿名：只用时区，从不使用位置或名字",
+  "still.notif": "{name}还在睡吗？从 {time} 睡到现在，已超过 4 小时。醒了就点一下。",
+  "still.fix": "修改时间",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",
