@@ -28,6 +28,7 @@ type CryNative = {
   deviceName?(): string;
   artworkFile?(resource: string): string;
   setMonitor?(on: boolean): void;
+  setVisible?(on: boolean): void;
   lastClip?(): string;
   playClip?(url: string): boolean;
   stopClip?(): void;
@@ -92,6 +93,8 @@ export const cryDetector = cry
       refreshWidgets: () => { try { cry.refreshWidgets?.(); } catch {} },
       /** This phone is the baby monitor (true), or the mic only serves smart volume (false: nothing is sent). */
       setMonitor: (on: boolean) => { try { cry.setMonitor?.(on); } catch {} },
+      /** Whether hush is on screen: the mic's frequent level updates are only sent then. */
+      setVisible: (on: boolean) => { try { cry.setVisible?.(on); } catch {} },
       /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */
       artworkFile: (resource: string): string => { try { return cry.artworkFile?.(resource) ?? ""; } catch { return ""; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },

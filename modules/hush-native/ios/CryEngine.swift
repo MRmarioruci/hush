@@ -364,7 +364,13 @@ final class CryEngine {
     if talkHistory.count > 8 { talkHistory.removeFirst() }
     let talking = talkHistory.filter { $0 }.count >= 3
 
-    listener?("status", ["score": Double(score), "level": levelDb, "crying": crying, "top": top, "topScore": Double(scores[top]), "noiseDb": Double(denoiser.noiseDb)])
+    // Only on screen, or when crying starts/stops (every 5 s while it goes on): see Android.
+    let tNow = now()
+    if uiVisible || crying != lastSentCrying || (crying && tNow - lastSentAt > 5000) {
+      lastSentCrying = crying
+      lastSentAt = tNow
+      listener?("status", ["score": Double(score), "level": levelDb, "crying": crying, "top": top, "topScore": Double(scores[top]), "noiseDb": Double(denoiser.noiseDb)])
+    }
 
     // Once a minute: warn the parents if this phone is about to run out of battery.
     let t = now()
@@ -453,6 +459,10 @@ final class CryEngine {
 
   /** True when this phone is the baby monitor (false: the mic only serves smart volume; nothing is sent). */
   var monitorMode = true
+  /** hush is on screen (set by the app). */
+  var uiVisible = true
+  private var lastSentCrying = false
+  private var lastSentAt: Int64 = 0
   func setMonitor(_ on: Bool) {
     if on == monitorMode { return }
     monitorMode = on

@@ -106,6 +106,11 @@ object CryEngine {
    */
   @Volatile var monitorMode = true
     private set
+
+  /** hush is on screen (set by the app): the mic's level updates are only sent then. */
+  @Volatile var uiVisible = true
+  private var lastSentCrying = false
+  private var lastSentAt = 0L
   fun setMonitor(on: Boolean) {
     if (on == monitorMode) return
     monitorMode = on
@@ -420,10 +425,18 @@ object CryEngine {
         if (talkHistory.size > 8) talkHistory.removeFirst()
         val talking = talkHistory.count { it } >= 3
 
-        listener?.invoke(
-          "status",
-          mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
-        )
+        // Twice a second for the screen; with hush off screen only when crying starts or stops
+        // (and every 5 s while it goes on, for smart volume). Every event is work queued for the
+        // app; on some phones a backlog of them ran it out of memory over a night.
+        val tNow = System.currentTimeMillis()
+        if (uiVisible || now != lastSentCrying || (now && tNow - lastSentAt > 5000)) {
+          lastSentCrying = now
+          lastSentAt = tNow
+          listener?.invoke(
+            "status",
+            mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
+          )
+        }
 
         // Every 10 minutes (and right after starting): tell the parents all is well.
         if (System.currentTimeMillis() - lastReport > HEARTBEAT_MS) {

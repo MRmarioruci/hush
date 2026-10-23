@@ -50,6 +50,7 @@ public class HushCryModule: Module, NotificationDelegate {
     }
 
     Function("setMonitor") { (on: Bool) in CryEngine.shared.setMonitor(on) }
+    Function("setVisible") { (on: Bool) in CryEngine.shared.uiVisible = on }
 
     Function("setTexts") { (texts: [String: String]) in
       let e = CryEngine.shared

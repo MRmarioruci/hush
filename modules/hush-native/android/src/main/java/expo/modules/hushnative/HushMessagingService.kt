@@ -16,12 +16,17 @@ import org.json.JSONObject
  * vibrates the phone itself, as an alarm, so the parent feels it even with the phone on silent
  * (many phones mute notification vibration in silent mode).
  */
+@Volatile private var pushErrorNoted = false
+
 class HushMessagingService : ExpoFirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     // expo's background-task runner can throw when a message wakes the app before it's ready
     // (NullPointerException in TaskService.executeTask). That must never crash hush: our own
     // handling below still runs, and the app catches up on the message when it opens.
-    try { super.onMessageReceived(withTopic(remoteMessage)) } catch (e: Throwable) { Diag.add("push handler error: ${e.javaClass.simpleName}: ${e.message}") }
+    try { super.onMessageReceived(withTopic(remoteMessage)) } catch (e: Throwable) {
+      // Noted once per run (it repeats with every push and would flood the report).
+      if (!pushErrorNoted) { pushErrorNoted = true; Diag.add("push handler error: ${e.javaClass.simpleName}: ${e.message} (further ones not logged)") }
+    }
     try {
       val data = remoteMessage.data
       val body = data["body"]?.let { runCatching { JSONObject(it) }.getOrNull() }

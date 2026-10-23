@@ -574,6 +574,12 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   // Start or stop the mic when either the monitor or smart white noise needs it.
   const wantMic = listening || soundWantsMic;
+  // The mic only sends its twice-a-second level updates while hush is on screen.
+  useEffect(() => {
+    cryDetector?.setVisible(AppState.currentState === "active");
+    const sub = AppState.addEventListener("change", (st) => cryDetector?.setVisible(st === "active"));
+    return () => sub.remove();
+  }, []);
   // Only the baby monitor alerts the other phones; smart volume just listens for itself.
   useEffect(() => { cryDetector?.setMonitor(listening); }, [listening]);
   useEffect(() => {
