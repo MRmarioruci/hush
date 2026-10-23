@@ -289,13 +289,28 @@ object CryEngine {
     wakeLock = (app.getSystemService(Context.POWER_SERVICE) as PowerManager)
       .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hush:listening")
       .apply { setReferenceCounted(false); acquire(12 * 60 * 60 * 1000L) }
-    thread = Thread({ loop(app) }, "hush-cry").apply { start() }
+    // Each start is its own session: a session that's still winding down (stop, then start
+    // again quickly, as smart volume does with the white noise) can't switch the new one off.
+    val my = ++session
+    val previous = thread
+    thread = Thread({
+      try { previous?.join(3000) } catch (_: InterruptedException) { return@Thread }
+      if (session == my && running) loop(app, my)
+    }, "hush-cry").apply { start() }
   }
+  @Volatile private var session = 0
+
+  /**
+   * The sound model, loaded once and kept: loading it means ~4 MB plus the model's working
+   * memory, and smart volume starts and stops the mic with every play/pause. Only one session
+   * runs at a time (a new one waits for the previous to finish), so sharing it is safe.
+   */
+  private var sharedModel: Interpreter? = null
+  @Synchronized private fun sharedInterpreter(context: Context): Interpreter = sharedModel ?: loadModel(context).also { sharedModel = it }
 
   fun stop() {
     running = false
-    thread?.interrupt()
-    thread = null
+    thread?.interrupt() // kept (not cleared) so the next start waits for it to finish
     try { wakeLock?.release() } catch (_: Exception) {}
     wakeLock = null
   }
@@ -328,11 +343,11 @@ object CryEngine {
     throw IllegalStateException("Microphone unavailable")
   }
 
-  private fun loop(context: Context) {
+  private fun loop(context: Context, my: Int) {
     var rec: AudioRecord? = null
-    var model: Interpreter? = null
+    val mine = { session == my && running }
     try {
-      model = loadModel(context)
+      val model = sharedInterpreter(context)
       val inShape = model.getInputTensor(0).shape()
       val outShape = model.getOutputTensor(0).shape()
       val classes = outShape.last()
@@ -377,9 +392,9 @@ object CryEngine {
         talkStart = 0L
       }
 
-      while (running && !Thread.currentThread().isInterrupted) {
+      while (mine() && !Thread.currentThread().isInterrupted) {
         var read = 0
-        while (read < HOP && running) {
+        while (read < HOP && mine()) {
           val n = rec.read(pcm, read, HOP - read)
           if (n <= 0) break
           read += n
@@ -493,14 +508,18 @@ object CryEngine {
     } catch (e: Exception) {
       cancelClip()
       Log.w(TAG, "Listening stopped", e)
-      listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
-      reportUnexpectedStop()
+      if (session == my) {
+        listener?.invoke("status", mapOf("error" to (e.message ?: "Listening stopped")))
+        reportUnexpectedStop()
+      }
     } finally {
-      if (monitorMode) EventLog.add("listen_stop")
       try { rec?.stop() } catch (_: Exception) {}
       rec?.release()
-      model?.close()
-      running = false
+      // Only the current session ends listening (a newer one may already be running).
+      if (session == my) {
+        if (monitorMode) EventLog.add("listen_stop")
+        running = false
+      }
     }
   }
 
