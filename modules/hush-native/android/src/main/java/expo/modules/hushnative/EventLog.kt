@@ -22,7 +22,11 @@ object EventLog {
     val f = file ?: return
     val o = JSONObject().put("type", type).put("t", System.currentTimeMillis())
     for ((k, v) in fields) o.put(k, v)
-    try { f.appendText(o.toString() + "\n") } catch (_: Exception) {}
+    try {
+      f.appendText(o.toString() + "\n")
+      // The app empties this every minute; if it ever can't, keep only the newest part.
+      if (f.length() > 1_000_000) f.writeText(f.readLines().takeLast(3000).joinToString("\n", postfix = "\n"))
+    } catch (_: Exception) {}
   }
 
   /** Returns everything logged so far and empties the log. */
