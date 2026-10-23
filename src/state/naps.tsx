@@ -79,7 +79,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     if (firstSmart.current) firstSmart.current = false; else reload();
   }, [s.smartSleep, reload]);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
+    const id = setInterval(() => { if (AppState.currentState === "active") setNow(Date.now()); }, 60_000);
     // Coming back to hush: pick up "asleep / awake" notifications that arrived meanwhile.
     const catchUp = () => Notifications.getPresentedNotificationsAsync().then((list) => {
       const last = list

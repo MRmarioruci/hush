@@ -442,6 +442,7 @@ object CryEngine {
         if (System.currentTimeMillis() - lastReport > HEARTBEAT_MS) {
           lastReport = System.currentTimeMillis()
           reportRoom(context)
+          Diag.memory("listening")
         }
 
         // Once a minute: warn the parents if this phone is about to run out of battery.

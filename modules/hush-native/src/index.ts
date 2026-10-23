@@ -41,6 +41,7 @@ type CryNative = {
   setMe?(token: string, name: string): void;
   setListen?(allow: boolean, bucket: string, notice: string, cryClip: number): void;
   diagMark?(what: string): void;
+  diagMemory?(what: string): void;
   diagReport?(): string;
   addListener(event: "onStatus", cb: (s: CryStatus) => void): Subscription;
   addListener(event: "onCry", cb: (e: { at: number; first: boolean }) => void): Subscription;
@@ -120,5 +121,7 @@ export const cryDetector = cry
 /** Android diagnostics (no personal data): marks from JS and a report to share. */
 export const diag = {
   mark: (what: string) => { try { cry?.diagMark?.(what); } catch {} },
+  /** Note memory use now (Java and native heaps, plus the JS heap given). */
+  memory: (what: string) => { try { cry?.diagMemory?.(what); } catch {} },
   report: (): string => { try { return cry?.diagReport?.() ?? ""; } catch { return ""; } },
 };

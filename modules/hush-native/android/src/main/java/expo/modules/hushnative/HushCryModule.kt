@@ -182,6 +182,7 @@ class HushCryModule : Module() {
     // Hands the app everything logged since last time, one JSON object per line.
     // Diagnostics (no personal data): a mark from JS, and the full report to share.
     Function("diagMark") { what: String -> appContext.reactContext?.let { Diag.init(it) }; Diag.add("js $what") }
+    Function("diagMemory") { what: String -> appContext.reactContext?.let { Diag.init(it) }; Diag.memory(what) }
     Function("diagReport") { appContext.reactContext?.let { Diag.init(it); Diag.report(it) } ?: "" }
 
     Function("takeEvents") {

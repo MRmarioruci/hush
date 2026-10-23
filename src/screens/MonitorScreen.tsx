@@ -695,7 +695,7 @@ function useRemote() {
   // While this page is open, keep in step with the room shown: ask every 10 seconds.
   useFocusEffect(useCallback(() => {
     if (!target) return;
-    const id = setInterval(() => send("status"), 10_000);
+    const id = setInterval(() => { if (AppState.currentState === "active") send("status"); }, 10_000);
     return () => clearInterval(id);
   }, [target, send]));
   // A play/stop/sound request that got no report back within 15 s.
@@ -712,7 +712,7 @@ function useAskFamily() {
     if (!tokens) return;
     const ask = () => myToken().then((me) => sendData(tokens.split(","), { type: "cmd", cmd: "status", from: me })).catch(() => {});
     ask();
-    const id = setInterval(ask, 30_000);
+    const id = setInterval(() => { if (AppState.currentState === "active") ask(); }, 30_000);
     return () => clearInterval(id);
   }, [tokens]));
 }

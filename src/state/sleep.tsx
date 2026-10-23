@@ -299,11 +299,29 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   // For the diagnostics report: how long hush was in the background, and whether sound played.
   useEffect(() => {
     let since = 0;
+    let memo: ReturnType<typeof setInterval> | undefined;
+    // Memory every 10 minutes while in the background: a report then shows what grew before a crash.
+    const jsHeap = () => {
+      try {
+        const st = (globalThis as { HermesInternal?: { getInstrumentedStats?: () => { js_heapSize?: number } } }).HermesInternal?.getInstrumentedStats?.();
+        return st?.js_heapSize ? `${Math.round(st.js_heapSize / 1_048_576)} MB` : "?";
+      } catch { return "?"; }
+    };
     const sub = AppState.addEventListener("change", (st) => {
-      if (st === "background") { since = Date.now(); diag.mark(`background (sound ${player.playing ? "on" : "off"})`); }
-      else if (st === "active" && since) { diag.mark(`back after ${Math.round((Date.now() - since) / 60000)} min (sound ${player.playing ? "on" : "off"})`); since = 0; }
+      if (st === "background") {
+        since = Date.now();
+        diag.mark(`background (sound ${player.playing ? "on" : "off"})`);
+        diag.memory(`bg 0m js ${jsHeap()}`);
+        if (memo) clearInterval(memo);
+        memo = setInterval(() => diag.memory(`bg ${Math.round((Date.now() - since) / 60000)}m js ${jsHeap()} sound ${player.playing ? "on" : "off"}`), 10 * 60_000);
+      } else if (st === "active" && since) {
+        if (memo) { clearInterval(memo); memo = undefined; }
+        diag.mark(`back after ${Math.round((Date.now() - since) / 60000)} min (sound ${player.playing ? "on" : "off"})`);
+        diag.memory(`back js ${jsHeap()}`);
+        since = 0;
+      }
     });
-    return () => sub.remove();
+    return () => { sub.remove(); if (memo) clearInterval(memo); };
   }, [player]);
 
   /* ---------- ripples in time with the sound ---------- */

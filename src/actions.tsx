@@ -161,6 +161,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
   const room = mon.room;
   // Crying in the baby's room (parent's phone): the last crying alert that arrived.
   const [cryAt, setCryAt] = useState(0);
+  const lastSnap = useRef("");
   useEffect(() => {
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; at?: number } | undefined;
@@ -245,6 +246,11 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       labels: L,
     };
     const id = setTimeout(() => {
+      // Only redraw the widgets when something on them changed (each redraw makes new images).
+      // While a recording is on its way the ring has to move, so those always go through.
+      const key = JSON.stringify(snap);
+      if (key === lastSnap.current && !fetching) return;
+      lastSnap.current = key;
       writeSnap(snap).then(() => {
         requestWidgetUpdate({ widgetName: "Hush", renderWidget: (w) => <HushWidget snap={snap} small={w.width < 220} /> }).catch(() => {});
         requestWidgetUpdate({ widgetName: "HushSmall", renderWidget: () => <HushWidget snap={snap} small /> }).catch(() => {});

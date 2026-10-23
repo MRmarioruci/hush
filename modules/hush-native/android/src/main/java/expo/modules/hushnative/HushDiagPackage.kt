@@ -42,6 +42,13 @@ object Diag {
     } catch (_: Exception) {}
   }
 
+  /** How much memory hush is using right now (so a report shows what grows before a crash). */
+  fun memory(what: String) {
+    val rt = Runtime.getRuntime()
+    val mb = { b: Long -> b / 1_048_576 }
+    add("mem $what: java ${mb(rt.totalMemory() - rt.freeMemory())}/${mb(rt.maxMemory())} MB, native ${mb(android.os.Debug.getNativeHeapAllocatedSize())} MB")
+  }
+
   /** Everything worth knowing, as text to share. */
   fun report(context: Context): String {
     val sb = StringBuilder()
