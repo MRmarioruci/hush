@@ -158,8 +158,10 @@ function RoomOrb({ onPress }: { onPress: () => void }) {
   } else if (mon.room) {
     const fresh = Date.now() - (mon.room.got ?? mon.room.at) < 30 * MIN;
     on = mon.room.listening && fresh;
-    big = on ? t("orb.quiet") : t("orb.off");
-    color = on ? colors.sage : colors.muted;
+    // Crying: the baby monitor says so in the family's room (it clears once the baby settles).
+    const crying = on && !!mon.room.crying && Date.now() - (mon.room.cryAt ?? 0) < 30 * MIN;
+    big = crying ? t("orb.cryingShort") : on ? t("orb.quiet") : t("orb.off");
+    color = crying ? colors.rose : on ? colors.sage : colors.muted;
   } else {
     big = mon.members.length ? t("orb.off") : t("orb.setUp");
     color = colors.muted;

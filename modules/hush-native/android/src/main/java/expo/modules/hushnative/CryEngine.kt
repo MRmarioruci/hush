@@ -121,16 +121,19 @@ object CryEngine {
   }
 
   private fun alert(kind0: String, fallback0: String, data1: Map<String, Any>, pct: Int = 0) {
-    if (!monitorMode) return
+    if (!monitorMode) { Diag.add("no alert ($kind0): this phone is only listening for smart volume, not the baby monitor"); return }
     val acked = (kind0 == "crying" || kind0 == "still") && System.currentTimeMillis() < ackUntil
     val kind = if (acked) "acked" else kind0
     val fallback = if (acked) txtAcked else fallback0
     val data0 = if (acked) data1 + mapOf("quiet" to true, "by" to ackBy) else data1
     val data = data0 + ("from" to myToken)
-    Diag.add("alert sent: $kind")
     val list = targets.filter { !it["token"].isNullOrEmpty() && it["token"] != myToken }
-    if (list.isEmpty()) { AlertSender.send(tokens.filter { it != myToken }, fill(fallback, pct).replace("{who}", ackBy), data); return }
-    AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct).replace("{who}", ackBy) }, data)
+    val to = if (list.isEmpty()) tokens.filter { it != myToken } else list.mapNotNull { it["token"] }
+    Diag.add("alert $kind to ${to.size} phone(s)" + (if (to.isEmpty()) " (none paired: nothing sent)" else ""))
+    // What Expo's push service answered, so a failed alert shows up in the diagnostics.
+    val done: (Boolean, String) -> Unit = { ok, text -> if (!ok || text.contains("\"error\"")) Diag.add("alert $kind push failed: ${text.take(240)}") }
+    if (list.isEmpty()) { AlertSender.send(to, fill(fallback, pct).replace("{who}", ackBy), data, done); return }
+    AlertSender.sendEach(list.map { it["token"]!! to fill(it[kind] ?: fallback, pct).replace("{who}", ackBy) }, data, done)
   }
 
   /** Receives "status" and "cry" events; set by the JS-facing module. */
@@ -389,6 +392,8 @@ object CryEngine {
       fun endSpell() {
         if (spellStart == 0L) return
         if (monitorMode) EventLog.add("cry", mapOf("start" to spellStart, "end" to lastHeard, "peak" to peak.toDouble(), "alerted" to alerted))
+        // The family's room shows the baby settled again (only once there were alerts about it).
+        if (monitorMode && alerted) CloudSync.writePhone(context, mapOf("crying" to false, "seen" to System.currentTimeMillis()))
         spellStart = 0L
         alerted = false
         peak = 0f
@@ -503,6 +508,8 @@ object CryEngine {
             lastAlert = t
             listener?.invoke("cry", mapOf("at" to t.toDouble(), "first" to first))
             if (monitorMode) EventLog.add("alert", mapOf("first" to first))
+            // The family's room shows it too (every phone's Home and Monitor, not only the notification).
+            if (first && monitorMode) CloudSync.writePhone(context, mapOf("crying" to true, "cryAt" to t, "seen" to t))
             if (first) alert("crying", txtCrying, mapOf("type" to "cry", "baby" to babyName, "at" to t))
             else alert("still", txtStill, mapOf("type" to "cry", "baby" to babyName, "at" to t))
             if (monitorMode) sendCryClip(t)

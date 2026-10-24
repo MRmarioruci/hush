@@ -463,7 +463,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // What another phone reports about its room (shown on Home and Monitor). Reports come in through
   // the push listener while hush runs, and are also kept natively as they arrive, so the ones that
   // came while hush was closed or asleep are picked up when it opens.
-  type RoomMsg = { type?: string; from?: string; name?: string; baby?: string; playing?: boolean; sound?: string; listening?: boolean; canMonitor?: boolean; at?: number; got?: number; listenSince?: number; battery?: number; charging?: boolean };
+  type RoomMsg = { type?: string; from?: string; name?: string; baby?: string; crying?: boolean; cryAt?: number; playing?: boolean; sound?: string; listening?: boolean; canMonitor?: boolean; at?: number; got?: number; listenSince?: number; battery?: number; charging?: boolean };
   const applyRooms = useCallback((list: RoomMsg[]) => {
     const cur = mRef.current;
     const mems = membersOf(cur.family, cur.me ?? "");
@@ -482,6 +482,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging, got,
         name: d.name ?? prev?.name, baby: d.baby ?? prev?.baby, lastListen: d.listening ? got : prev?.lastListen,
         canMonitor: !!d.canMonitor && !d.listening,
+        // Only the cloud room carries crying; a push report without it keeps what was known.
+        crying: d.crying ?? prev?.crying, cryAt: d.cryAt ?? prev?.cryAt,
       };
       changed = true;
     }
@@ -977,7 +979,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           if (!live()) return;
           const meTok = mRef.current.me ?? "";
           applyRooms(list.filter((p) => p.token && p.token !== meTok && typeof p.seen === "number").map((p) => ({
-            from: p.token, name: p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
+            from: p.token, name: p.name, baby: p.baby, crying: !!p.crying, cryAt: p.cryAt, playing: p.playing, sound: p.sound, listening: p.listening,
             canMonitor: p.canMonitor, listenSince: p.listenSince, battery: p.battery, charging: p.charging, at: p.seen, got: p.seen,
           })));
         },

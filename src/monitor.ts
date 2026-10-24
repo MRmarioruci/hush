@@ -12,6 +12,8 @@ export type { Member } from "./family";
 /** What the other phones see about a phone that's listening (a baby's room), as it reports it. */
 export type Room = {
   playing: boolean; sound: string; listening: boolean; at: number; listenSince?: number; battery?: number; charging?: boolean;
+  /** The baby monitor heard crying (it sent alerts), since when; false once the baby settled. */
+  crying?: boolean; cryAt?: number;
   /** When this phone received it (this phone's clock; the other phone's clock can differ). */
   got?: number;
   /** That phone's name and its baby's name. */

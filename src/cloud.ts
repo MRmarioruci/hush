@@ -230,7 +230,7 @@ export async function isMember(f: string): Promise<boolean | null> {
 /* ---------- shared state ---------- */
 
 /** The live state of this phone. Merged into what's there. */
-export type PhoneLive = { listening?: boolean; canMonitor?: boolean; playing?: boolean; sound?: string; listenSince?: number; battery?: number; charging?: boolean; baby?: string; name?: string; seen: number };
+export type PhoneLive = { crying?: boolean; cryAt?: number; listening?: boolean; canMonitor?: boolean; playing?: boolean; sound?: string; listenSince?: number; battery?: number; charging?: boolean; baby?: string; name?: string; seen: number };
 export function writePhone(f: string, token: string, live: PhoneLive) {
   if (!f || !token) return;
   safe(() => setDoc(sub(f, "phones", myUid()), { ...live, token }, { merge: true }));
