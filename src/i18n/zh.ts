@@ -813,6 +813,8 @@ export const zh: Record<Key, string> = {
   "fam.makeMonitor": "设为监视器",
   "fam.madeMonitor": "现在是婴儿监视器",
   "fam.makeFailed": "没有切换。可能白噪音停了，或那边的 hush 被关闭了。",
+  "rt.idleHint": "这部手机是婴儿监视器。它的麦克风现在关着。",
+  "rx.remoteDo": "白噪音、收听和睡眠",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

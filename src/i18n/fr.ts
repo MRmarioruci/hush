@@ -813,6 +813,8 @@ export const fr: Record<Key, string> = {
   "fam.makeMonitor": "En faire le babyphone",
   "fam.madeMonitor": "C’est maintenant le babyphone",
   "fam.makeFailed": "Pas de changement. Le bruit blanc s’est peut-être arrêté, ou hush a été fermé là-bas.",
+  "rt.idleHint": "Ce téléphone est le babyphone. Son micro est coupé pour l’instant.",
+  "rx.remoteDo": "Bruit blanc, écoute et sommeil",
   "settings.title": "Réglages",
   "settings.babyName": "Prénom de bébé",
   "settings.prefs": "Préférences",

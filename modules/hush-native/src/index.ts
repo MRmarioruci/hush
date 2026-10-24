@@ -30,6 +30,8 @@ type CryNative = {
   setMonitor?(on: boolean): void;
   setVisible?(on: boolean): void;
   isMonitoring?(): boolean;
+  rooms?(): string;
+  setBaby?(name: string): void;
   lastClip?(): string;
   playClip?(url: string): boolean;
   stopClip?(): void;
@@ -99,6 +101,10 @@ export const cryDetector = cry
       setVisible: (on: boolean) => { try { cry.setVisible?.(on); } catch {} },
       /** Listening as the baby monitor (the mic can also be on just for smart volume). */
       isMonitoring: (): boolean => { try { return cry.isMonitoring?.() ?? cry.isListening(); } catch { return false; } },
+      /** Room reports from the other phones that arrived natively (also while hush was closed). */
+      rooms: (): Record<string, Record<string, unknown>> => { try { return JSON.parse(cry.rooms?.() ?? "{}") ?? {}; } catch { return {}; } },
+      /** The baby's name, kept natively so a woken phone answers with it. */
+      setBaby: (name: string) => { try { cry.setBaby?.(name); } catch {} },
       /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */
       artworkFile: (resource: string): string => { try { return cry.artworkFile?.(resource) ?? ""; } catch { return ""; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },

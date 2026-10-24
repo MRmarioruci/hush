@@ -31,7 +31,8 @@ const X = '<path d="M6 6l12 12M18 6 6 18"/>';
 const SEND = '<path d="M4 12 20 4l-6 16-3-7z"/>';
 
 export function MonitorScreen() {
-  const { members, listening, rooms } = useMonitor();
+  const { members, listening, rooms, m } = useMonitor();
+  const isMon = listening || m.mode === "monitor";
   useT();
   const alerts = useAlerts();
   const [fam, setFam] = useState<false | "list" | "add">(false);
@@ -59,13 +60,13 @@ export function MonitorScreen() {
       ) : (
         <>
           <RolePicker />
-          <Rise key={listening ? "monitor" : "alerts"}>{listening ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
-          {!listening && (
+          <Rise key={isMon ? "monitor" : "alerts"}>{isMon ? <ThisPhone /> : <Receiving alerts={alerts} />}</Rise>
+          {!isMon && rooms.length > 0 && (
             <Pressable onPress={() => setRemote(true)} style={({ pressed }) => [styles.remoteBtn, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
               <View style={styles.remoteIcon}><Icon d={REMOTE} size={22} color={colors.bg} width={2} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.remoteBtnTitle}>{t("rx.remote")}</Text>
-                <Text style={styles.remoteBtnSub} numberOfLines={1}>{rooms.length ? t("rx.remoteWhat", { names: rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ") }) : t("rx.remoteNone")}</Text>
+                <Text style={styles.remoteBtnTitle} numberOfLines={1}>{t("rx.remote")} · {rooms.map((r) => r.name.trim() || t("rt.otherPhone")).join(", ")}</Text>
+                <Text style={styles.remoteBtnSub} numberOfLines={1}>{t("rx.remoteDo")}</Text>
               </View>
               <Icon d={ICONS.chevron} size={20} color={colors.muted} width={2} />
             </Pressable>
@@ -189,7 +190,8 @@ const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="1
 
 /** What this phone does, chosen explicitly: get the alerts, or be the baby monitor by the crib. */
 function RolePicker() {
-  const { listening, toggleListening, rooms } = useMonitor();
+  const { listening, toggleListening, rooms, m, update } = useMonitor();
+  const isMon = listening || m.mode === "monitor";
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const acts = useActs();
@@ -199,12 +201,16 @@ function RolePicker() {
   const lastMon = acts.find((a) => a.k === "monOn" || a.k === "monOff");
   const last = !listening && !rooms.length && lastMon?.k === "monOff" && Date.now() - lastMon.at < 12 * 3600_000
     ? `${actText(lastMon)} · ${fmtTime(lastMon.at)} · ${actName(lastMon)}` : null;
+  // The tabs choose what this phone is. Choosing the monitor starts listening; choosing alerts stops it.
   const pick = async (monitor: boolean) => {
-    if (busy || monitor === listening) return;
+    if (busy || monitor === isMon) return;
+    setMsg(null);
+    update({ mode: monitor ? "monitor" : "alerts" });
+    if (monitor === listening) return;
     setBusy(true); setMsg(await toggleListening()); setBusy(false);
   };
   const opt = (monitor: boolean) => {
-    const on = monitor === listening;
+    const on = monitor === isMon;
     const tone = monitor ? colors.sage : "#c9bfff";
     return (
       <Pressable onPress={() => pick(monitor)} disabled={busy} style={[styles.roleOpt, on && { backgroundColor: tone }]} accessibilityRole="radio" accessibilityState={{ checked: on, busy }}>
@@ -501,7 +507,22 @@ function ThisPhone() {
   const [msg, setMsg] = useState<string | null>(null);
   const crying = !!status.crying;
   const toggle = async () => setMsg(await toggleListening());
-  if (!listening) return null;
+  // The baby monitor with its mic off (stopped here, by the system, or from another phone): it stays
+  // the monitor until the other tab is chosen, with a button to listen again.
+  if (!listening) return (
+    <View style={{ alignItems: "center" }}>
+      <Pressable onPress={toggle} style={({ pressed }) => [{ width: 250, height: 250, alignItems: "center", justifyContent: "center" }, pressed && { transform: [{ scale: 0.97 }] }]}
+        accessibilityRole="switch" accessibilityState={{ checked: false }} accessibilityLabel={t("orb.start")}>
+        <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, borderWidth: 10, borderColor: colors.card }} />
+        <View style={[styles.listenOrb, { backgroundColor: colors.card }]}>
+          <Icon d={MIC} size={34} color={colors.sage} width={2} />
+          <Text style={[styles.listenOrbText, { color: colors.cream }]} numberOfLines={2}>{t("orb.start")}</Text>
+        </View>
+      </Pressable>
+      <Text style={styles.orbMeta}>{t("rt.idleHint")}</Text>
+      {msg && <Text style={styles.msg}>{msg}</Text>}
+    </View>
+  );
   const threshold = THRESHOLDS[m.sensitivity];
   const score = status.score ?? 0;
   const level = Math.min(1, score / Math.max(threshold * 2, 0.01)); // the alert line sits halfway round

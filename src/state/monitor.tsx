@@ -581,6 +581,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const sub = AppState.addEventListener("change", (st) => cryDetector?.setVisible(st === "active"));
     return () => sub.remove();
   }, []);
+  // Listening (here, or switched on from another phone) makes this phone the baby monitor. Stopping
+  // doesn't change it back: that's chosen on the Monitor tab.
+  useEffect(() => { if (listening && loaded.current && mRef.current.mode !== "monitor") update({ mode: "monitor" }); }, [listening, update]);
   // Only the baby monitor alerts the other phones; smart volume just listens for itself.
   useEffect(() => { cryDetector?.setMonitor(listening); }, [listening]);
   useEffect(() => {
@@ -657,31 +660,61 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return peers.length;
   }, [sendOwnDays]);
   const lastSyncRef = useRef(0);
-  // What another phone reports about its room (shown on Home and Monitor).
-  useEffect(() => {
-    const sub = addPushListener((n) => {
-      const d = n.request.content.data as { type?: string; from?: string; name?: string; baby?: string; playing?: boolean; sound?: string; listening?: boolean; canMonitor?: boolean; at?: number; listenSince?: number; battery?: number; charging?: boolean } | undefined;
-      if (d?.type !== "room") return;
-      const cur = mRef.current;
-      const mems = membersOf(cur.family, cur.me ?? "");
+  // What another phone reports about its room (shown on Home and Monitor). Reports come in through
+  // the push listener while hush runs, and are also kept natively as they arrive, so the ones that
+  // came while hush was closed or asleep are picked up when it opens.
+  type RoomMsg = { type?: string; from?: string; name?: string; baby?: string; playing?: boolean; sound?: string; listening?: boolean; canMonitor?: boolean; at?: number; got?: number; listenSince?: number; battery?: number; charging?: boolean };
+  const applyRooms = useCallback((list: RoomMsg[]) => {
+    const cur = mRef.current;
+    const mems = membersOf(cur.family, cur.me ?? "");
+    const rooms = { ...(cur.rooms ?? {}) };
+    let changed = false;
+    for (const d of list) {
       // Older versions don't say who they are: only clear with a single other phone.
       const from = d.from ?? (mems.length === 1 ? mems[0].token : null);
-      if (!from || !mems.some((p) => p.token === from)) return;
-      const prev = cur.rooms?.[from];
+      if (!from || !mems.some((p) => p.token === from)) continue;
+      const prev = rooms[from];
       const at = d.at ?? Date.now();
-      if (prev && prev.at > at) return; // an older report arriving late
-      const got = Date.now();
-      const next: Room = {
+      if (prev && prev.at >= at) continue; // already known, or an older report arriving late
+      const got = Math.min(Date.now(), d.got ?? Date.now());
+      rooms[from] = {
         playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at, listenSince: d.listenSince,
         battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging, got,
         name: d.name ?? prev?.name, baby: d.baby ?? prev?.baby, lastListen: d.listening ? got : prev?.lastListen,
         canMonitor: !!d.canMonitor && !d.listening,
       };
-      update({ rooms: { ...(cur.rooms ?? {}), [from]: next } });
-      mRef.current = { ...mRef.current, rooms: { ...(cur.rooms ?? {}), [from]: next } };
+      changed = true;
+    }
+    if (!changed) return;
+    update({ rooms });
+    mRef.current = { ...mRef.current, rooms };
+  }, [update]);
+  // Catch up: the reports kept natively, then ask every phone what it's doing right now (they
+  // answer natively, even locked or with hush closed). On opening hush and coming back to it.
+  const lastAsk = useRef(0);
+  const catchUp = useCallback(async () => {
+    if (!loaded.current || !cryDetector) return;
+    applyRooms(Object.values(cryDetector.rooms()) as RoomMsg[]);
+    const cur = mRef.current;
+    const peers = membersOf(cur.family, cur.me ?? "").map((p) => p.token);
+    if (!peers.length || Date.now() - lastAsk.current < 45_000) return;
+    lastAsk.current = Date.now();
+    try { const me = await getMyToken(); await sendData(peers, { type: "cmd", cmd: "status", from: me }); } catch {}
+  }, [applyRooms]);
+  useEffect(() => {
+    const first = setTimeout(catchUp, 1200);
+    const app = AppState.addEventListener("change", (st) => st === "active" && catchUp());
+    return () => { clearTimeout(first); app.remove(); };
+  }, [catchUp, tokens.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { cryDetector?.setBaby(m.babyName.trim()); }, [m.babyName]);
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as RoomMsg | undefined;
+      if (d?.type !== "room") return;
+      applyRooms([d]);
     });
     return () => sub.remove();
-  }, [update]);
+  }, [applyRooms]);
 
   /* ---------- "listen in": a parent asks for a few seconds of the room ---------- */
 

@@ -813,6 +813,8 @@ export const es: Record<Key, string> = {
   "fam.makeMonitor": "Hacer vigilabebés",
   "fam.madeMonitor": "Ahora es el vigilabebés",
   "fam.makeFailed": "No cambió. Quizá se paró el ruido blanco o se cerró hush allí.",
+  "rt.idleHint": "Este móvil es el vigilabebés. Su micrófono está apagado ahora.",
+  "rx.remoteDo": "Ruido blanco, escuchar y sueño",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

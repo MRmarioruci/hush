@@ -34,7 +34,9 @@ class HushMessagingService : ExpoFirebaseMessagingService() {
       val quiet = body?.optBoolean("quiet") == true
       if (!quiet && (type in setOf("cry", "stopped", "test") || data["channelId"]?.startsWith("baby-alarm") == true)) alarmBuzz(applicationContext)
       // Requests from a paired parent, answered here so they work with the screen locked.
-      if (type == "cmd" && body != null) RoomCommands.handle(applicationContext, body)
+      if (type == "cmd" && body != null) { RoomStore.restoreMe(applicationContext); RoomCommands.handle(applicationContext, body) }
+      // What another phone's room is doing: kept, so the app knows even if it was closed.
+      if (type == "room" && body != null) RoomStore.save(applicationContext, body)
       // A recording from the baby's room: keep it for the widget (and redraw it) right away.
       if (type == "clip" && body != null) ClipStore.save(applicationContext, body)
     } catch (_: Exception) {}

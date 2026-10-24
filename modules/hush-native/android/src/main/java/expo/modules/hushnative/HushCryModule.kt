@@ -33,7 +33,14 @@ class HushCryModule : Module() {
       CryEngine.delayMs = delaySeconds * 1000L
       CryEngine.babyName = babyName
       CryEngine.tokens = tokens
+      appContext.reactContext?.let { RoomStore.saveMe(it) }
     }
+    Function("setBaby") { name: String ->
+      CryEngine.babyName = name
+      appContext.reactContext?.let { RoomStore.saveMe(it) }
+    }
+    // Room reports that arrived natively (also while hush was closed): JSON { token: report }.
+    Function("rooms") { appContext.reactContext?.let { RoomStore.all(it) } ?: "{}" }
 
     Function("start") {
       val ctx = appContext.reactContext ?: return@Function false
@@ -60,6 +67,7 @@ class HushCryModule : Module() {
     Function("setMe") { token: String, name: String ->
       CryEngine.myToken = token
       CryEngine.myName = name
+      appContext.reactContext?.let { RoomStore.saveMe(it) }
     }
     Function("setListen") { allow: Boolean, bucket: String, notice: String, cryClip: Int ->
       CryEngine.allowListen = allow
@@ -71,6 +79,7 @@ class HushCryModule : Module() {
     // Alert texts for each paired parent, in their own language.
     Function("setTargets") { list: List<Map<String, String>> ->
       CryEngine.targets = list
+      appContext.reactContext?.let { RoomStore.saveMe(it) }
     }
 
     // Baby monitor, or only smart volume's ears (then nothing is sent to the other phones).
