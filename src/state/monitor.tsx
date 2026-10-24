@@ -5,11 +5,14 @@ import { dialog } from "../components/Dialog";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
-import { addEvents, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent } from "../nights";
+import { addEvents, dayKey, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent, type Night } from "../nights";
+import { nativeCredentials, phoneId, roomId, signIn, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAppActive } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
 import { CLIP_SECONDS, CRY_CLIP_SECONDS, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, type Room, setupAlertChannel, getMyToken, sendDataMany, onDeadTokens } from "../monitor";
-import { makeInvite, membersOf, mergeEntries, newFamily, readFamilyMsg, readInvite, type Family, type Member } from "../family";
+import { makeInvite, membersOf, mergeEntries, newFamily, readFamilyMsg, readInvite, type Entry, type Family, type Member } from "../family";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -72,6 +75,13 @@ type Monitor = {
   /** Someone is on the crying (this phone = "me"), until when. */
   ack: { who: string; until: number } | null;
   lastSync: number;
+  /** Connected to the family's room in the cloud (the source of truth for everything shared). */
+  cloudReady: boolean;
+  /** The room's shared sleep: asleep since / woke at, and which phone said so (null: not known yet). */
+  roomSleep: RoomSleep | null;
+  setRoomSleep: (s: RoomSleep) => void;
+  /** This phone's live state, for the room (white noise etc.; the native side adds battery and the mic). */
+  writeLive: (live: Omit<PhoneLive, "seen">) => void;
 };
 
 const Ctx = createContext<Monitor | null>(null);
@@ -479,6 +489,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (old && membersOf(old, tok).length) {
       const left = { ...old, entries: { ...old.entries, [tok]: { ...(old.entries[tok] ?? { name: cur.myName.trim() }), gone: true, at: Date.now() } } };
       broadcast(left);
+      writePhone(roomId(old), tok, { entry: left.entries[tok] });
     }
     const now = Date.now();
     const next: Family = { id: inv.id, key: inv.key, entries: { [tok]: { name: cur.myName.trim(), lang: getLang(), at: now }, [inv.token]: { name: inv.name, at: 1 } } };
@@ -542,7 +553,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const f = cur.family;
     const meTok = cur.me ?? "";
     if (!f || !meTok) return;
-    broadcast({ ...f, entries: { ...f.entries, [meTok]: { ...(f.entries[meTok] ?? { name: "" }), gone: true, at: Date.now() } } });
+    const gone = { ...(f.entries[meTok] ?? { name: "" }), gone: true, at: Date.now() };
+    broadcast({ ...f, entries: { ...f.entries, [meTok]: gone } });
+    writePhone(roomId(f), meTok, { entry: gone });
     setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
   }, [setFamily, broadcast]);
 
@@ -650,6 +663,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const syncSleep = useCallback(async (force = false) => {
     const peers = peersOf(mRef.current);
     if (!peers.length) return 0;
+    if (cloudRef.current && ridRef.current) {
+      setLastSync(Date.now());
+      await pushDays(force);
+      return peers.length;
+    }
     if (!force && Date.now() - lastSyncRef.current < 5 * 60_000) return peers.length; // at most every 5 min
     lastSyncRef.current = Date.now();
     setLastSync(Date.now());
@@ -697,6 +715,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     applyRooms(Object.values(cryDetector.rooms()) as RoomMsg[]);
     const cur = mRef.current;
     const peers = membersOf(cur.family, cur.me ?? "").map((p) => p.token);
+    if (cloudRef.current) return; // the cloud room already has every phone's state
     if (!peers.length || Date.now() - lastAsk.current < 45_000) return;
     lastAsk.current = Date.now();
     try { const me = await getMyToken(); await sendData(peers, { type: "cmd", cmd: "status", from: me }); } catch {}
@@ -830,7 +849,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     setActTransport({
       me: () => me || mRef.current.me || "",
       myName: () => mRef.current.myName.trim(),
-      send: (a) => { const to = peersOf(mRef.current); if (to.length) sendData(to, { type: "act", act: a, from: me }).catch(() => {}); },
+      send: (a) => {
+        if (cloudRef.current && ridRef.current) { writeAct(ridRef.current, { ...a, by: a.by || me }); return; }
+        const to = peersOf(mRef.current); if (to.length) sendData(to, { type: "act", act: a, from: me }).catch(() => {});
+      },
     });
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; from?: string; act?: Act } | undefined;
@@ -851,6 +873,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const name = cur.myName.trim() || t("rt.otherPhone");
     setAck({ who: "me", until });
     logAct("onit");
+    writeRoom(ridRef.current, { ack: { by: me, name, until } });
     // The baby's phone sends its next cries quietly; the other parents hear who's going.
     sendData([room], { type: "cmd", cmd: "ack", from: me, name, until }).catch(() => {});
     for (const p of membersOf(cur.family, me).filter((x) => x.token !== room)) {
@@ -882,8 +905,149 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [sendOwnDays]);
 
+  /* ---------- the family's room in the cloud (src/cloud.ts): one source of truth ---------- */
+  const rid = joining ? "" : roomId(m.family);
+  const ridRef = useRef(rid);
+  ridRef.current = rid;
+  const [cloudReady, setCloudReady] = useState(false);
+  const cloudRef = useRef(false);
+  cloudRef.current = cloudReady;
+  const active = useAppActive();
+  useEffect(() => { if (!cloudReady && active) signIn().then(setCloudReady); }, [cloudReady, active]);
+  const hasFamily = !!rid && members.length > 0;
+
+  // The native side writes this phone's state too (mic, battery), also while hush sleeps.
+  useEffect(() => {
+    if (!cryDetector || !cloudReady || !me) return;
+    const c = nativeCredentials();
+    if (!hasFamily || !c) { cryDetector.setCloud("", "", "", "", ""); return; }
+    cryDetector.setCloud(c.apiKey, c.projectId, rid, phoneId(me), c.refreshToken);
+  }, [cloudReady, rid, me, hasFamily]);
+
+  // Every phone's family entry (name, language, removed), newest wins (as with the family pushes).
+  const wroteEntries = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (!cloudReady || !hasFamily || !m.family) return;
+    for (const [tok, e] of Object.entries(m.family.entries)) {
+      const k = `${rid}|${tok}`;
+      if (wroteEntries.current[k] === e.at) continue;
+      wroteEntries.current[k] = e.at;
+      writePhone(rid, tok, { entry: e });
+    }
+  }, [cloudReady, rid, hasFamily, m.family]);
+  useEffect(() => { if (cloudReady && hasFamily && m.babyName.trim()) writeRoom(rid, { baby: m.babyName.trim() }); }, [cloudReady, rid, hasFamily, m.babyName]);
+
+  const writeLive = useCallback((live: Omit<PhoneLive, "seen">) => {
+    const cur = mRef.current;
+    if (!cloudRef.current || !ridRef.current || !cur.me) return;
+    const b = cryDetector?.battery?.();
+    writePhone(ridRef.current, cur.me, { live: { ...live, ...(b ? { battery: b[0], charging: b[1] } : {}), name: cur.myName.trim(), baby: cur.babyName.trim(), seen: Date.now() } });
+  }, []);
+
+  const [roomSleep, setRoomSleepState] = useState<RoomSleep | null>(null);
+  const setRoomSleep = useCallback((sl: RoomSleep) => {
+    setRoomSleepState(sl);
+    writeRoom(ridRef.current, { sleep: sl });
+  }, []);
+
+  // This phone's sleep days: only the ones that changed (remembered across restarts).
+  const DAYS_KEY = "hush:cloudDays";
+  const wroteDays = useRef<Record<string, { h: string; at: number }> | null>(null);
+  const pushingDays = useRef(false);
+  const pushDays = useCallback(async (force = false) => {
+    const room = ridRef.current;
+    if (!cloudRef.current || !room || pushingDays.current) return;
+    pushingDays.current = true;
+    try {
+      if (!wroteDays.current) {
+        try { wroteDays.current = JSON.parse((await AsyncStorage.getItem(DAYS_KEY)) ?? "{}") ?? {}; } catch { wroteDays.current = {}; }
+      }
+      const done = wroteDays.current!;
+      const own = (await ownNights()).slice(0, 30);
+      const device = await deviceId();
+      const baby = mRef.current.babyName.trim();
+      let changed = false;
+      for (const n of own) {
+        const k = `${room}|${n.key}`;
+        const h = hashOf(JSON.stringify(n));
+        const prev = done[k];
+        if (prev?.h === h) continue;
+        // A day still being listened to changes every minute: at most every 5 minutes then.
+        if (!force && prev && Date.now() - prev.at < 5 * 60_000) continue;
+        writeDay(room, device, n.key, Date.now(), JSON.stringify(packNights([{ ...n, rev: Date.now() }], baby, device)));
+        done[k] = { h, at: Date.now() };
+        changed = true;
+      }
+      if (changed) {
+        // Forget what's older than the days kept.
+        const oldest = own.at(-1)?.key ?? "";
+        for (const k of Object.keys(done)) if (k.split("|")[1] < oldest) delete done[k];
+        AsyncStorage.setItem(DAYS_KEY, JSON.stringify(done)).catch(() => {});
+      }
+    } catch {} finally { pushingDays.current = false; }
+  }, []);
+  useEffect(() => {
+    if (!cloudReady || !hasFamily) return;
+    const id = setTimeout(() => pushDays(), 3000);
+    return () => clearTimeout(id);
+  }, [cloudReady, hasFamily, rid, nightsVersion, listening, pushDays]);
+  useEffect(() => {
+    if (!cloudReady || !hasFamily || !active) return;
+    const id = setInterval(() => pushDays(), 5 * 60_000);
+    return () => clearInterval(id);
+  }, [cloudReady, hasFamily, active, pushDays]);
+
+  // Reading the room: only while hush is on screen. Coming back gets everything at once.
+  const seenDays = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (!cloudReady || !hasFamily || !active) return;
+    let myDevice = "";
+    deviceId().then((d) => { myDevice = d; }).catch(() => {});
+    return watchRoom(rid, {
+      room: (d) => {
+        if (d.sleep && typeof d.sleep.at === "number") setRoomSleepState(d.sleep);
+        const cur = mRef.current;
+        if (d.ack && d.ack.until > Date.now() && d.ack.by !== cur.me) setAck({ who: d.ack.name, until: Math.min(d.ack.until, Date.now() + 15 * 60_000) });
+        if (d.baby && !cur.babyName.trim()) update({ babyName: d.baby });
+      },
+      phones: (list) => {
+        const cur = mRef.current;
+        const f = cur.family;
+        const meTok = cur.me ?? "";
+        if (!f || !meTok) return;
+        const theirs: Record<string, Entry> = {};
+        for (const p of list) if (p.token && p.entry && typeof p.entry.at === "number") theirs[p.token] = p.entry;
+        const merged = mergeEntries(f.entries, theirs);
+        if (merged) {
+          if (merged[meTok]?.gone && theirs[meTok]?.gone) {
+            // Another phone removed this one: start over on our own.
+            setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
+            return;
+          }
+          setFamily({ ...f, entries: merged });
+        }
+        applyRooms(list.filter((p) => p.token && p.token !== meTok && typeof p.seen === "number").map((p) => ({
+          from: p.token, name: p.entry?.name ?? p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
+          canMonitor: p.canMonitor, listenSince: p.listenSince, battery: p.battery, charging: p.charging, at: p.seen, got: p.seen,
+        })));
+      },
+      acts: (list) => { for (const a of list) receiveAct(a as Act); },
+      days: (list) => {
+        const got: Night[] = [];
+        for (const d of list) {
+          if (!d.device || d.device === myDevice) continue;
+          const id = `${d.device}|${d.key}`;
+          if (seenDays.current[id] === d.rev) continue;
+          seenDays.current[id] = d.rev;
+          try { got.push(...(unpackNights(JSON.parse(d.j)) ?? [])); } catch {}
+        }
+        if (got.length) saveReceivedNights(got).then(() => setNightsVersion((v) => v + 1));
+      },
+    }, dayKey(Date.now() - 35 * 86400_000));
+  }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive }}>{children}</Ctx.Provider>
   );
 }
 
@@ -898,4 +1062,11 @@ function migrate(raw: MonitorSettings): MonitorSettings {
   const f = newFamily("", raw.myName.trim());
   const family = { ...f, id: raw.role === "nursery" ? f.id : `~${f.id}`, entries, legacy: true } as Family;
   return { ...raw, family };
+}
+
+/** A short fingerprint of a string (to tell whether a day changed). */
+function hashOf(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `${s.length}:${h >>> 0}`;
 }

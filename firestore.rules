@@ -1,0 +1,30 @@
+rules_version = '2';
+// The family rooms (src/cloud.ts). There are no accounts: phones sign in anonymously, and a room's
+// name is the family's secret id + key from the pairing code. Knowing the name is what lets a phone
+// in, so rooms can be opened by name but never listed or searched.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function roomName(room) { return room.size() >= 20 && room.size() <= 40; }
+
+    match /rooms/{room} {
+      allow get: if signedIn() && roomName(room);
+      allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 10;
+
+      match /phones/{phone} {
+        allow get, list: if signedIn() && roomName(room);
+        allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 20;
+      }
+      match /acts/{act} {
+        allow get, list: if signedIn() && roomName(room);
+        allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 12;
+      }
+      match /days/{day} {
+        allow get, list: if signedIn() && roomName(room);
+        allow delete: if signedIn() && roomName(room);
+        allow create, update: if signedIn() && roomName(room)
+          && request.resource.data.j is string && request.resource.data.j.size() < 60000;
+      }
+    }
+  }
+}

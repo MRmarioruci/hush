@@ -9,6 +9,14 @@ const hasFirebase = fs.existsSync("./google-services.json");
 // Firebase Storage bucket for "listen in" clips (same Firebase project as push).
 const STORAGE_BUCKET = process.env.HUSH_STORAGE_BUCKET
   || (hasFirebase ? JSON.parse(fs.readFileSync("./google-services.json", "utf8")).project_info?.storage_bucket : undefined);
+// The family's shared room (Firestore, src/cloud.ts): the same Firebase project, read from google-services.json.
+const FIREBASE = (() => {
+  if (!hasFirebase) return undefined;
+  const g = JSON.parse(fs.readFileSync("./google-services.json", "utf8"));
+  const c = g.client?.[0];
+  const apiKey = c?.api_key?.[0]?.current_key;
+  return apiKey ? { apiKey, projectId: g.project_info.project_id, appId: c.client_info.mobilesdk_app_id, storageBucket: g.project_info.storage_bucket } : undefined;
+})();
 
 // Play needs a higher versionCode for every upload: 1.5.0 -> 10500, 1.5.1 -> 10501.
 const VERSION = require("./package.json").version;
@@ -64,6 +72,7 @@ module.exports = ({ config }) => ({
     ...(config.extra || {}),
     eas: EXPO_PROJECT_ID ? { projectId: EXPO_PROJECT_ID } : undefined,
     storageBucket: STORAGE_BUCKET,
+    firebase: FIREBASE,
   },
   web: {
     favicon: "./assets/favicon.png",

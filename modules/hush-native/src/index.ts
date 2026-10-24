@@ -31,6 +31,7 @@ type CryNative = {
   setVisible?(on: boolean): void;
   isMonitoring?(): boolean;
   rooms?(): string;
+  setCloud?(apiKey: string, projectId: string, room: string, phone: string, refreshToken: string): boolean;
   setBaby?(name: string): void;
   lastClip?(): string;
   playClip?(url: string): boolean;
@@ -103,6 +104,8 @@ export const cryDetector = cry
       isMonitoring: (): boolean => { try { return cry.isMonitoring?.() ?? cry.isListening(); } catch { return false; } },
       /** Room reports from the other phones that arrived natively (also while hush was closed). */
       rooms: (): Record<string, Record<string, unknown>> => { try { return JSON.parse(cry.rooms?.() ?? "{}") ?? {}; } catch { return {}; } },
+      /** The family's cloud room, so the native side keeps this phone's state there while hush sleeps ("" room = none). */
+      setCloud: (apiKey: string, projectId: string, room: string, phone: string, refreshToken: string) => { try { cry.setCloud?.(apiKey, projectId, room, phone, refreshToken); } catch {} },
       /** The baby's name, kept natively so a woken phone answers with it. */
       setBaby: (name: string) => { try { cry.setBaby?.(name); } catch {} },
       /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */

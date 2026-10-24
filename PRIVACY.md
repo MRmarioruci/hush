@@ -1,6 +1,6 @@
 # hush privacy policy
 
-_Last updated: 16 October 2026_
+_Last updated: 24 October 2026_
 
 hush is a white-noise and baby-monitor app for Android, made by Mario Ruci.
 This policy explains what the app does with your information. The short version:
@@ -53,21 +53,42 @@ Only these things are sent, and only to phones you paired yourself:
   including the baby phone's battery level for battery alerts;
 - a short morning summary of the night: times, number and length of crying spells.
 
-These services pass the messages on and do not receive any audio. hush does not
-run its own servers and does not keep copies of these messages.
+These services pass the messages on and do not receive any audio.
+
+## The family's shared room
+
+So that all your connected phones show the same thing, hush keeps one shared
+"room" for your family in Google's Cloud Firestore
+([policy](https://policies.google.com/privacy)), in hush's own Firebase project.
+It is created only once you connect a second phone. It holds:
+
+- each connected phone's name, language and push token, and its current state:
+  whether it is the baby monitor, whether white noise is playing (and which sound),
+  its battery level;
+- your baby's name;
+- whether the baby is asleep or awake (and since when), and "I'm on it" for crying;
+- the activity log (who started or stopped the monitor or white noise, asleep/awake);
+- each phone's sleep days: when the baby slept, when hush was listening or playing,
+  and when and how long crying happened.
+
+There is no account: each phone signs in anonymously, and the room's name is the
+secret code from your pairing, which only your phones know. No audio is ever
+stored there. **Settings → Clear sleep history** deletes this phone's sleep days
+from the room as well as from the phone. To have a whole room deleted, contact us
+(below) from one of its phones.
 
 ## What stays on your phone
 
-Settings, the paired phones list, received alerts and the night history (when
-crying happened, when hush was listening or playing) are stored only on your
+Settings, received alerts and a copy of the night history are stored on your
 phones. Detailed events are kept for 14 nights and then reduced to a short
-summary per night. Uninstalling hush, or clearing its storage, deletes all of it.
+summary per night. Uninstalling hush, or clearing its storage, deletes the phone's copy.
 
 ## What hush does not do
 
 - No account or sign-in, and no email, phone number or location is collected.
 - No advertising, tracking or analytics SDKs.
-- No data is sold or shared with anyone beyond delivering your alerts as described above.
+- No data is sold or shared with anyone beyond delivering your alerts and keeping
+  your family's room in step, as described above.
 
 ## Children
 

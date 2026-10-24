@@ -39,6 +39,12 @@ class HushCryModule : Module() {
       CryEngine.babyName = name
       appContext.reactContext?.let { RoomStore.saveMe(it) }
     }
+    // The family's room in the cloud, for writing this phone's state while hush sleeps (CloudSync.kt).
+    Function("setCloud") { apiKey: String, projectId: String, room: String, phone: String, refreshToken: String ->
+      val ctx = appContext.reactContext ?: return@Function false
+      if (room.isEmpty()) CloudSync.clear(ctx) else CloudSync.configure(ctx, apiKey, projectId, room, phone, refreshToken)
+      true
+    }
     // Room reports that arrived natively (also while hush was closed): JSON { token: report }.
     Function("rooms") { appContext.reactContext?.let { RoomStore.all(it) } ?: "{}" }
 

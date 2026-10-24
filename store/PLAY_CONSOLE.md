@@ -87,10 +87,10 @@ option) and nothing medical. hush is not a medical device, and the listing and a
 
 **Overview**
 - Does your app collect or share any of the required user data types? **Yes**
-- Is all of the user data collected by your app encrypted in transit? **Yes** (HTTPS to Expo push)
-- Do you provide a way for users to request that their data is deleted? **No.** There's no account
-  and nothing is kept on a server; all history is on the phone and is removed by uninstalling.
-  If the form needs more, add that explanation.
+- Is all of the user data collected by your app encrypted in transit? **Yes** (HTTPS to Expo push and Firebase)
+- Do you provide a way for users to request that their data is deleted? **Yes.** In the app
+  (Settings → Clear sleep history removes the phone's sleep days from the family room), and by request
+  through the contact in the privacy policy for a whole room. Deletion URL: the privacy policy page.
 
 **Data types: mark these as collected, and none as shared**
 
@@ -98,14 +98,17 @@ Sending data to a service provider (Expo / Firebase) that works for you counts a
 
 | Data type | Collected | Shared | Ephemeral | Required? | Purpose |
 |---|---|---|---|---|---|
-| Personal info → **Name** (baby's name, parent phone names in alerts) | Yes | No | No | Optional | App functionality |
-| App activity → **Other actions** (crying events, night summaries sent to paired phones) | Yes | No | No | Optional | App functionality |
+| Personal info → **Name** (baby's name, phone names; in alerts and the family room) | Yes | No | No | Optional | App functionality |
+| App activity → **Other actions** (crying events, sleep times, monitor/white-noise activity, kept in the family room) | Yes | No | No | Optional | App functionality |
+| Device or other IDs → **Device or other IDs** (anonymous Firebase sign-in ID) | Yes | No | No | Optional | App functionality |
 | Device or other IDs → **Device or other IDs** (push notification token) | Yes | No | No | Optional | App functionality |
 | Audio → **Voice or sound recordings** (optional "listen in" clips and clips with crying alerts, 5–15 s, deleted after a day) | Yes | No | No | Optional | App functionality |
 
-They're **optional** because they're only sent once the user pairs phones for the baby monitor.
+They're **optional** because they're only sent once the user pairs phones (that's when the family room is made).
+Battery level is part of the phone's state in the room; Play has no data type for it, so nothing to mark.
 
 **Do not mark these:**
+- Health info: baby sleep times are app activity, not medical data.
 - Photos/videos: the camera only scans the QR code and nothing is saved or sent.
 - Location, contacts, financial info, health info, messages, files, calendar, web history,
   app performance / crash logs: not collected.

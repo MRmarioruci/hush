@@ -151,6 +151,11 @@ object CryEngine {
   /** What the parents' phones show: listening, white noise, battery. Sent silently. */
   fun reportRoom(context: Context, to: List<String> = targets.mapNotNull { it["token"] }.ifEmpty { tokens }) {
     val (pct, plugged) = battery(context)
+    // The family's room in the cloud: the source of truth the other phones read.
+    CloudSync.writePhone(context, mapOf(
+      "listening" to (running && monitorMode), "canMonitor" to (running && !monitorMode), "playing" to roomPlaying,
+      "sound" to roomSound, "listenSince" to listenSince, "battery" to pct, "charging" to plugged, "seen" to System.currentTimeMillis(),
+    ))
     AlertSender.sendData(to, mapOf(
       "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to (running && monitorMode),
       // The mic is on for smart volume (white noise playing): a parent can make it the monitor.
@@ -521,6 +526,8 @@ object CryEngine {
       if (session == my) {
         if (monitorMode) EventLog.add("listen_stop")
         running = false
+        // However it stopped (by hand, the system, an error): the room hears it straight away.
+        CloudSync.writePhone(context, mapOf("listening" to false, "canMonitor" to false, "listenSince" to 0L, "seen" to System.currentTimeMillis()))
       }
     }
   }

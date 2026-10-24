@@ -381,6 +381,19 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     });
     return () => sub.remove();
   }, [player, roomFor]);
+  // This phone's state in the family's cloud room, whenever it changes (and every 10 minutes while
+  // white noise plays, so the others can tell it's still going).
+  const { writeLive, cloudReady } = mon;
+  useEffect(() => {
+    if (!cloudReady) return;
+    const write = () => {
+      const r = roomFor();
+      writeLive({ playing: r.playing, sound: r.sound, listening: r.listening, canMonitor: r.canMonitor, listenSince: r.listenSince });
+    };
+    const id0 = setTimeout(write, 800);
+    const id = playing ? setInterval(write, 10 * 60_000) : null;
+    return () => { clearTimeout(id0); if (id) clearInterval(id); };
+  }, [cloudReady, playing, soundId, mon.listening, mon.micOn, mon.m.family, writeLive, roomFor]);
   // Tell the other phones when this room changes (someone pressed play, a timer ended, listening
   // started or stopped). Only while listening, or the moment it stops.
   const wasListening = useRef(mon.listening);

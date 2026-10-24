@@ -98,6 +98,8 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     return () => { clearInterval(id); sub.remove(); };
   }, [reload]);
 
+  // Sleep history changed here (a sleep logged, edited or deleted): the family's room gets it.
+  useEffect(() => { if (mon.cloudReady && nights.length) mon.syncSleep(true).catch(() => {}); }, [nights, mon.cloudReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const sleeps = useMemo(() => nights.flatMap((n) => n.sleeps ?? [])
     .filter((x, i, all) => all.findIndex((y) => y.from === x.from && y.to === x.to) === i) // a sleep across midnight is in two days
     .sort((a, b) => a.from - b.from), [nights]);
@@ -114,15 +116,29 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   // Asleep: logged on this phone, or this baby's phone is listening, or the baby's phone says so.
   const monitorAsleep = s.features.monitor && mon.listening && !(awakeAt > listenStart) && !heardAwake;
   const room = mon.room;
+  // The last thing any phone said about the baby's sleep: the family's cloud room when connected
+  // (one answer for every phone), else the last push from a paired phone.
+  const said: PeerSleep | null = mon.cloudReady ? mon.roomSleep : peer;
   const roomAsleep = s.features.monitor && !mon.listening && !!room?.listening && now - (room?.at ?? 0) < 45 * 60_000
-    // …unless the baby's phone said "woke up" after it started listening
-    && !(peer && !peer.asleep && peer.at > (room?.listenSince ?? 0));
-  // A paired phone said the baby fell asleep (and hasn't said awake since).
-  const peerAsleep = !!peer?.asleep && now - peer.at < 16 * 3600_000;
+    // …unless a phone said "woke up" after it started listening
+    && !(said && !said.asleep && said.at > (room?.listenSince ?? 0));
+  // Another phone said the baby fell asleep (and nobody has said awake since).
+  const peerAsleep = !!said?.asleep && said.from !== mon.me && now - said.at < 16 * 3600_000;
   const since = openFrom
     ?? (monitorAsleep || roomAsleep ? (sleeps.filter((x) => x.to >= Math.min(now, loadedAt) - 3 * 60_000).at(-1)?.from ?? mon.room?.at ?? now) : null)
-    ?? (peerAsleep ? peer!.since : null);
+    ?? (peerAsleep ? said!.since : null);
   const state = useMemo(() => napState(sleeps, s.birthday, since, now), [sleeps, s.birthday, since, now]);
+
+  /** Tell the family's room what this phone says about the baby's sleep (the one shared answer). */
+  const cloudRef = useRef(mon.cloudReady);
+  cloudRef.current = mon.cloudReady;
+  const { setRoomSleep } = mon;
+  const say = useCallback((asleep: boolean, at: number) => {
+    if (!cloudRef.current || !mon.me) return;
+    setRoomSleep({ asleep, since: at, at: Date.now(), from: mon.me });
+    mon.syncSleep(true).catch(() => {});
+  }, [setRoomSleep, mon.me]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   /* ---------- telling the paired phones ---------- */
 
@@ -167,8 +183,9 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     reload();
     notify("asleep", at);
     logAct("asleep");
+    say(true, at);
     return null;
-  }, [reload, notify]);
+  }, [reload, notify, say]);
 
   /** `skip`: the phone that asked (it already knows). Never turns the baby monitor off. */
   const wakeUp = useCallback(async (skip?: string, at = Date.now()) => {
@@ -177,11 +194,13 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     // White noise is for sleeping; stop it when the baby is up.
     if (playing && Date.now() - at < 5 * 60_000) stop("woke", who);
     // Asleep only because another phone said so: ask that phone to end its sleep.
-    if (!openFrom && !monitorAsleep && peerAsleep && peer) {
+    if (!openFrom && !monitorAsleep && peerAsleep && said) {
+      // The cloud room tells the phone tracking it (also if hush is closed there); else a push.
+      if (mon.cloudReady) { say(false, at); return null; }
       let me = "";
       try { me = await getMyToken(); } catch {}
-      sendData([peer.from], { type: "cmd", cmd: "woke", from: me }).catch(() => {});
-      savePeer({ ...peer, asleep: false, at });
+      sendData([said.from], { type: "cmd", cmd: "woke", from: me }).catch(() => {});
+      savePeer({ ...said, asleep: false, at });
       return null;
     }
     if (openFrom) await endSleep(at);
@@ -190,8 +209,9 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     reload();
     if (state.asleep) notify("awake", at, { dur: slept, skip });
     if (peer?.asleep) savePeer({ ...peer, asleep: false, at });
+    if (state.asleep) say(false, at);
     return mon.listening ? t("nap.stillListening") : null;
-  }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, savePeer, state, notify]);
+  }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, said, savePeer, state, notify, say]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
   const wokeAt = useCallback((at: number) => wakeUp(undefined, Math.min(Date.now(), Math.max(at, state.asleep ? state.since + 60_000 : at))), [wakeUp, state]);
 
@@ -217,11 +237,19 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   // Messages from the paired phones: "asleep / awake", and "the baby woke up" from the other side.
   const wakeRef = useRef(wakeUp);
   wakeRef.current = wakeUp;
+  // Another phone said the baby woke while this phone tracks the sleep (also while hush was closed
+  // here): end it at that time.
+  useEffect(() => {
+    const sl = mon.roomSleep;
+    if (!sl || sl.asleep || sl.from === mon.me || openFrom == null || sl.at <= openFrom) return;
+    wakeRef.current(sl.from, Math.min(Date.now(), Math.max(sl.since, openFrom + 60_000)));
+  }, [mon.roomSleep?.at, openFrom]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; asleep?: boolean; since?: number; from?: string; cmd?: string } | undefined;
       if (!d?.from || !peers().some((p) => p.token === d.from)) return;
       if (d.type === "sleep" && typeof d.asleep === "boolean") {
+        if (cloudRef.current) return; // the cloud room has it (with the sender's own time)
         savePeer({ asleep: d.asleep, since: d.since ?? Date.now(), at: Date.now(), from: d.from });
       } else if (d.type === "cmd" && d.cmd === "woke") {
         wakeRef.current(d.from);
@@ -242,6 +270,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     if (heardAwake) notify("awake", last?.to ?? Date.now(), { dur: last ? (last.to - last.from) / 60_000 : 0 });
     else notify("asleep", last?.from ?? Date.now());
     logAct(heardAwake ? "awake" : "asleep", { why: "smart" });
+    say(!heardAwake, heardAwake ? (last?.to ?? Date.now()) : (last?.from ?? Date.now()));
   }, [heardAwake, mon.listening, loadedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // White noise turned off by hand (here or from a paired phone): the sleep is probably over too.
@@ -265,6 +294,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       reload();
       notify("awake", st.at, { dur: (st.at - since) / 60_000 });
       logAct("awake", { why: "sound" });
+      say(false, st.at);
     })().catch(() => {});
   }, [lastStop?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   const endedBySound = !!ended && !state.asleep && now - ended.at < 15 * 60_000;
@@ -277,6 +307,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     } else setAwakeAt(0);
     setEnded(null);
     reload();
+    say(true, e.since);
     // Quietly put the parents' phones back to "asleep".
     const to = peers().map((p) => p.token);
     if (to.length) {
@@ -302,13 +333,16 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       reload();
       notify("asleepSound", at);
       logAct("asleep", { why: "sound" });
+      say(true, at);
     })().catch(() => {});
   }, [starts]); // eslint-disable-line react-hooks/exhaustive-deps
   const undoSound = useCallback(async () => {
+    const from = state.asleep ? state.since : Date.now();
     if (soundSleep) await deleteSleep(soundSleep);
     setSoundSleep(null);
     reload();
-  }, [soundSleep, reload]);
+    say(false, from);
+  }, [soundSleep, reload, say, state]);
 
   // A daytime sleep still going after 4 hours: probably someone forgot to tap Woke up. One gentle
   // notification, on the phone that's tracking it, with "Woke up" and "Fix the time". A night
