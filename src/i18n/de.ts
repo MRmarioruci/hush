@@ -815,6 +815,7 @@ export const de: Record<Key, string> = {
   "fam.makeFailed": "Nicht umgestellt. Vielleicht ist das Rauschen aus oder hush wurde dort geschlossen.",
   "rt.idleHint": "Dieses Handy ist das Babyphone. Das Mikro ist gerade aus.",
   "rx.remoteDo": "Rauschen, Mithören und Schlaf",
+  "pair.requestGone": "{name} fragt nicht mehr an.",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

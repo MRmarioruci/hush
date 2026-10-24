@@ -815,6 +815,7 @@ export const el: Record<Key, string> = {
   "fam.makeFailed": "Δεν άλλαξε. Ίσως σταμάτησε ο λευκός θόρυβος ή έκλεισε το hush εκεί.",
   "rt.idleHint": "Αυτό το κινητό είναι η ενδοεπικοινωνία. Το μικρόφωνο είναι κλειστό τώρα.",
   "rx.remoteDo": "Λευκός θόρυβος, ακρόαση και ύπνος",
+  "pair.requestGone": "Το {name} σταμάτησε να ζητά να μπει.",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",

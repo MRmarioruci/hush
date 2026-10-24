@@ -142,18 +142,47 @@ export async function readCode(code: string): Promise<Code | "missing" | "expire
   }
 }
 
-/** Ask to join (this phone shows up as "pending" until a member lets it in). */
-export async function askToJoin(f: string, me: Me, invitedBy: string): Promise<boolean> {
+/** Ask to join (this phone shows up as "pending" until a member lets it in). "member": already in. */
+export async function askToJoin(f: string, me: Me, invitedBy: string): Promise<"pending" | "member" | false> {
   if (!(await signIn())) return false;
   const uid = myUid();
   try {
+    const cur = await getDocFromServer(sub(f, "members", uid));
+    if (cur.exists() && (cur.data() as MemberDoc).status === "member") return "member";
     await setDoc(sub(f, "members", uid), { uid, token: me.token, name: me.name, lang: me.lang, status: "pending", joinedAt: Date.now(), invitedBy } satisfies MemberDoc);
-    return true;
+    return "pending";
   } catch {
     return false;
   }
 }
-export const approve = (f: string, uid: string) => updateDoc(sub(f, "members", uid), { status: "member", joinedAt: Date.now() });
+/** Let a waiting phone in, if it's still waiting. False: it cancelled or gave up meanwhile. */
+export async function approve(f: string, uid: string): Promise<boolean> {
+  return runTransaction(db!, async (tx) => {
+    const s = await tx.get(sub(f, "members", uid));
+    if (!s.exists() || (s.data() as MemberDoc).status !== "pending") return false;
+    tx.update(sub(f, "members", uid), { status: "member", joinedAt: Date.now() });
+    return true;
+  });
+}
+/**
+ * Remove the phone with this push address, found on the server (this phone's list may not be
+ * loaded yet), and only while that entry still has the address (a phone that got a new address
+ * isn't removed by mistake).
+ */
+export async function removeByToken(f: string, token: string) {
+  if (!db || !f || !token || !(await signIn())) return;
+  try {
+    const s = await getDocs(query(collection(db, "families", f, "members"), where("token", "==", token)));
+    for (const d of s.docs) {
+      const uid = (d.data() as MemberDoc).uid ?? d.id;
+      await deleteDoc(sub(f, "phones", uid)).catch(() => {});
+      await runTransaction(db, async (tx) => {
+        const cur = await tx.get(sub(f, "members", uid));
+        if (cur.exists() && (cur.data() as MemberDoc).token === token) tx.delete(sub(f, "members", uid));
+      }).catch(() => {});
+    }
+  } catch {}
+}
 /** Say no to a pending phone, or remove a member (its live state goes too). */
 export async function removeFromFamily(f: string, uid: string) {
   if (!db || !f || !uid) return;

@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState, Platform } from "react-native";
 import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, dayKey, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent, type Night } from "../nights";
-import { approve, askToJoin, createFamily, isMember, leaveFamily as leaveCloud, myUid, nativeCredentials, publishCode, readCode, removeFromFamily, signIn, updateMe, watchMembers, watchMyRequest, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
+import { approve, askToJoin, createFamily, isMember, leaveFamily as leaveCloud, myUid, nativeCredentials, publishCode, readCode, removeByToken, removeFromFamily, signIn, updateMe, watchMembers, watchMyRequest, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppActive } from "../components/ui";
 import * as Notifications from "expo-notifications";
@@ -695,6 +695,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   cloudRef.current = cloudReady;
   const active = useAppActive();
   // Sign in and check the cloud answers; retried every 2 minutes while hush is on screen.
+  // (Also once when hush starts in the background, woken by a push: the member list should run then too.)
+  useEffect(() => { signIn().then((ok) => { if (ok) setCloudReady(true); }); }, []);
   useEffect(() => {
     if (cloudReady || !active) return;
     let stop = false;
@@ -741,14 +743,15 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (tok && (mine.token !== tok || (mine.name ?? "") !== cur.myName.trim() || mine.lang !== getLang())) updateMe(rid, meInfo(tok));
       // A phone asked to join with a code from this phone: Allow or Not now.
       for (const x of list) {
-        if (x.status !== "pending" || x.invitedBy !== myUid() || Date.now() - (x.joinedAt ?? 0) > 10 * 60_000 || askedAllow.current.has(x.uid)) continue;
+        if (x.status !== "pending" || x.invitedBy !== myUid() || Math.abs(Date.now() - (x.joinedAt ?? 0)) > 5 * 60_000 || askedAllow.current.has(x.uid)) continue;
         askedAllow.current.add(x.uid);
         const who = x.name?.trim() || t("rt.otherPhone");
         const room = cur.babyName.trim() ? t("hero.room", { name: babyLabel(cur.babyName) }) : t("rx.room");
-        Notifications.dismissAllNotificationsAsync().catch(() => {});
         dialog(t("pair.wantsTitle", { name: who, room }), t("pair.wantsBody", { name: babyLabel(cur.babyName) }), [
           { text: t("pair.notNow"), style: "cancel", onPress: () => { removeFromFamily(rid, x.uid); } },
-          { text: t("pair.allow"), onPress: () => { approve(rid, x.uid).catch(() => dialog(t("pair.offline"))); } },
+          { text: t("pair.allow"), onPress: () => {
+            approve(rid, x.uid).then((ok) => { if (!ok) dialog(t("pair.requestGone", { name: who })); }, () => dialog(t("pair.offline")));
+          } },
         ]);
       }
     });
@@ -777,12 +780,15 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return r === "offline" ? t("pair.offline") : r;
   }, [myToken, setFamily]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Joining: this phone waits as "pending" until a member lets it in (or says no, or nobody answers).
-  const [joining, setJoining] = useState<string | null>(null);
-  const joinFid = useRef("");
+  // Joining: this phone waits as "pending" until a member lets it in, says no, or 3 minutes pass.
+  // The request is remembered (m.joinPending), so it carries on if hush is closed meanwhile. The
+  // old family is only left once the new one has let this phone in.
+  const JOIN_MS = 3 * 60_000;
+  const [joinResult, setJoinResult] = useState<"denied" | "failed" | null>(null);
+  const joining = m.joinPending?.fid ?? joinResult;
   /** Join with a typed code, a scanned QR or an opened link. Returns an error to show, or null. */
   const join = useCallback(async (raw: string): Promise<string | null> => {
-    const code = raw.match(/(?:^|[?&]c=|\D)(\d{6})(?:\D|$)/)?.[1] ?? (/^\d{6}$/.test(raw.trim()) ? raw.trim() : null);
+    const code = raw.match(/[?&]c=(\d{6})/)?.[1] ?? raw.replace(/\s/g, "").match(/^(\d{6})$/)?.[1];
     if (!code) return t("family.notCode");
     let tok: string;
     try { tok = await myToken(); } catch (e) { return (e as Error).message; }
@@ -793,41 +799,46 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     setCloudReady(true);
     if (c.by === myUid()) return t("family.ownCode");
     const old = mRef.current.family?.id ?? "";
-    if (old === c.fid && (await isMember(old))) return null; // already in it
-    // One family at a time: leave the old one.
-    if (old) { await leaveCloud(old); setFamily(null, { rooms: {} }); }
-    if (!(await askToJoin(c.fid, meInfo(tok), c.by))) return t("pair.offline");
-    joinFid.current = c.fid;
-    setJoining(c.fid);
+    if (old === c.fid) return null; // already in it
+    const r = await askToJoin(c.fid, meInfo(tok), c.by);
+    if (!r) return t("pair.offline");
+    if (r === "member") {
+      if (old) leaveCloud(old);
+      setFamily({ id: c.fid, key: "cloud", entries: {} }, { rooms: {}, joinPending: null });
+      return null;
+    }
+    setJoinResult(null);
+    update({ joinPending: { fid: c.fid, at: Date.now(), leave: old || undefined, name: c.name, baby: c.baby } });
     // Wakes the inviting phone with a notification (tapping it opens the Allow question).
     const room = c.baby ? t("hero.room", { name: babyLabel(c.baby) }) : t("rx.room");
     sendPush([c.byToken], t("pair.wantsTitle", { name: mRef.current.myName.trim() || t("rt.otherPhone"), room }), { type: "join-ask" }).catch(() => {});
     return null;
-  }, [myToken, setFamily]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myToken, setFamily, update]); // eslint-disable-line react-hooks/exhaustive-deps
+  const jp = m.joinPending;
   useEffect(() => {
-    const f = joining;
-    if (!f || f === "denied" || f === "failed") return;
-    let waited = false;
-    const off = watchMyRequest(f, (st) => {
-      if (st === "pending") waited = true;
-      else if (st === "member") { setFamily({ id: f, key: "cloud", entries: {} }, { rooms: {} }); joinFid.current = ""; setJoining(null); }
-      else if (waited) { joinFid.current = ""; setJoining("denied"); }
+    if (!jp || !cloudReady) return;
+    const done = (res: "denied" | "failed") => { update({ joinPending: null }); setJoinResult(res); };
+    const off = watchMyRequest(jp.fid, (st) => {
+      if (st === "member") {
+        if (jp.leave && jp.leave !== jp.fid) leaveCloud(jp.leave);
+        setFamily({ id: jp.fid, key: "cloud", entries: {} }, { rooms: {}, joinPending: null });
+        setJoinResult(null);
+      } else if (st === "gone") done("denied");
     });
-    const timer = setTimeout(() => setJoining((j) => (j === f ? "failed" : j)), 3 * 60_000);
+    const timer = setTimeout(() => { leaveCloud(jp.fid); done("failed"); }, Math.max(0, jp.at + JOIN_MS - Date.now()));
     return () => { off(); clearTimeout(timer); };
-  }, [joining, setFamily]);
-  /** Stop waiting (cancelled, said no, or no answer): the request goes. */
+  }, [jp?.fid, jp?.at, cloudReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Stop waiting (cancelled), or put a "said no" / "no answer" away. */
   const cancelJoin = useCallback(() => {
-    if (joinFid.current) leaveCloud(joinFid.current);
-    joinFid.current = "";
-    setJoining(null);
-  }, []);
+    const p = mRef.current.joinPending;
+    if (p) { leaveCloud(p.fid); update({ joinPending: null }); }
+    setJoinResult(null);
+  }, [update]);
 
   const removeMember = useCallback((token: string) => {
     const f = mRef.current.family;
     if (!f?.entries[token]) return;
-    const uid = tokenUid.current[token];
-    if (uid) removeFromFamily(f.id, uid);
+    removeByToken(f.id, token);
     const entries = { ...f.entries };
     delete entries[token];
     const rooms = { ...(mRef.current.rooms ?? {}) };

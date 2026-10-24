@@ -198,7 +198,7 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: () => void }
 type Found = { name: string; baby: string; invite: string };
 
 function Join({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { join, joining, cancelJoin, members } = useMonitor();
+  const { join, joining, cancelJoin, members, m } = useMonitor();
   const [tab, setTab] = useState<"type" | "scan">("type");
   const [digits, setDigits] = useState("");
   const [busy, setBusy] = useState(false);
@@ -218,13 +218,19 @@ function Join({ onClose, onDone }: { onClose: () => void; onDone: () => void }) 
     setAsked(true);
   }, [join]);
 
-  // The answer: let in (joining clears and the other phone is a member), said no, or no answer.
+  // A request already waiting (sent from a link, the scanner, or before hush was closed): show it.
+  const waiting = !!m.joinPending;
+  useEffect(() => {
+    if (m.joinPending && !found) { setFound({ name: m.joinPending.name ?? "", baby: m.joinPending.baby ?? "", invite: "" }); setAsked(true); }
+  }, [!!m.joinPending]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The answer: let in (no longer waiting, and the other phones are there), said no, or no answer.
   useEffect(() => {
     if (!asked) return;
-    if (joining === null && members.length > 0) { setAsked(false); onDone(); }
-    else if (joining === "denied") { setAsked(false); cancelJoin(); setFound(null); setProblem({ title: t("pair.denied", { name: found?.name || t("rt.otherPhone") }) }); }
-    else if (joining === "failed") { setAsked(false); cancelJoin(); setProblem({ title: t("pair.noAnswer", { name: found?.name || t("rt.otherPhone") }), body: t("pair.noAnswerBody") }); }
-  }, [joining, asked, members.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    const who = found?.name || t("rt.otherPhone");
+    if (!waiting && joining === null && members.length > 0) { setAsked(false); onDone(); }
+    else if (joining === "denied") { setAsked(false); cancelJoin(); setFound(null); setDigits(""); setProblem({ title: t("pair.denied", { name: who }) }); }
+    else if (joining === "failed") { setAsked(false); cancelJoin(); setFound(null); setDigits(""); setProblem({ title: t("pair.noAnswer", { name: who }), body: t("pair.noAnswerBody") }); }
+  }, [joining, asked, waiting, members.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const check = async (code: string) => {
     const now = Date.now();

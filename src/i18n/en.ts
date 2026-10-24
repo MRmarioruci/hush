@@ -815,6 +815,7 @@ export const en = {
   "fam.makeFailed": "Didn't switch. Its white noise may have stopped, or hush was closed there.",
   "rt.idleHint": "This phone is the baby monitor. Its mic is off right now.",
   "rx.remoteDo": "White noise, listen in and sleep",
+  "pair.requestGone": "{name} stopped asking to join.",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

@@ -40,6 +40,10 @@ export function MonitorScreen() {
   useAskFamily();
   // Changing what this phone does always lands on its own view.
   useEffect(() => { setRemote(false); }, [listening]);
+  // Waiting to be let into a family (asked from a link or the scanner, or before hush was closed):
+  // the join screen shows it, and the answer.
+  const { joining } = useMonitor();
+  useEffect(() => { if (joining && joining !== "denied" && joining !== "failed" && !pair) setPair("join"); }, [joining]); // eslint-disable-line react-hooks/exhaustive-deps
   // A crying notification was tapped: show the main view, where the cry and its recording are.
   useEffect(() => onShowMonitorMain(() => { setRemote(false); setFam(false); setPair(null); }), []);
   return (

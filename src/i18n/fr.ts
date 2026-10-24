@@ -815,6 +815,7 @@ export const fr: Record<Key, string> = {
   "fam.makeFailed": "Pas de changement. Le bruit blanc s’est peut-être arrêté, ou hush a été fermé là-bas.",
   "rt.idleHint": "Ce téléphone est le babyphone. Son micro est coupé pour l’instant.",
   "rx.remoteDo": "Bruit blanc, écoute et sommeil",
+  "pair.requestGone": "{name} ne demande plus à rejoindre.",
   "settings.title": "Réglages",
   "settings.babyName": "Prénom de bébé",
   "settings.prefs": "Préférences",
