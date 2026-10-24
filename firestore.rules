@@ -16,7 +16,7 @@ service cloud.firestore {
         allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 20;
       }
       match /acts/{act} {
-        allow get, list: if signedIn() && roomName(room);
+        allow get, list, delete: if signedIn() && roomName(room);
         allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 12;
       }
       match /days/{day} {

@@ -55,9 +55,14 @@ export function logAct(k: ActKind, extra: Partial<Pick<Act, "why" | "asker" | "s
 }
 
 /** Something happened on another phone in the family. */
-export function receiveAct(a: Act) {
-  if (!a?.id || !a.k) return;
-  list = merge(list, [{ ...a, at: Math.min(a.at, Date.now()) }]);
+export function receiveAct(a: Act) { receiveActs([a]); }
+/** Several at once (the cloud room's log): one save, one redraw, and only if something is new. */
+export function receiveActs(xs: Act[]) {
+  const ok = xs.filter((a) => a?.id && a.k && a.at > clearedAt).map((a) => ({ ...a, at: Math.min(a.at, Date.now()) }));
+  if (!ok.length) return;
+  const next = merge(list, ok);
+  if (next.length === list.length && next.every((x, i) => x.id === list[i].id)) return;
+  list = next;
   emit();
 }
 
@@ -67,4 +72,11 @@ export function subscribeActs(f: (l: Act[]) => void) {
   f(list);
   return () => { subs.delete(f); };
 }
-export const clearActs = () => { list = []; emit(); };
+/** Cleared here: older entries (from the room, or late pushes) don't come back. */
+let clearedAt = 0;
+AsyncStorage.getItem("hush:actsCleared").then((v) => { clearedAt = Number(v) || 0; }).catch(() => {});
+export const clearActs = () => {
+  clearedAt = Date.now();
+  AsyncStorage.setItem("hush:actsCleared", String(clearedAt)).catch(() => {});
+  list = []; emit();
+};

@@ -388,12 +388,13 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     if (!cloudReady) return;
     const write = () => {
       const r = roomFor();
-      writeLive({ playing: r.playing, sound: r.sound, listening: r.listening, canMonitor: r.canMonitor, listenSince: r.listenSince });
+      // listenSince comes from the native side only (this screen's copy restarts with the app).
+      writeLive({ playing: r.playing, sound: r.sound, listening: r.listening, canMonitor: r.canMonitor });
     };
     const id0 = setTimeout(write, 800);
     const id = playing ? setInterval(write, 10 * 60_000) : null;
     return () => { clearTimeout(id0); if (id) clearInterval(id); };
-  }, [cloudReady, playing, soundId, mon.listening, mon.micOn, mon.m.family, writeLive, roomFor]);
+  }, [cloudReady, playing, soundId, mon.listening, mon.members.length, writeLive, roomFor]);
   // Tell the other phones when this room changes (someone pressed play, a timer ended, listening
   // started or stopped). Only while listening, or the moment it stops.
   const wasListening = useRef(mon.listening);

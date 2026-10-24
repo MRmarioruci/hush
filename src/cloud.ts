@@ -16,7 +16,7 @@ import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import * as FirebaseAuth from "firebase/auth";
 import { initializeAuth, getAuth, signInAnonymously, type Auth } from "firebase/auth";
 import {
-  initializeFirestore, doc, collection, setDoc, onSnapshot, query, orderBy, limit, where, getDocs, deleteDoc, getDocFromServer,
+  initializeFirestore, doc, collection, setDoc, onSnapshot, query, orderBy, limit, where, getDocs, deleteDoc, getDocFromServer, runTransaction,
   type Firestore, type Unsubscribe, type DocumentData,
 } from "firebase/firestore";
 import type { Family, Entry } from "./family";
@@ -91,7 +91,7 @@ const roomDoc = (room: string) => doc(db!, "rooms", room);
 const safe = (p: () => Promise<unknown>) => { if (!db) return; p().catch(() => {}); };
 
 /** The live state of this phone (or the family entry of any phone). Merged into what's there. */
-export type PhoneLive = { listening?: boolean; canMonitor?: boolean; playing?: boolean; sound?: string; listenSince?: number; battery?: number; charging?: boolean; baby?: string; name?: string; seen: number };
+export type PhoneLive = { cloud?: boolean; listening?: boolean; canMonitor?: boolean; playing?: boolean; sound?: string; listenSince?: number; battery?: number; charging?: boolean; baby?: string; name?: string; seen: number };
 export function writePhone(room: string, token: string, data: { live?: PhoneLive; entry?: Entry }) {
   if (!room || !token) return;
   const flat: Record<string, unknown> = { token };
@@ -104,7 +104,14 @@ export type RoomSleep = { asleep: boolean; since: number; at: number; from: stri
 export type RoomAck = { by: string; name: string; until: number };
 export function writeRoom(room: string, data: { sleep?: RoomSleep; ack?: RoomAck; baby?: string }) {
   if (!room) return;
-  safe(() => setDoc(roomDoc(room), { ...data, updated: Date.now() }, { merge: true }));
+  const { sleep, ...rest } = data;
+  if (Object.keys(rest).length) safe(() => setDoc(roomDoc(room), { ...rest, updated: Date.now() }, { merge: true }));
+  // Asleep / awake: the newest statement wins, whichever write reaches the server last.
+  if (sleep) safe(() => runTransaction(db!, async (tx) => {
+    const cur = (await tx.get(roomDoc(room))).data()?.sleep as RoomSleep | undefined;
+    if (cur && cur.at > sleep.at) return;
+    tx.set(roomDoc(room), { sleep, updated: Date.now() }, { merge: true });
+  }));
 }
 
 export function writeAct(room: string, act: { id: string } & Record<string, unknown>) {
@@ -118,12 +125,13 @@ export function writeDay(room: string, device: string, key: string, rev: number,
   safe(() => setDoc(doc(db!, "rooms", room, "days", `${device.replace(/[^A-Za-z0-9_-]/g, "_")}_${key}`), { device, key, rev, j: packed }));
 }
 
-/** Settings → Clear sleep history: this phone's days leave the room too. */
+/** Settings → Clear sleep history: this phone's days and the room's activity log leave the room too. */
 export async function deleteDays(room: string, device: string) {
   if (!room || !device || !(await signIn())) return;
   try {
     const s = await getDocs(query(collection(db!, "rooms", room, "days"), where("device", "==", device)));
-    await Promise.all(s.docs.map((d) => deleteDoc(d.ref)));
+    const a = await getDocs(collection(db!, "rooms", room, "acts"));
+    await Promise.all([...s.docs, ...a.docs].map((d) => deleteDoc(d.ref)));
   } catch {}
   AsyncStorage.removeItem("hush:cloudDays").catch(() => {});
 }

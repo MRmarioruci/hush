@@ -17,6 +17,8 @@ object CloudSync {
   @Volatile private var idToken = ""
   @Volatile private var idTokenUntil = 0L
   private val lock = Any()
+  // One write at a time, in order: a late "listening" must never land after "stopped".
+  private val queue = java.util.concurrent.Executors.newSingleThreadExecutor()
 
   fun configure(context: Context, apiKey: String, projectId: String, room: String, phone: String, refreshToken: String) {
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -32,9 +34,9 @@ object CloudSync {
   /** Merge these fields into this phone's document. Runs on its own thread; never throws. */
   fun writePhone(context: Context, fields: Map<String, Any?>) {
     val app = context.applicationContext
-    Thread {
+    queue.execute {
       try { write(app, fields) } catch (e: Exception) { Diag.add("cloud write failed: ${e.javaClass.simpleName}: ${e.message?.take(120)}") }
-    }.start()
+    }
   }
 
   private fun write(context: Context, fields: Map<String, Any?>) {

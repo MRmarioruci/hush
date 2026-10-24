@@ -99,7 +99,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   // Sleep history changed here (a sleep logged, edited or deleted): the family's room gets it.
-  useEffect(() => { if (mon.cloudReady && nights.length) mon.syncSleep(true).catch(() => {}); }, [nights, mon.cloudReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (mon.cloudReady && nights.length) mon.syncSleep().catch(() => {}); }, [nights, mon.cloudReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const sleeps = useMemo(() => nights.flatMap((n) => n.sleeps ?? [])
     .filter((x, i, all) => all.findIndex((y) => y.from === x.from && y.to === x.to) === i) // a sleep across midnight is in two days
     .sort((a, b) => a.from - b.from), [nights]);
@@ -132,12 +132,17 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   /** Tell the family's room what this phone says about the baby's sleep (the one shared answer). */
   const cloudRef = useRef(mon.cloudReady);
   cloudRef.current = mon.cloudReady;
+  const onCloudRef = useRef(mon.isOnCloud);
+  onCloudRef.current = mon.isOnCloud;
   const { setRoomSleep } = mon;
+  const saidAsleepAt = useRef(0); // when this phone last said "asleep" (an older "awake" can't end that sleep)
+  const meRef = useRef(mon.me);
+  meRef.current = mon.me;
   const say = useCallback((asleep: boolean, at: number) => {
-    if (!cloudRef.current || !mon.me) return;
-    setRoomSleep({ asleep, since: at, at: Date.now(), from: mon.me });
-    mon.syncSleep(true).catch(() => {});
-  }, [setRoomSleep, mon.me]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (asleep) saidAsleepAt.current = Date.now();
+    if (!cloudRef.current || !meRef.current) return;
+    setRoomSleep({ asleep, since: at, at: Date.now(), from: meRef.current });
+  }, [setRoomSleep]);
 
 
   /* ---------- telling the paired phones ---------- */
@@ -196,7 +201,9 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     // Asleep only because another phone said so: ask that phone to end its sleep.
     if (!openFrom && !monitorAsleep && peerAsleep && said) {
       // The cloud room tells the phone tracking it (also if hush is closed there); else a push.
-      if (mon.cloudReady) { say(false, at); return null; }
+      // The room has it for everyone; the push wakes the phone tracking the sleep even if hush is
+      // closed there (it ends its sleep or, as the baby monitor, its counting).
+      say(false, at);
       let me = "";
       try { me = await getMyToken(); } catch {}
       sendData([said.from], { type: "cmd", cmd: "woke", from: me }).catch(() => {});
@@ -241,15 +248,21 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   // here): end it at that time.
   useEffect(() => {
     const sl = mon.roomSleep;
-    if (!sl || sl.asleep || sl.from === mon.me || openFrom == null || sl.at <= openFrom) return;
-    wakeRef.current(sl.from, Math.min(Date.now(), Math.max(sl.since, openFrom + 60_000)));
-  }, [mon.roomSleep?.at, openFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!sl || sl.asleep || sl.from === mon.me) return;
+    if (openFrom != null) {
+      if (sl.at <= Math.max(openFrom, saidAsleepAt.current)) return;
+      wakeRef.current(sl.from, Math.min(Date.now(), Math.max(sl.since, openFrom + 60_000)));
+    } else if (monitorAsleep && sl.at > Math.max(listenStart, saidAsleepAt.current)) {
+      // This phone is the baby monitor counting the sleep: that sleep is over.
+      setAwakeAt(Math.min(Date.now(), Math.max(sl.since, listenStart)));
+    }
+  }, [mon.roomSleep?.at, openFrom, monitorAsleep]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const sub = addPushListener((n) => {
       const d = n.request.content.data as { type?: string; asleep?: boolean; since?: number; from?: string; cmd?: string } | undefined;
       if (!d?.from || !peers().some((p) => p.token === d.from)) return;
       if (d.type === "sleep" && typeof d.asleep === "boolean") {
-        if (cloudRef.current) return; // the cloud room has it (with the sender's own time)
+        if (onCloudRef.current(d.from)) return; // the cloud room has it (with the sender's own time)
         savePeer({ asleep: d.asleep, since: d.since ?? Date.now(), at: Date.now(), from: d.from });
       } else if (d.type === "cmd" && d.cmd === "woke") {
         wakeRef.current(d.from);

@@ -1,6 +1,6 @@
 // The baby monitor: listening state, settings and pairing. Independent of the white noise,
 // so both can run at once and neither stops the other.
-import { logAct, receiveAct, setActTransport, type Act } from "../activity";
+import { logAct, receiveAct, receiveActs, setActTransport, type Act } from "../activity";
 import { dialog } from "../components/Dialog";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
@@ -80,6 +80,8 @@ type Monitor = {
   /** The room's shared sleep: asleep since / woke at, and which phone said so (null: not known yet). */
   roomSleep: RoomSleep | null;
   setRoomSleep: (s: RoomSleep) => void;
+  /** Whether another phone is known to be on the cloud room (then its pushes about shared state are redundant). */
+  isOnCloud: (token: string) => boolean;
   /** This phone's live state, for the room (white noise etc.; the native side adds battery and the mic). */
   writeLive: (live: Omit<PhoneLive, "seen">) => void;
 };
@@ -137,6 +139,14 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const me = m.me ?? "";
   const members = membersOf(m.family, me);
   const tokens = members.map((p) => p.token);
+  // The cloud room (set up further down; these refs are read by callbacks defined before it).
+  const ridRef = useRef("");
+  const cloudRef = useRef(false);
+  const onCloud = useRef(new Set<string>());
+  const cloudEntries = useRef<{ room: string; entries: Record<string, Entry> } | null>(null);
+  const pushDaysRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
+  /** Pushes keep carrying shared things too while any phone isn't on the cloud room (older versions). */
+  const pushAlso = () => !cloudRef.current || membersOf(mRef.current.family, mRef.current.me ?? "").some((p) => !onCloud.current.has(p.token));
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
   const [listening, setListeningRaw] = useState(() => cryDetector?.isListening() ?? false);
   const [lastStop, setLastStop] = useState<Stop | null>(null);
@@ -525,6 +535,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const f = mRef.current.family;
     if (!f?.entries[token]) return;
     const next = { ...f, entries: { ...f.entries, [token]: { ...f.entries[token], gone: true, at: Date.now() } } };
+    writePhone(roomId(f), token, { entry: next.entries[token] }); // the room hears it once, from here
     const rooms = { ...(mRef.current.rooms ?? {}) };
     delete rooms[token];
     setFamily(next, { rooms });
@@ -665,8 +676,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     if (!peers.length) return 0;
     if (cloudRef.current && ridRef.current) {
       setLastSync(Date.now());
-      await pushDays(force);
-      return peers.length;
+      await pushDaysRef.current(force);
+      if (!pushAlso()) return peers.length;
     }
     if (!force && Date.now() - lastSyncRef.current < 5 * 60_000) return peers.length; // at most every 5 min
     lastSyncRef.current = Date.now();
@@ -715,7 +726,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     applyRooms(Object.values(cryDetector.rooms()) as RoomMsg[]);
     const cur = mRef.current;
     const peers = membersOf(cur.family, cur.me ?? "").map((p) => p.token);
-    if (cloudRef.current) return; // the cloud room already has every phone's state
+    if (!pushAlso()) return; // the cloud room already has every phone's state
     if (!peers.length || Date.now() - lastAsk.current < 45_000) return;
     lastAsk.current = Date.now();
     try { const me = await getMyToken(); await sendData(peers, { type: "cmd", cmd: "status", from: me }); } catch {}
@@ -850,7 +861,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       me: () => me || mRef.current.me || "",
       myName: () => mRef.current.myName.trim(),
       send: (a) => {
-        if (cloudRef.current && ridRef.current) { writeAct(ridRef.current, { ...a, by: a.by || me }); return; }
+        if (cloudRef.current && ridRef.current) writeAct(ridRef.current, { ...a, by: a.by || me });
+        if (!pushAlso()) return;
         const to = peersOf(mRef.current); if (to.length) sendData(to, { type: "act", act: a, from: me }).catch(() => {});
       },
     });
@@ -907,13 +919,19 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   /* ---------- the family's room in the cloud (src/cloud.ts): one source of truth ---------- */
   const rid = joining ? "" : roomId(m.family);
-  const ridRef = useRef(rid);
   ridRef.current = rid;
   const [cloudReady, setCloudReady] = useState(false);
-  const cloudRef = useRef(false);
   cloudRef.current = cloudReady;
   const active = useAppActive();
-  useEffect(() => { if (!cloudReady && active) signIn().then(setCloudReady); }, [cloudReady, active]);
+  // Sign in and check the room store answers; retried every 2 minutes while hush is on screen.
+  useEffect(() => {
+    if (cloudReady || !active) return;
+    let stop = false;
+    const attempt = () => signIn().then((ok) => { if (!stop && ok) setCloudReady(true); });
+    attempt();
+    const id = setInterval(attempt, 2 * 60_000);
+    return () => { stop = true; clearInterval(id); };
+  }, [cloudReady, active]);
   const hasFamily = !!rid && members.length > 0;
 
   // The native side writes this phone's state too (mic, battery), also while hush sleeps.
@@ -924,33 +942,40 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     cryDetector.setCloud(c.apiKey, c.projectId, rid, phoneId(me), c.refreshToken);
   }, [cloudReady, rid, me, hasFamily]);
 
-  // Every phone's family entry (name, language, removed), newest wins (as with the family pushes).
-  const wroteEntries = useRef<Record<string, number>>({});
-  useEffect(() => {
-    if (!cloudReady || !hasFamily || !m.family) return;
-    for (const [tok, e] of Object.entries(m.family.entries)) {
-      const k = `${rid}|${tok}`;
-      if (wroteEntries.current[k] === e.at) continue;
-      wroteEntries.current[k] = e.at;
-      writePhone(rid, tok, { entry: e });
-    }
-  }, [cloudReady, rid, hasFamily, m.family]);
+  // This phone's own family entry (name, language). Only ever our own, and only when it's newer
+  // than the room's copy, so a phone that was closed for a while can't undo a rename or a removal.
+  // (A removal is written once, by the phone that removes: see removeMember.)
+  const writeMyEntry = useCallback(() => {
+    const cur = mRef.current;
+    const meTok = cur.me ?? "";
+    const room = ridRef.current;
+    const seen = cloudEntries.current;
+    if (!cloudRef.current || !room || !meTok || !seen || seen.room !== room) return;
+    const mine = cur.family?.entries[meTok];
+    if (!mine || mine.gone) return;
+    const there = seen.entries[meTok];
+    if (there && there.at >= mine.at) return;
+    seen.entries = { ...seen.entries, [meTok]: mine };
+    writePhone(room, meTok, { entry: mine });
+  }, []);
+  useEffect(writeMyEntry, [m.family, cloudReady, rid, writeMyEntry]);
   useEffect(() => { if (cloudReady && hasFamily && m.babyName.trim()) writeRoom(rid, { baby: m.babyName.trim() }); }, [cloudReady, rid, hasFamily, m.babyName]);
 
   const writeLive = useCallback((live: Omit<PhoneLive, "seen">) => {
     const cur = mRef.current;
     if (!cloudRef.current || !ridRef.current || !cur.me) return;
     const b = cryDetector?.battery?.();
-    writePhone(ridRef.current, cur.me, { live: { ...live, ...(b ? { battery: b[0], charging: b[1] } : {}), name: cur.myName.trim(), baby: cur.babyName.trim(), seen: Date.now() } });
+    writePhone(ridRef.current, cur.me, { live: { ...live, cloud: true, ...(b ? { battery: b[0], charging: b[1] } : {}), name: cur.myName.trim(), baby: cur.babyName.trim(), seen: Date.now() } });
   }, []);
 
   const [roomSleep, setRoomSleepState] = useState<RoomSleep | null>(null);
   const setRoomSleep = useCallback((sl: RoomSleep) => {
-    setRoomSleepState(sl);
+    setRoomSleepState((cur) => (cur && cur.at > sl.at ? cur : sl));
     writeRoom(ridRef.current, { sleep: sl });
   }, []);
 
-  // This phone's sleep days: only the ones that changed (remembered across restarts).
+  // This phone's sleep days: only the ones that changed (remembered across restarts). A day still
+  // going changes every minute; times are compared to 5 minutes, and today goes at most every 5.
   const DAYS_KEY = "hush:cloudDays";
   const wroteDays = useRef<Record<string, { h: string; at: number }> | null>(null);
   const pushingDays = useRef(false);
@@ -966,26 +991,26 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       const own = (await ownNights()).slice(0, 30);
       const device = await deviceId();
       const baby = mRef.current.babyName.trim();
+      const today = dayKey(Date.now());
       let changed = false;
       for (const n of own) {
         const k = `${room}|${n.key}`;
-        const h = hashOf(JSON.stringify(n));
+        const h = hashOf(JSON.stringify(n, (_k, v) => (typeof v === "number" && v > 1e12 ? Math.floor(v / 300_000) : v)));
         const prev = done[k];
         if (prev?.h === h) continue;
-        // A day still being listened to changes every minute: at most every 5 minutes then.
-        if (!force && prev && Date.now() - prev.at < 5 * 60_000) continue;
+        if (!force && prev && n.key === today && Date.now() - prev.at < 5 * 60_000) continue;
         writeDay(room, device, n.key, Date.now(), JSON.stringify(packNights([{ ...n, rev: Date.now() }], baby, device)));
         done[k] = { h, at: Date.now() };
         changed = true;
       }
       if (changed) {
-        // Forget what's older than the days kept.
         const oldest = own.at(-1)?.key ?? "";
         for (const k of Object.keys(done)) if (k.split("|")[1] < oldest) delete done[k];
         AsyncStorage.setItem(DAYS_KEY, JSON.stringify(done)).catch(() => {});
       }
     } catch {} finally { pushingDays.current = false; }
   }, []);
+  pushDaysRef.current = pushDays;
   useEffect(() => {
     if (!cloudReady || !hasFamily) return;
     const id = setTimeout(() => pushDays(), 3000);
@@ -999,55 +1024,75 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   // Reading the room: only while hush is on screen. Coming back gets everything at once.
   const seenDays = useRef<Record<string, number>>({});
+  const lastAck = useRef(0);
   useEffect(() => {
     if (!cloudReady || !hasFamily || !active) return;
-    let myDevice = "";
-    deviceId().then((d) => { myDevice = d; }).catch(() => {});
-    return watchRoom(rid, {
-      room: (d) => {
-        if (d.sleep && typeof d.sleep.at === "number") setRoomSleepState(d.sleep);
-        const cur = mRef.current;
-        if (d.ack && d.ack.until > Date.now() && d.ack.by !== cur.me) setAck({ who: d.ack.name, until: Math.min(d.ack.until, Date.now() + 15 * 60_000) });
-        if (d.baby && !cur.babyName.trim()) update({ babyName: d.baby });
-      },
-      phones: (list) => {
-        const cur = mRef.current;
-        const f = cur.family;
-        const meTok = cur.me ?? "";
-        if (!f || !meTok) return;
-        const theirs: Record<string, Entry> = {};
-        for (const p of list) if (p.token && p.entry && typeof p.entry.at === "number") theirs[p.token] = p.entry;
-        const merged = mergeEntries(f.entries, theirs);
-        if (merged) {
-          if (merged[meTok]?.gone && theirs[meTok]?.gone) {
-            // Another phone removed this one: start over on our own.
-            setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
-            return;
+    // A snapshot from this room counts only while this phone is still in this family (a join or a
+    // removal switches families before the old listener has stopped).
+    const live = () => roomId(mRef.current.family) === rid;
+    let unsub = () => {};
+    let stopped = false;
+    deviceId().then((myDevice) => {
+      if (stopped) return;
+      unsub = watchRoom(rid, {
+        room: (d) => {
+          if (!live()) return;
+          const sl = d.sleep;
+          if (sl && typeof sl.at === "number") setRoomSleepState((cur) => (cur && cur.at > sl.at ? cur : sl));
+          const cur = mRef.current;
+          if (d.ack && d.ack.until > Date.now() && d.ack.by !== cur.me && d.ack.until !== lastAck.current) {
+            lastAck.current = d.ack.until;
+            setAck({ who: d.ack.name, until: Math.min(d.ack.until, Date.now() + 15 * 60_000) });
           }
-          setFamily({ ...f, entries: merged });
-        }
-        applyRooms(list.filter((p) => p.token && p.token !== meTok && typeof p.seen === "number").map((p) => ({
-          from: p.token, name: p.entry?.name ?? p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
-          canMonitor: p.canMonitor, listenSince: p.listenSince, battery: p.battery, charging: p.charging, at: p.seen, got: p.seen,
-        })));
-      },
-      acts: (list) => { for (const a of list) receiveAct(a as Act); },
-      days: (list) => {
-        const got: Night[] = [];
-        for (const d of list) {
-          if (!d.device || d.device === myDevice) continue;
-          const id = `${d.device}|${d.key}`;
-          if (seenDays.current[id] === d.rev) continue;
-          seenDays.current[id] = d.rev;
-          try { got.push(...(unpackNights(JSON.parse(d.j)) ?? [])); } catch {}
-        }
-        if (got.length) saveReceivedNights(got).then(() => setNightsVersion((v) => v + 1));
-      },
-    }, dayKey(Date.now() - 35 * 86400_000));
+          if (d.baby && !cur.babyName.trim()) update({ babyName: d.baby });
+        },
+        phones: (list) => {
+          if (!live()) return;
+          const cur = mRef.current;
+          const f = cur.family;
+          const meTok = cur.me ?? "";
+          if (!f || !meTok) return;
+          const theirs: Record<string, Entry> = {};
+          for (const p of list) {
+            if (p.token && p.entry && typeof p.entry.at === "number") theirs[p.token] = p.entry;
+            if (p.token && p.cloud && typeof p.seen === "number" && Date.now() - p.seen < 3 * 86400_000) onCloud.current.add(p.token);
+          }
+          cloudEntries.current = { room: rid, entries: theirs };
+          const merged = mergeEntries(f.entries, theirs);
+          if (merged) {
+            if (merged[meTok]?.gone && theirs[meTok]?.gone) {
+              // Another phone removed this one: start over on our own.
+              setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
+              return;
+            }
+            setFamily({ ...f, entries: merged });
+          }
+          writeMyEntry();
+          applyRooms(list.filter((p) => p.token && p.token !== meTok && typeof p.seen === "number").map((p) => ({
+            from: p.token, name: p.entry?.name ?? p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
+            canMonitor: p.canMonitor, listenSince: p.listenSince, battery: p.battery, charging: p.charging, at: p.seen, got: p.seen,
+          })));
+        },
+        acts: (list) => { if (live()) receiveActs(list as Act[]); },
+        days: (list) => {
+          if (!live()) return;
+          const got: Night[] = [];
+          for (const d of list) {
+            if (!d.device || d.device === myDevice) continue;
+            const id = `${d.device}|${d.key}`;
+            if (seenDays.current[id] === d.rev) continue;
+            seenDays.current[id] = d.rev;
+            try { got.push(...(unpackNights(JSON.parse(d.j)) ?? [])); } catch {}
+          }
+          if (got.length) saveReceivedNights(got).then((ok) => { if (ok) setNightsVersion((v) => v + 1); });
+        },
+      }, dayKey(Date.now() - 35 * 86400_000));
+    }).catch(() => {});
+    return () => { stopped = true; unsub(); };
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: (tok: string) => cloudReady && onCloud.current.has(tok) }}>{children}</Ctx.Provider>
   );
 }
 

@@ -470,17 +470,23 @@ function combineByDay(records: Night[]): Night[] {
 
 /** Keep days that arrived from another phone (never our own, echoed back). */
 let saving: Promise<void> = Promise.resolve();
-export function saveReceivedNights(list: Night[]): Promise<void> {
+let savedAny = false;
+/** Resolves true when something new was kept (another phone's day, newer than ours). */
+export function saveReceivedNights(list: Night[]): Promise<boolean> {
   // Many sync messages can land at once; save them one after another so none is lost.
-  saving = saving.then(() => saveNow(list)).catch(() => {});
-  return saving;
+  const run = saving.then(async () => { savedAny = false; await saveNow(list); return savedAny; });
+  saving = run.then(() => {}, () => {});
+  return run.catch(() => false);
 }
 async function saveNow(list: Night[]) {
   const me = await deviceId();
   list = list.filter((n) => n.device && n.device !== me);
   if (!list.length) return;
   const stored = await read<Night[]>(NIGHTS, []);
-  await write(NIGHTS, mergeNights(stored, list).slice(0, KEEP_DAYS));
+  const next = mergeNights(stored, list).slice(0, KEEP_DAYS);
+  if (JSON.stringify(next) === JSON.stringify(stored)) return;
+  savedAny = true;
+  await write(NIGHTS, next);
 }
 
 /** The sleep that just ended, and the days it touched (for the summary push). */
