@@ -1,29 +1,57 @@
 rules_version = '2';
-// The family rooms (src/cloud.ts). There are no accounts: phones sign in anonymously, and a room's
-// name is the family's secret id + key from the pairing code. Knowing the name is what lets a phone
-// in, so rooms can be opened by name but never listed or searched.
+// hush families (src/cloud.ts). No accounts: every phone signs in anonymously and its uid is its
+// member id. Only members can read or change a family. A phone with a pairing code can only ask to
+// join (status "pending"); a member has to let it in.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function roomName(room) { return room.size() >= 20 && room.size() <= 40; }
+    function memberOf(f) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/families/$(f)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/families/$(f)/members/$(request.auth.uid)).data.status == "member";
+    }
 
-    match /rooms/{room} {
-      allow get: if signedIn() && roomName(room);
-      allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 10;
+    // Pairing codes: anyone signed in can look one up by its 6 digits (never list them); only a
+    // member makes one for its family, and an unexpired code can't be taken over.
+    match /codes/{code} {
+      allow get: if signedIn();
+      allow create, update: if memberOf(request.resource.data.fid)
+        && request.resource.data.by == request.auth.uid
+        && (resource == null || resource.data.exp < request.time.toMillis());
+    }
 
-      match /phones/{phone} {
-        allow get, list: if signedIn() && roomName(room);
-        allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 20;
+    match /families/{f} {
+      allow get, update: if memberOf(f);
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid;
+
+      match /members/{uid} {
+        allow get: if memberOf(f) || (signedIn() && request.auth.uid == uid);
+        allow list: if memberOf(f);
+        // Your own entry: ask to join, or (making the family) be its first member.
+        allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid
+          && (request.resource.data.status == "pending"
+              || (request.resource.data.status == "member"
+                  && getAfter(/databases/$(database)/documents/families/$(f)).data.owner == request.auth.uid));
+        // Your own entry without changing your status (name, language, push address); or a member
+        // letting someone in.
+        allow update: if (signedIn() && request.auth.uid == uid && request.resource.data.status == resource.data.status)
+          || memberOf(f);
+        // Leave yourself, or a member removes someone (or says no).
+        allow delete: if (signedIn() && request.auth.uid == uid) || memberOf(f);
+      }
+
+      match /phones/{uid} {
+        allow read: if memberOf(f);
+        allow create, update: if memberOf(f) && request.auth.uid == uid && request.resource.data.size() <= 16;
+        allow delete: if memberOf(f);
       }
       match /acts/{act} {
-        allow get, list, delete: if signedIn() && roomName(room);
-        allow create, update: if signedIn() && roomName(room) && request.resource.data.size() <= 12;
+        allow read, delete: if memberOf(f);
+        allow create, update: if memberOf(f) && request.resource.data.size() <= 12;
       }
       match /days/{day} {
-        allow get, list: if signedIn() && roomName(room);
-        allow delete: if signedIn() && roomName(room);
-        allow create, update: if signedIn() && roomName(room)
-          && request.resource.data.j is string && request.resource.data.j.size() < 60000;
+        allow read, delete: if memberOf(f);
+        allow create, update: if memberOf(f) && request.resource.data.j is string && request.resource.data.j.size() < 60000;
       }
     }
   }

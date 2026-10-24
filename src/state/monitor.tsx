@@ -6,13 +6,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState, Platform } from "react-native";
 import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
 import { addEvents, dayKey, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent, type Night } from "../nights";
-import { nativeCredentials, phoneId, roomId, signIn, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
+import { approve, askToJoin, createFamily, isMember, leaveFamily as leaveCloud, myUid, nativeCredentials, publishCode, readCode, removeFromFamily, signIn, updateMe, watchMembers, watchMyRequest, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppActive } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { loadStops, saveStops, type Stop, type StopWhy } from "../stops";
 import { CLIP_SECONDS, CRY_CLIP_SECONDS, newClip, storageBucket, sendData, MONITOR_DEFAULTS, addPushListener, hasMic, sendPush, THRESHOLDS, askMicAndNotifications, loadMonitor, saveMonitor, type MonitorSettings, type Room, setupAlertChannel, getMyToken, sendDataMany, onDeadTokens } from "../monitor";
-import { makeInvite, membersOf, mergeEntries, newFamily, readFamilyMsg, readInvite, type Entry, type Family, type Member } from "../family";
+import { membersOf, type Family, type Member } from "../family";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "../i18n";
 import { useUnlock } from "./unlock";
 
@@ -36,11 +36,11 @@ type Monitor = {
   setFocus: (token: string | null) => void;
   /** What this phone is doing now: listening (a baby's room), watching another room, or neither. */
   role: "nursery" | "parent" | null;
-  /** The code other phones scan (or open as a link) to join; makes the family if there's none yet. */
-  invite: () => Promise<string>;
+  /** A 6-digit code (5 minutes) for another phone to join with; makes the family if there's none yet. Or an error to show. */
+  invite: () => Promise<{ code: string; exp: number } | string>;
   /** Join with a scanned code or opened link. Returns an error to show, or null. */
   join: (raw: string) => Promise<string | null>;
-  /** The phone that showed the code we joined with, until it answers. */
+  /** Waiting to be let in (the family's id), "denied", "failed" (no answer), or null. */
   joining: string | null;
   removeMember: (token: string) => void;
   leaveFamily: () => void;
@@ -106,7 +106,14 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   if (!ready.current) ready.current = new Promise<void>((res) => { readyResolve.current = res; });
   useEffect(() => {
     loadMonitor().then((raw) => {
-      let v = { ...migrate(raw), ...pending.current };
+      let v = { ...raw, ...pending.current };
+      // 1.31: phones are connected through the family in the cloud. Pairings from before are
+      // forgotten once, for a clean start (every phone pairs again).
+      if (!v.cloudFamily) {
+        v = { ...v, family: null, rooms: {}, parents: undefined, pairedToken: undefined, pairedWith: undefined, role: undefined, cloudFamily: true };
+        AsyncStorage.multiRemove(["hush:cloudDays", "hush:acts"]).catch(() => {});
+        saveMonitor(v);
+      }
       // No name yet: start with the phone's own name (e.g. "Redmi Note 14"); it can be changed in the phones list.
       // Old placeholder names ("Parent 1", "Phone 2", in any language) count as no name.
       const placeholder = !v.myName?.trim() || /^[^\s\d]+\s*\d{1,2}$/u.test(v.myName.trim());
@@ -142,11 +149,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // The cloud room (set up further down; these refs are read by callbacks defined before it).
   const ridRef = useRef("");
   const cloudRef = useRef(false);
-  const onCloud = useRef(new Set<string>());
-  const cloudEntries = useRef<{ room: string; entries: Record<string, Entry> } | null>(null);
   const pushDaysRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
   /** Pushes keep carrying shared things too while any phone isn't on the cloud room (older versions). */
-  const pushAlso = () => !cloudRef.current || membersOf(mRef.current.family, mRef.current.me ?? "").some((p) => !onCloud.current.has(p.token));
+  const pushAlso = () => !cloudRef.current;
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
   const [listening, setListeningRaw] = useState(() => cryDetector?.isListening() ?? false);
   const [lastStop, setLastStop] = useState<Stop | null>(null);
@@ -314,7 +319,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, []);
 
-  /* ---------- the family: which phones belong together ---------- */
+  /* ---------- the family: which phones belong together (Firestore, see the end and src/cloud.ts) ---------- */
 
   /** This phone's push address (asks for notifications the first time). */
   const myToken = useCallback(async () => {
@@ -325,250 +330,16 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       if (mRef.current.me) tok = mRef.current.me; else throw e;
     }
     if (tok !== mRef.current.me) {
-      const cur = mRef.current;
-      // A family made before the address was known (an update from paired phones): add ourselves.
-      const fam = cur.family && !cur.family.entries[tok]
-        ? { ...cur.family, entries: { ...cur.family.entries, [tok]: { name: cur.myName.trim(), lang: getLang(), at: Date.now() } } }
-        : cur.family;
-      update({ me: tok, family: fam });
-      mRef.current = { ...cur, me: tok, family: fam };
+      update({ me: tok });
+      mRef.current = { ...mRef.current, me: tok };
     }
     return tok;
   }, [update]);
-
-  /** Tell phones what we know about the family (all of them unless given). */
-  const broadcast = useCallback(async (f: Family, to?: string[]) => {
-    const meTok = mRef.current.me ?? "";
-    if (!meTok) return;
-    const list = to ?? Object.entries(f.entries).filter(([tok, e]) => tok !== meTok && (!e.gone || Date.now() - e.at < 7 * 86400_000)).map(([tok]) => tok);
-    if (!list.length) return;
-    await sendDataMany(list.map((tok) => ({ to: tok, data: { type: "family", id: f.id, key: f.key, entries: f.entries, from: meTok, baby: mRef.current.babyName.trim() } })));
-  }, []);
 
   const setFamily = useCallback((f: Family | null, extra: Partial<MonitorSettings> = {}) => {
     update({ family: f, ...extra });
     mRef.current = { ...mRef.current, family: f, ...extra };
   }, [update]);
-
-  // Phones that were paired before families existed: share the family once our address is known.
-  useEffect(() => {
-    if (!m.family || !(m.family as Family & { legacy?: boolean }).legacy) return;
-    myToken().then(() => {
-      const f = mRef.current.family;
-      if (!f) return;
-      const { legacy: _, ...clean } = f as Family & { legacy?: boolean };
-      setFamily(clean);
-      broadcast(clean);
-    }).catch(() => {});
-  }, [!!m.family]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // This phone's name or language changed: tell the others.
-  useEffect(() => {
-    const f = mRef.current.family;
-    const meTok = mRef.current.me;
-    if (!f || !meTok) return;
-    const mine = f.entries[meTok];
-    const name = m.myName.trim();
-    if (mine && mine.name === name && mine.lang === lang) return;
-    const id = setTimeout(() => {
-      const cur = mRef.current.family!;
-      const next = { ...cur, entries: { ...cur.entries, [meTok]: { name, lang, at: Date.now() } } };
-      setFamily(next);
-      broadcast(next);
-    }, 1500);
-    return () => clearTimeout(id);
-  }, [m.myName, lang, m.me, setFamily, broadcast]);
-
-  const [joining, setJoining] = useState<string | null>(null);
-  const approving = useRef(new Set<string>());
-  const beforeJoin = useRef<Family | null>(null);
-  const joinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // A phone that lost its pairing asks the phones that still talk to it; they send the family back
-  // if it's still listed there (see "take the family back" below).
-  const asked = useRef<Record<string, number>>({});
-  useEffect(() => {
-    const sub = addPushListener((n) => {
-      const d = n.request.content.data as { type?: string; from?: string } | undefined;
-      const from = d?.from;
-      if (!from || !d?.type) return;
-      const cur = mRef.current;
-      const f = cur.family;
-      if (d.type === "family-ask") {
-        if (f && f.entries[from] && !f.entries[from].gone) broadcast(f, [from]);
-        return;
-      }
-      if (!loaded.current || !["cmd", "room", "clip", "sleep", "days", "sync-request"].includes(d.type)) return;
-      if (f && membersOf(f, cur.me ?? "").some((p) => p.token === from)) return; // we know them
-      if (Date.now() - (asked.current[from] ?? 0) < 60_000) return;
-      asked.current[from] = Date.now();
-      getMyToken().then((me) => { if (me !== from) sendData([from], { type: "family-ask", from: me }); }).catch(() => {});
-    });
-    return () => sub.remove();
-  }, [broadcast]);
-
-  // Family news from another phone.
-  useEffect(() => {
-    const sub = addPushListener((n) => {
-      const msg = readFamilyMsg(n.request.content.data);
-      if (!msg) return;
-      const cur = mRef.current;
-      const f = cur.family;
-      const meTok = cur.me ?? "";
-      // A new phone used our code or QR: it only gets in when someone here taps Allow.
-      const theirs = msg.entries[msg.from];
-      if (f && meTok && msg.from !== meTok && msg.id === f.id && msg.key === f.key && theirs && !theirs.gone
-        && (!f.entries[msg.from] || f.entries[msg.from].gone)) {
-        Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
-        if (approving.current.has(msg.from)) return;
-        approving.current.add(msg.from);
-        const who = theirs.name?.trim() || t("rt.otherPhone");
-        const room = cur.babyName.trim() ? t("hero.room", { name: babyLabel(cur.babyName) }) : t("rx.room");
-        dialog(t("pair.wantsTitle", { name: who, room }), t("pair.wantsBody", { name: babyLabel(cur.babyName) }), [
-          { text: t("pair.notNow"), style: "cancel", onPress: () => { approving.current.delete(msg.from); sendData([msg.from], { type: "join-denied", from: meTok }); } },
-          { text: t("pair.allow"), onPress: () => {
-            approving.current.delete(msg.from);
-            const now = mRef.current.family ?? f;
-            const next: Family = { ...now, entries: { ...now.entries, [msg.from]: { ...theirs, at: Date.now() } } };
-            setFamily(next);
-            broadcast(next);
-          } },
-        ]);
-        return;
-      }
-      // This phone lost its pairing but the family still lists it: take the family back.
-      if (!f || !membersOf(f, meTok).length) {
-        getMyToken().then((tok) => {
-          const mine = msg.entries[tok];
-          if (!mine || mine.gone || msg.from === tok) return;
-          const entries = { ...msg.entries, [tok]: { ...mine, name: mRef.current.myName.trim() || mine.name, lang: getLang(), at: Date.now() } };
-          const back: Family = { id: msg.id, key: msg.key, entries };
-          update({ me: tok });
-          mRef.current = { ...mRef.current, me: tok };
-          setFamily(back);
-          broadcast(back);
-          diag.mark("family restored from another phone");
-        }).catch(() => {});
-        return;
-      }
-      if (!meTok || msg.from === meTok) return;
-      const same = msg.id === f.id && msg.key === f.key;
-      const known = !!f.entries[msg.from] && !f.entries[msg.from].gone;
-      if (!same && !known) return; // not our family
-      Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
-      if (msg.from === joining) { setJoining(null); if (joinTimer.current) clearTimeout(joinTimer.current); }
-      // Two families joined up (or phones updated from pairing): settle on one name for it.
-      const adopt = !same && msg.id < f.id;
-      const merged = mergeEntries(f.entries, msg.entries);
-      const entries = merged ?? f.entries;
-      const mine = entries[meTok];
-      if (mine?.gone && msg.entries[meTok]?.gone) {
-        // Another phone removed this one: start over on our own.
-        setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
-        return;
-      }
-      const next: Family = { id: adopt ? msg.id : f.id, key: adopt ? msg.key : f.key, entries };
-      if (!cur.babyName.trim() && msg.baby) update({ babyName: msg.baby });
-      if (merged || adopt) {
-        setFamily(next);
-        broadcast(next); // everyone gets the news, including phones that just joined
-      } else if (mergeEntries(msg.entries, f.entries) || !same) {
-        broadcast(next, [msg.from]); // they're behind: bring them up to date
-      }
-    });
-    return () => sub.remove();
-  }, [joining, setFamily, broadcast, update]);
-
-  const invite = useCallback(async () => {
-    const tok = await myToken();
-    let f = mRef.current.family;
-    if (!f) { f = newFamily(tok, mRef.current.myName.trim(), getLang()); setFamily(f); }
-    return makeInvite(f, tok, mRef.current.myName.trim());
-  }, [myToken, setFamily]);
-
-  const join = useCallback(async (raw: string): Promise<string | null> => {
-    const inv = readInvite(raw);
-    if (!inv) return t("family.notCode");
-    let tok: string;
-    try { tok = await myToken(); } catch (e) { return (e as Error).message; }
-    if (inv.token === tok) return t("family.ownCode");
-    const cur = mRef.current;
-    const old = cur.family;
-    if (old && old.id === inv.id && old.key === inv.key && old.entries[inv.token]) return null; // already in it
-    // Leaving the old family: tell its phones.
-    if (old && membersOf(old, tok).length) {
-      const left = { ...old, entries: { ...old.entries, [tok]: { ...(old.entries[tok] ?? { name: cur.myName.trim() }), gone: true, at: Date.now() } } };
-      broadcast(left);
-      writePhone(roomId(old), tok, { entry: left.entries[tok] });
-    }
-    const now = Date.now();
-    const next: Family = { id: inv.id, key: inv.key, entries: { [tok]: { name: cur.myName.trim(), lang: getLang(), at: now }, [inv.token]: { name: inv.name, at: 1 } } };
-    beforeJoin.current = old ?? null;
-    setFamily(next, { rooms: {} });
-    setJoining(inv.token);
-    if (joinTimer.current) clearTimeout(joinTimer.current);
-    // The other phone has to tap Allow: give them time.
-    joinTimer.current = setTimeout(() => setJoining((j) => (j === inv.token ? "failed" : j)), 60_000);
-    await broadcast(next, [inv.token]);
-    return null;
-  }, [myToken, setFamily, broadcast]);
-
-  /** Joining didn't work out (said no, no answer, or cancelled): back to how things were. */
-  const cancelJoin = useCallback(() => {
-    if (joinTimer.current) clearTimeout(joinTimer.current);
-    setJoining(null);
-    const meTok = mRef.current.me ?? "";
-    const prev = beforeJoin.current;
-    beforeJoin.current = null;
-    setFamily(prev ?? (meTok ? newFamily(meTok, mRef.current.myName.trim(), getLang()) : null), { rooms: {} });
-  }, [setFamily]);
-  useEffect(() => {
-    const sub = addPushListener((n) => {
-      const d = n.request.content.data as { type?: string; from?: string } | undefined;
-      if (d?.type !== "join-denied" || !d.from) return;
-      setJoining((j) => (j === d.from ? "denied" : j));
-    });
-    return () => sub.remove();
-  }, []);
-
-  const removeMember = useCallback((token: string) => {
-    const f = mRef.current.family;
-    if (!f?.entries[token]) return;
-    const next = { ...f, entries: { ...f.entries, [token]: { ...f.entries[token], gone: true, at: Date.now() } } };
-    writePhone(roomId(f), token, { entry: next.entries[token] }); // the room hears it once, from here
-    const rooms = { ...(mRef.current.rooms ?? {}) };
-    delete rooms[token];
-    setFamily(next, { rooms });
-    broadcast(next);
-  }, [setFamily, broadcast]);
-
-  // Phones whose push address stopped working (hush removed, data cleared) leave the family by
-  // themselves, so nothing keeps sending to them. Found by any send, here or in the native listener.
-  useEffect(() => {
-    const drop = (tokens: string[]) => {
-      if (!loaded.current) return;
-      const f = mRef.current.family;
-      const gone = tokens.filter((tok) => f?.entries[tok] && !f.entries[tok].gone && tok !== mRef.current.me);
-      gone.forEach((tok) => { removeMember(tok); diag.mark(`removed phone with dead push address …${tok.slice(-6)}`); });
-    };
-    const off = onDeadTokens(drop);
-    const check = () => drop(cryDetector?.takeDeadTokens() ?? []);
-    const id = setInterval(check, 60_000);
-    const app = AppState.addEventListener("change", (st) => st === "active" && check());
-    ready.current!.then(check);
-    return () => { off(); clearInterval(id); app.remove(); };
-  }, [removeMember]);
-
-  const leaveFamily = useCallback(() => {
-    const cur = mRef.current;
-    const f = cur.family;
-    const meTok = cur.me ?? "";
-    if (!f || !meTok) return;
-    const gone = { ...(f.entries[meTok] ?? { name: "" }), gone: true, at: Date.now() };
-    broadcast({ ...f, entries: { ...f.entries, [meTok]: gone } });
-    writePhone(roomId(f), meTok, { entry: gone });
-    setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
-  }, [setFamily, broadcast]);
 
   useEffect(() => { cryDetector?.setMe(me, m.myName.trim()); }, [me, m.myName]);
 
@@ -917,13 +688,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [sendOwnDays]);
 
-  /* ---------- the family's room in the cloud (src/cloud.ts): one source of truth ---------- */
-  const rid = joining ? "" : roomId(m.family);
+  /* ---------- the family in the cloud (src/cloud.ts): who's connected, and everything shared ---------- */
+  const rid = m.family?.id ?? "";
   ridRef.current = rid;
   const [cloudReady, setCloudReady] = useState(false);
   cloudRef.current = cloudReady;
   const active = useAppActive();
-  // Sign in and check the room store answers; retried every 2 minutes while hush is on screen.
+  // Sign in and check the cloud answers; retried every 2 minutes while hush is on screen.
   useEffect(() => {
     if (cloudReady || !active) return;
     let stop = false;
@@ -933,39 +704,173 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     return () => { stop = true; clearInterval(id); };
   }, [cloudReady, active]);
   const hasFamily = !!rid && members.length > 0;
+  const meInfo = (tok: string) => ({ token: tok, name: mRef.current.myName.trim(), lang: getLang() });
+
+  // Who's in: the family's member list on the server, kept up to date whenever hush runs (also in
+  // the background; it only changes when someone joins, leaves or renames). This phone's copy is
+  // only a cache (so alerts still reach everyone without a connection).
+  const tokenUid = useRef<Record<string, string>>({});
+  const askedAllow = useRef(new Set<string>());
+  useEffect(() => {
+    if (!cloudReady || !rid) return;
+    return watchMembers(rid, (list, mine) => {
+      const cur = mRef.current;
+      if (cur.family?.id !== rid) return;
+      if (!mine || mine.status !== "member") {
+        // Removed by another phone (or the family is gone): this phone is on its own again.
+        diag.mark("no longer in the family");
+        setFamily(null, { rooms: {} });
+        return;
+      }
+      const entries: Family["entries"] = {};
+      const map: Record<string, string> = {};
+      for (const x of list) {
+        if (x.status !== "member" || !x.token) continue;
+        entries[x.token] = { name: x.name ?? "", ...(x.lang ? { lang: x.lang } : {}), at: x.joinedAt ?? 0 };
+        map[x.token] = x.uid;
+      }
+      tokenUid.current = map;
+      if (JSON.stringify(cur.family.entries) !== JSON.stringify(entries)) {
+        const gone = Object.keys(cur.family.entries).filter((tok) => !entries[tok]);
+        const rooms = { ...(cur.rooms ?? {}) };
+        for (const tok of gone) delete rooms[tok];
+        setFamily({ id: rid, key: "cloud", entries }, { rooms });
+      }
+      // Our own entry follows this phone (push address, name, language).
+      const tok = cur.me;
+      if (tok && (mine.token !== tok || (mine.name ?? "") !== cur.myName.trim() || mine.lang !== getLang())) updateMe(rid, meInfo(tok));
+      // A phone asked to join with a code from this phone: Allow or Not now.
+      for (const x of list) {
+        if (x.status !== "pending" || x.invitedBy !== myUid() || Date.now() - (x.joinedAt ?? 0) > 10 * 60_000 || askedAllow.current.has(x.uid)) continue;
+        askedAllow.current.add(x.uid);
+        const who = x.name?.trim() || t("rt.otherPhone");
+        const room = cur.babyName.trim() ? t("hero.room", { name: babyLabel(cur.babyName) }) : t("rx.room");
+        Notifications.dismissAllNotificationsAsync().catch(() => {});
+        dialog(t("pair.wantsTitle", { name: who, room }), t("pair.wantsBody", { name: babyLabel(cur.babyName) }), [
+          { text: t("pair.notNow"), style: "cancel", onPress: () => { removeFromFamily(rid, x.uid); } },
+          { text: t("pair.allow"), onPress: () => { approve(rid, x.uid).catch(() => dialog(t("pair.offline"))); } },
+        ]);
+      }
+    });
+  }, [cloudReady, rid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Renamed here, or the language changed: our entry follows.
+  useEffect(() => {
+    if (!cloudReady || !rid || !me) return;
+    const id = setTimeout(() => updateMe(rid, meInfo(me)), 1500);
+    return () => clearTimeout(id);
+  }, [cloudReady, rid, me, m.myName, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** A pairing code for others to join with (makes the family if there's none yet). Or an error to show. */
+  const invite = useCallback(async (): Promise<{ code: string; exp: number } | string> => {
+    let tok: string;
+    try { tok = await myToken(); } catch (e) { return (e as Error).message; }
+    if (!(await signIn())) return t("pair.offline");
+    setCloudReady(true);
+    let f = mRef.current.family?.id ?? "";
+    // A family this phone isn't really in any more (removed while offline): start a new one.
+    if (f && (await isMember(f)) === false) f = "";
+    if (!f) {
+      try { f = await createFamily(meInfo(tok)); } catch { return t("pair.offline"); }
+      setFamily({ id: f, key: "cloud", entries: { [tok]: { name: mRef.current.myName.trim(), lang: getLang(), at: Date.now() } } }, { rooms: {} });
+    }
+    const r = await publishCode(f, meInfo(tok), mRef.current.babyName.trim());
+    return r === "offline" ? t("pair.offline") : r;
+  }, [myToken, setFamily]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Joining: this phone waits as "pending" until a member lets it in (or says no, or nobody answers).
+  const [joining, setJoining] = useState<string | null>(null);
+  const joinFid = useRef("");
+  /** Join with a typed code, a scanned QR or an opened link. Returns an error to show, or null. */
+  const join = useCallback(async (raw: string): Promise<string | null> => {
+    const code = raw.match(/(?:^|[?&]c=|\D)(\d{6})(?:\D|$)/)?.[1] ?? (/^\d{6}$/.test(raw.trim()) ? raw.trim() : null);
+    if (!code) return t("family.notCode");
+    let tok: string;
+    try { tok = await myToken(); } catch (e) { return (e as Error).message; }
+    const c = await readCode(code);
+    if (c === "offline") return t("pair.offline");
+    if (c === "missing") return t("pair.noCode");
+    if (c === "expired") return t("pair.expired");
+    setCloudReady(true);
+    if (c.by === myUid()) return t("family.ownCode");
+    const old = mRef.current.family?.id ?? "";
+    if (old === c.fid && (await isMember(old))) return null; // already in it
+    // One family at a time: leave the old one.
+    if (old) { await leaveCloud(old); setFamily(null, { rooms: {} }); }
+    if (!(await askToJoin(c.fid, meInfo(tok), c.by))) return t("pair.offline");
+    joinFid.current = c.fid;
+    setJoining(c.fid);
+    // Wakes the inviting phone with a notification (tapping it opens the Allow question).
+    const room = c.baby ? t("hero.room", { name: babyLabel(c.baby) }) : t("rx.room");
+    sendPush([c.byToken], t("pair.wantsTitle", { name: mRef.current.myName.trim() || t("rt.otherPhone"), room }), { type: "join-ask" }).catch(() => {});
+    return null;
+  }, [myToken, setFamily]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const f = joining;
+    if (!f || f === "denied" || f === "failed") return;
+    let waited = false;
+    const off = watchMyRequest(f, (st) => {
+      if (st === "pending") waited = true;
+      else if (st === "member") { setFamily({ id: f, key: "cloud", entries: {} }, { rooms: {} }); joinFid.current = ""; setJoining(null); }
+      else if (waited) { joinFid.current = ""; setJoining("denied"); }
+    });
+    const timer = setTimeout(() => setJoining((j) => (j === f ? "failed" : j)), 3 * 60_000);
+    return () => { off(); clearTimeout(timer); };
+  }, [joining, setFamily]);
+  /** Stop waiting (cancelled, said no, or no answer): the request goes. */
+  const cancelJoin = useCallback(() => {
+    if (joinFid.current) leaveCloud(joinFid.current);
+    joinFid.current = "";
+    setJoining(null);
+  }, []);
+
+  const removeMember = useCallback((token: string) => {
+    const f = mRef.current.family;
+    if (!f?.entries[token]) return;
+    const uid = tokenUid.current[token];
+    if (uid) removeFromFamily(f.id, uid);
+    const entries = { ...f.entries };
+    delete entries[token];
+    const rooms = { ...(mRef.current.rooms ?? {}) };
+    delete rooms[token];
+    setFamily({ ...f, entries }, { rooms });
+  }, [setFamily]);
+  const leaveFamily = useCallback(() => {
+    const f = mRef.current.family;
+    if (f) leaveCloud(f.id);
+    setFamily(null, { rooms: {} });
+  }, [setFamily]);
+
+  // Phones whose push address stopped working (hush removed, data cleared) leave the family, so
+  // nothing keeps sending to them. Found by any send, here or in the native listener.
+  useEffect(() => {
+    const drop = (list: string[]) => {
+      if (!loaded.current) return;
+      const f = mRef.current.family;
+      const gone = list.filter((tok) => f?.entries[tok] && tok !== mRef.current.me);
+      gone.forEach((tok) => { removeMember(tok); diag.mark(`removed phone with dead push address …${tok.slice(-6)}`); });
+    };
+    const off = onDeadTokens(drop);
+    const check = () => drop(cryDetector?.takeDeadTokens() ?? []);
+    const id = setInterval(check, 60_000);
+    const app = AppState.addEventListener("change", (st) => st === "active" && check());
+    ready.current!.then(check);
+    return () => { off(); clearInterval(id); app.remove(); };
+  }, [removeMember]);
 
   // The native side writes this phone's state too (mic, battery), also while hush sleeps.
   useEffect(() => {
     if (!cryDetector || !cloudReady || !me) return;
     const c = nativeCredentials();
     if (!hasFamily || !c) { cryDetector.setCloud("", "", "", "", ""); return; }
-    cryDetector.setCloud(c.apiKey, c.projectId, rid, phoneId(me), c.refreshToken);
+    cryDetector.setCloud(c.apiKey, c.projectId, rid, c.uid, c.refreshToken);
   }, [cloudReady, rid, me, hasFamily]);
-
-  // This phone's own family entry (name, language). Only ever our own, and only when it's newer
-  // than the room's copy, so a phone that was closed for a while can't undo a rename or a removal.
-  // (A removal is written once, by the phone that removes: see removeMember.)
-  const writeMyEntry = useCallback(() => {
-    const cur = mRef.current;
-    const meTok = cur.me ?? "";
-    const room = ridRef.current;
-    const seen = cloudEntries.current;
-    if (!cloudRef.current || !room || !meTok || !seen || seen.room !== room) return;
-    const mine = cur.family?.entries[meTok];
-    if (!mine || mine.gone) return;
-    const there = seen.entries[meTok];
-    if (there && there.at >= mine.at) return;
-    seen.entries = { ...seen.entries, [meTok]: mine };
-    writePhone(room, meTok, { entry: mine });
-  }, []);
-  useEffect(writeMyEntry, [m.family, cloudReady, rid, writeMyEntry]);
   useEffect(() => { if (cloudReady && hasFamily && m.babyName.trim()) writeRoom(rid, { baby: m.babyName.trim() }); }, [cloudReady, rid, hasFamily, m.babyName]);
 
   const writeLive = useCallback((live: Omit<PhoneLive, "seen">) => {
     const cur = mRef.current;
     if (!cloudRef.current || !ridRef.current || !cur.me) return;
     const b = cryDetector?.battery?.();
-    writePhone(ridRef.current, cur.me, { live: { ...live, cloud: true, ...(b ? { battery: b[0], charging: b[1] } : {}), name: cur.myName.trim(), baby: cur.babyName.trim(), seen: Date.now() } });
+    writePhone(ridRef.current, cur.me, { ...live, ...(b ? { battery: b[0], charging: b[1] } : {}), name: cur.myName.trim(), baby: cur.babyName.trim(), seen: Date.now() });
   }, []);
 
   const [roomSleep, setRoomSleepState] = useState<RoomSleep | null>(null);
@@ -1027,9 +932,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const lastAck = useRef(0);
   useEffect(() => {
     if (!cloudReady || !hasFamily || !active) return;
-    // A snapshot from this room counts only while this phone is still in this family (a join or a
-    // removal switches families before the old listener has stopped).
-    const live = () => roomId(mRef.current.family) === rid;
+    // A snapshot counts only while this phone is still in this family (leaving or being removed
+    // switches before the old listener has stopped).
+    const live = () => mRef.current.family?.id === rid;
     let unsub = () => {};
     let stopped = false;
     deviceId().then((myDevice) => {
@@ -1048,28 +953,9 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         },
         phones: (list) => {
           if (!live()) return;
-          const cur = mRef.current;
-          const f = cur.family;
-          const meTok = cur.me ?? "";
-          if (!f || !meTok) return;
-          const theirs: Record<string, Entry> = {};
-          for (const p of list) {
-            if (p.token && p.entry && typeof p.entry.at === "number") theirs[p.token] = p.entry;
-            if (p.token && p.cloud && typeof p.seen === "number" && Date.now() - p.seen < 3 * 86400_000) onCloud.current.add(p.token);
-          }
-          cloudEntries.current = { room: rid, entries: theirs };
-          const merged = mergeEntries(f.entries, theirs);
-          if (merged) {
-            if (merged[meTok]?.gone && theirs[meTok]?.gone) {
-              // Another phone removed this one: start over on our own.
-              setFamily(newFamily(meTok, cur.myName.trim(), getLang()), { rooms: {} });
-              return;
-            }
-            setFamily({ ...f, entries: merged });
-          }
-          writeMyEntry();
+          const meTok = mRef.current.me ?? "";
           applyRooms(list.filter((p) => p.token && p.token !== meTok && typeof p.seen === "number").map((p) => ({
-            from: p.token, name: p.entry?.name ?? p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
+            from: p.token, name: p.name, baby: p.baby, playing: p.playing, sound: p.sound, listening: p.listening,
             canMonitor: p.canMonitor, listenSince: p.listenSince, battery: p.battery, charging: p.charging, at: p.seen, got: p.seen,
           })));
         },
@@ -1092,22 +978,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: (tok: string) => cloudReady && onCloud.current.has(tok) }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
   );
 }
 
-/** Settings from before families: paired phones become a family (shared once this phone's address is known). */
-function migrate(raw: MonitorSettings): MonitorSettings {
-  if (raw.family) return raw;
-  const entries: Family["entries"] = {};
-  for (const p of raw.parents ?? []) entries[p.token] = { name: p.name, lang: p.lang, at: p.addedAt || 1 };
-  if (raw.pairedToken) entries[raw.pairedToken] = { name: "", at: 1 };
-  if (!Object.keys(entries).length) return raw;
-  // The baby's phone's family name wins when they meet ("~" sorts after every generated name).
-  const f = newFamily("", raw.myName.trim());
-  const family = { ...f, id: raw.role === "nursery" ? f.id : `~${f.id}`, entries, legacy: true } as Family;
-  return { ...raw, family };
-}
 
 /** A short fingerprint of a string (to tell whether a day changed). */
 function hashOf(s: string): string {

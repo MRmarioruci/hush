@@ -9,7 +9,6 @@ import QRCode from "react-native-qrcode-svg";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
 import { ALERT_AFTER, CRY_CLIP_SECONDS, THRESHOLDS, addPushListener, getMyToken, loadAlerts, recordAlert, sendData, type AlertRecord, type Sensitivity } from "../monitor";
-import { inviteLink } from "../family";
 import { YAMNET_LABELS } from "../yamnetLabels";
 import { MonitorHero } from "../components/MonitorHero";
 import { PairFlow, PairStart, type PairMode } from "../components/PairFlow";
@@ -287,91 +286,13 @@ function RoomActivity() {
 
 /* ---------------- no family yet: join the phones ---------------- */
 
-function FamilyStart() {
-  const { m, update, baby, join, joining } = useMonitor();
-  const [showCode, setShowCode] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const onCode = async (raw: string) => { setScanning(false); setErr(await join(raw)); };
-  return (
-    <>
-      <MonitorHero baby={baby} />
-      <View style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
-        <Text style={styles.lead}>{t("fam.startTitle")}</Text>
-        <Text style={styles.leadSub}>{t("fam.startSub")}</Text>
-      </View>
-      <Card style={{ gap: 12 }}>
-        <TextInput value={m.myName} onChangeText={(myName) => update({ myName })} placeholder={t("fam.myName")} placeholderTextColor={colors.muted} style={styles.input} maxLength={30} />
-        {showCode ? (
-          <CodeCard onClose={() => setShowCode(false)} bare />
-        ) : (
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable onPress={() => setShowCode(true)} style={[styles.primary, { flex: 1 }]}><Text style={styles.primaryText}>{t("fam.showCode")}</Text></Pressable>
-            <Pressable onPress={() => setScanning(true)} style={[styles.secondary, { flex: 1 }]}><Text style={styles.secondaryText}>{t("fam.scan")}</Text></Pressable>
-          </View>
-        )}
-        <JoinStatus err={err} joining={joining} />
-      </Card>
-      <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onCode} />
-    </>
-  );
-}
 
-function JoinStatus({ err, joining }: { err: string | null; joining: string | null }) {
-  if (err) return <Text style={[styles.msg, { color: colors.rose }]}>{err}</Text>;
-  if (joining === "failed") return <Text style={[styles.msg, { color: colors.rose }]}>{t("fam.joinFailed")}</Text>;
-  if (joining) return (
-    <View style={{ flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" }}>
-      <ActivityIndicator color={colors.cream} size="small" />
-      <Text style={styles.msg}>{t("fam.joining")}</Text>
-    </View>
-  );
-  return null;
-}
 
-/** The code other phones scan (or the same thing as a link to send). */
-function CodeCard({ onClose, bare }: { onClose?: () => void; bare?: boolean }) {
-  const { invite, members } = useMonitor();
-  const [code, setCode] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [tries, setTries] = useState(0);
-  useEffect(() => { setErr(null); invite().then(setCode, (e) => setErr((e as Error).message)); }, [invite, tries]);
-  // Close once a new phone has joined.
-  const count = useRef(members.length);
-  useEffect(() => { if (members.length > count.current) onClose?.(); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  const body = (
-    <View style={{ alignItems: "center", gap: 14 }}>
-      <Text style={styles.stepTitle}>{t("fam.codeTitle")}</Text>
-      <View style={styles.qr}>
-        {code ? <QRCode value={code} size={188} backgroundColor={colors.cream} color={colors.bg} /> : (
-          <View style={{ alignItems: "center", gap: 12 }}>
-            {!err && <ActivityIndicator color={colors.bg} />}
-            <Text style={styles.qrWait}>{err ?? t("pair.ready")}</Text>
-            {err && <Pressable onPress={() => setTries((x) => x + 1)} style={styles.retry} accessibilityRole="button"><Text style={styles.retryText}>{t("common.tryAgain")}</Text></Pressable>}
-          </View>
-        )}
-      </View>
-      <View style={{ gap: 10, alignSelf: "stretch" }}>
-        <Step n={1} text={t("fam.codeStep1")} />
-        <Step n={2} text={t("fam.codeStep2")} />
-      </View>
-      {code && (
-        <Pressable onPress={() => Share.share({ message: t("fam.shareMsg", { link: inviteLink(code) }) }).catch(() => {})} style={styles.inline} hitSlop={8}>
-          <Icon d={SEND} size={15} color={colors.peach} />
-          <Text style={styles.inlineText}>{t("fam.shareLink")}</Text>
-        </Pressable>
-      )}
-      {onClose && <Pressable onPress={onClose} hitSlop={10}><Text style={styles.change}>{t("common.cancel")}</Text></Pressable>}
-    </View>
-  );
-  return bare ? body : <Card>{body}</Card>;
-}
 
 /* ---------------- the family: every phone that joined ---------------- */
 
 function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => void }) {
   const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms } = useMonitor();
-  const [showCode, setShowCode] = useState(false);
   // What each phone does: the baby monitor (listening by the crib) or getting the alerts.
   const role = (monitor: boolean) => (
     <View style={styles.roleLine}>
@@ -459,13 +380,10 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
             </Pressable>
           </View>
         ))}
-        {!showCode && (
-          <Pressable onPress={onInvite} style={styles.person}>
-            <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
-            <Text style={[styles.personName, { color: colors.peach }]}>{t("fam.add")}</Text>
-          </Pressable>
-        )}
-        {showCode && <View style={{ paddingTop: 10 }}><CodeCard onClose={() => setShowCode(false)} bare /></View>}
+        <Pressable onPress={onInvite} style={styles.person}>
+          <View style={[styles.avatar, { backgroundColor: colors.card2 }]}><Icon d={PLUS} size={18} color={colors.peach} width={2.2} /></View>
+          <Text style={[styles.personName, { color: colors.peach }]}>{t("fam.add")}</Text>
+        </Pressable>
         <View style={styles.famLinks}>
           <Pressable onPress={onJoin} hitSlop={8}><Text style={styles.change}>{t("pair.join")}</Text></Pressable>
           <Pressable
@@ -475,7 +393,7 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
             <Text style={[styles.change, { color: colors.muted }]}>{t("fam.leave")}</Text>
           </Pressable>
         </View>
-        <JoinStatus err={err} joining={joining} />
+        {err && <Text style={[styles.msg, { color: colors.rose }]}>{err}</Text>}
         {msg && <Text style={styles.msg}>{msg}</Text>}
       </Card>
       <Scanner visible={scanning} onClose={() => setScanning(false)} onCode={onCode} />
@@ -754,8 +672,8 @@ type Remote = ReturnType<typeof useRemote>;
 
 /** While Monitor is open: ask every phone in the family what it's doing (now, then every 30 s), so roles stay in sync. */
 function useAskFamily() {
-  const { members } = useMonitor();
-  const tokens = members.map((p) => p.token).join(",");
+  const { members, cloudReady } = useMonitor();
+  const tokens = cloudReady ? "" : members.map((p) => p.token).join(","); // the cloud already keeps everyone's state
   useFocusEffect(useCallback(() => {
     if (!tokens) return;
     const ask = () => myToken().then((me) => sendData(tokens.split(","), { type: "cmd", cmd: "status", from: me })).catch(() => {});

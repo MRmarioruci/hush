@@ -64,7 +64,7 @@ object CloudSync {
       mask.append(if (mask.isEmpty()) "?" else "&").append("updateMask.fieldPaths=").append(URLEncoder.encode(k, "UTF-8"))
     }
     body.put("fields", values)
-    val url = "https://firestore.googleapis.com/v1/projects/$project/databases/(default)/documents/rooms/$room/phones/$phone$mask"
+    val url = "https://firestore.googleapis.com/v1/projects/$project/databases/(default)/documents/families/$room/phones/$phone$mask"
     val c = URL(url).openConnection() as HttpURLConnection
     try {
       c.requestMethod = "PATCH"

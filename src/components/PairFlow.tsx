@@ -1,5 +1,6 @@
 // Putting phones in the same room: one phone invites (6-digit code + QR), the other types or scans it,
-// the inviting phone taps Allow, and both land on "You're in Sebastian's room".
+// the inviting phone taps Allow (see src/cloud.ts: the server only lets a member do that), and both
+// land on the Monitor tab, where each phone picks what it does.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,8 +9,11 @@ import QRCode from "react-native-qrcode-svg";
 import Svg, { Circle, Path, SvgXml } from "react-native-svg";
 import { colors, fonts } from "../theme";
 import { useMonitor } from "../state/monitor";
-import { inviteLink, readInvite } from "../family";
-import { CODE_MINUTES, publishCode, readCode } from "../pairing";
+import { CODE_MINUTES, readCode } from "../cloud";
+
+/** What the QR code and a shared link carry: the same 6 digits. */
+const codeLink = (code: string) => `hush://join?c=${code}`;
+const codeIn = (raw: string) => raw.match(/[?&]c=(\d{6})/)?.[1] ?? raw.match(/^\s*(\d{3})\s?(\d{3})\s*$/)?.slice(1).join("") ?? null;
 import { babyLabel, t } from "../i18n";
 import { Icon } from "./ui";
 
@@ -66,20 +70,14 @@ export function PairFlow({ mode, onClose }: { mode: PairMode | null; onClose: ()
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<PairMode | "done">("start");
   useEffect(() => { if (mode) setStep(mode); }, [mode]);
-  const { listening, rooms } = useMonitor();
-  // "Which phone stays by the crib?" only on the inviting phone, only when the room was just made
-  // (its first other phone), and only if no phone is the baby monitor yet. Otherwise just close.
-  const invited = (first: boolean) => {
-    const hasMonitor = listening || rooms.length > 0; // rooms: other phones listening now
-    if (first && !hasMonitor) setStep("done"); else onClose();
-  };
+  // Once a phone is in, everyone lands on the Monitor tab and picks there what each phone does.
+  const invited = () => onClose();
   return (
     <Modal visible={!!mode} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.root, { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 18 }]}>
         {step === "start" && <View style={{ flex: 1, justifyContent: "center" }}><PairStart onPick={setStep} /></View>}
         {step === "invite" && <Invite onClose={onClose} onDone={invited} />}
         {step === "join" && <Join onClose={onClose} onDone={onClose} />}
-        {step === "done" && <Done onClose={onClose} />}
       </View>
     </Modal>
   );
@@ -119,10 +117,9 @@ function Problem({ title, body }: { title: string; body?: string }) {
 
 /* ---------------- the inviting phone ---------------- */
 
-function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: boolean) => void }) {
-  const { invite, members, m } = useMonitor();
+function Invite({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { invite, members } = useMonitor();
   const room = useRoom();
-  const [inv, setInv] = useState<string | null>(null);
   const [code, setCode] = useState<{ code: string; exp: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [, tick] = useState(0);
@@ -132,15 +129,11 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: bool
     setErr(null);
     try {
       const slow = setTimeout(() => setErr((e) => e ?? t("pair.slow")), 20_000);
-      const i = await invite().finally(() => clearTimeout(slow));
-      setErr(null);
-      setInv(i);
-      const r = await publishCode(i, m.myName.trim(), m.babyName.trim());
-      if (r === "offline") setErr(t("pair.offline"));
-      else if (r === "setup") setErr(t("pair.codeSetup"));
-      else setCode(r);
+      const r = await invite().finally(() => clearTimeout(slow));
+      if (typeof r === "string") setErr(r);
+      else { setErr(null); setCode(r); }
     } catch (e) { setErr((e as Error).message); }
-  }, [invite, m.myName, m.babyName]);
+  }, [invite]);
   useEffect(() => { make(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // A new code when this one runs out.
   useEffect(() => {
@@ -151,7 +144,7 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: bool
     return () => clearInterval(id);
   }, [code, make]);
   // Someone was let in: done.
-  useEffect(() => { if (members.length > count.current) onDone(count.current === 0); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (members.length > count.current) onDone(); count.current = members.length; }, [members.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const left = code ? Math.max(0, code.exp - Date.now()) : 0;
   const frac = left / (CODE_MINUTES * 60_000);
@@ -174,10 +167,10 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: bool
           </>
         ) : err ? <Icon d={ALERT} size={34} color={colors.rose} width={2} /> : <ActivityIndicator color={colors.peach} />}
       </View>
-      {inv && (
+      {code && (
         <>
           <View style={styles.orRow}><View style={styles.orLine} /><Text style={styles.orText}>{t("pair.orScan")}</Text><View style={styles.orLine} /></View>
-          <View style={styles.qr}><QRCode value={inviteLink(inv)} size={124} backgroundColor={colors.cream} color={colors.bg} /></View>
+          <View style={styles.qr}><QRCode value={codeLink(code.code)} size={124} backgroundColor={colors.cream} color={colors.bg} /></View>
         </>
       )}
       <View style={{ marginTop: 14, alignSelf: "stretch", alignItems: "center", gap: 10 }}>
@@ -190,7 +183,7 @@ function Invite({ onClose, onDone }: { onClose: () => void; onDone: (first: bool
       </View>
       <View style={{ flex: 1 }} />
       {code && (
-        <Pressable onPress={() => Share.share({ message: t("pair.shareMsg", { code: pretty, room, link: inv ? inviteLink(inv) : "" }) }).catch(() => {})} style={[styles.soft, { alignSelf: "stretch" }]} accessibilityRole="button">
+        <Pressable onPress={() => Share.share({ message: t("pair.shareMsg", { code: pretty, room, link: codeLink(code.code) }) }).catch(() => {})} style={[styles.soft, { alignSelf: "stretch" }]} accessibilityRole="button">
           <Icon d={SEND} size={18} color={colors.peach} width={2} />
           <Text style={styles.softText}>{t("pair.send")}</Text>
         </Pressable>
@@ -247,7 +240,7 @@ function Join({ onClose, onDone }: { onClose: () => void; onDone: () => void }) 
       return;
     }
     if (r === "offline") { setProblem({ title: t("pair.offline") }); return; }
-    ask({ name: r.name, baby: r.baby, invite: r.invite });
+    ask({ name: r.name, baby: r.baby, invite: code });
   };
   const press = (k: string) => {
     if (busy || found) return;
@@ -257,9 +250,9 @@ function Join({ onClose, onDone }: { onClose: () => void; onDone: () => void }) 
     if (next.length === 6) check(next);
   };
   const onScan = (raw: string) => {
-    const inv = readInvite(raw);
-    if (!inv) { setProblem({ title: t("family.notCode") }); return; }
-    ask({ name: inv.name, baby: "", invite: raw });
+    const code = codeIn(raw);
+    if (!code) { setProblem({ title: t("family.notCode") }); return; }
+    check(code);
   };
 
   if (found) return (

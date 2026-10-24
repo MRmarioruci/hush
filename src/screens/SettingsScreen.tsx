@@ -17,7 +17,7 @@ import { fmtAge, pickBirthday } from "../components/Naps";
 import { dateLocale } from "../i18n";
 import type { Features } from "../storage";
 import { addEvent, clearHistory, deviceId } from "../nights";
-import { deleteDays, roomId } from "../cloud";
+import { deleteDays } from "../cloud";
 import { clearActs } from "../activity";
 import { dialog } from "../components/Dialog";
 import { useNaps } from "../state/naps";
@@ -54,7 +54,7 @@ export function SettingsScreen() {
     { text: t("settings.clearDo"), style: "destructive", onPress: async () => {
       await clearHistory();
       clearActs();
-      deleteDays(roomId(m.family), await deviceId()).catch(() => {});
+      deleteDays(m.family?.id ?? "", await deviceId()).catch(() => {});
       // Still listening: keep counting tonight from now on.
       if (listening) await addEvent({ type: "listen_start", t: Date.now() });
       naps.reload();

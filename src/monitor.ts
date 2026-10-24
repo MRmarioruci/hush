@@ -50,6 +50,8 @@ export type MonitorSettings = {
   clip?: { url?: string; at: number; error?: string; detail?: string; seconds?: number; got?: number; auto?: boolean } | null;
   /** Parent phone: preferred clip length (5, 10 or 15 s). */
   clipSeconds?: number;
+  /** Old pairings were cleared for the family in the cloud (1.31). */
+  cloudFamily?: boolean;
   /** What this phone is, chosen on the Monitor tab. Stays "monitor" when its listening stops. */
   mode?: "monitor" | "alerts";
 };
