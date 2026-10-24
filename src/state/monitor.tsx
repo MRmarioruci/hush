@@ -135,7 +135,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const setListening = useCallback((on: boolean, why: StopWhy = "you", detail?: string) => {
     const was = listeningNow.current;
     listeningNow.current = on;
-    if (was !== on) logAct(on ? "monOn" : "monOff", on ? {} : { why });
+    if (was !== on) logAct(on ? "monOn" : "monOff", on ? (why === "remote" && detail ? { asker: detail } : {}) : { why });
     setListeningRaw((was) => {
       if (was && !on) {
         const stop: Stop = { at: Date.now(), why, detail };
@@ -227,6 +227,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const appSub = AppState.addEventListener("change", (s) => { if (s === "active" && latest) apply(latest); });
     let latest: CryStatus | null = null;
     const a = cryDetector.onStatus((st) => {
+      if (st.monitorBy !== undefined) { setListening(true, "remote", st.monitorBy || undefined); return; }
       latest = st;
       if (AppState.currentState === "active" || !!st.crying !== !!shown.crying || st.error) apply(st);
       if (st.crying) setCryHeardAt(Date.now());
@@ -659,7 +660,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   // What another phone reports about its room (shown on Home and Monitor).
   useEffect(() => {
     const sub = addPushListener((n) => {
-      const d = n.request.content.data as { type?: string; from?: string; name?: string; baby?: string; playing?: boolean; sound?: string; listening?: boolean; at?: number; listenSince?: number; battery?: number; charging?: boolean } | undefined;
+      const d = n.request.content.data as { type?: string; from?: string; name?: string; baby?: string; playing?: boolean; sound?: string; listening?: boolean; canMonitor?: boolean; at?: number; listenSince?: number; battery?: number; charging?: boolean } | undefined;
       if (d?.type !== "room") return;
       const cur = mRef.current;
       const mems = membersOf(cur.family, cur.me ?? "");
@@ -674,6 +675,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         playing: !!d.playing, sound: d.sound ?? "womb", listening: !!d.listening, at, listenSince: d.listenSince,
         battery: d.battery ?? prev?.battery, charging: d.charging ?? prev?.charging, got,
         name: d.name ?? prev?.name, baby: d.baby ?? prev?.baby, lastListen: d.listening ? got : prev?.lastListen,
+        canMonitor: !!d.canMonitor && !d.listening,
       };
       update({ rooms: { ...(cur.rooms ?? {}), [from]: next } });
       mRef.current = { ...mRef.current, rooms: { ...(cur.rooms ?? {}), [from]: next } };

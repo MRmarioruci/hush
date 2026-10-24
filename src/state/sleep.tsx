@@ -360,8 +360,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     const r = remote.current;
     // Whether the microphone is really on comes from the native listener, not this screen's state
     // (they can differ after hush was restarted in the background), so phones never flip between answers.
-    const listening = cryDetector ? cryDetector.isListening() : r.listening;
-    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening, listenSince: listenSince.current, at: Date.now() };
+    // Listening only counts as the baby monitor; the mic can also be on just for smart volume.
+    const listening = cryDetector ? cryDetector.isMonitoring() : r.listening;
+    const canMonitor = !!cryDetector && cryDetector.isListening() && !listening;
+    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening, canMonitor, listenSince: listenSince.current, at: Date.now() };
   }, [player]);
   useEffect(() => {
     const sub = addPushListener((n) => {

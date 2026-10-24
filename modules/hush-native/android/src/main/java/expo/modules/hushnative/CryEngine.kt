@@ -152,7 +152,9 @@ object CryEngine {
   fun reportRoom(context: Context, to: List<String> = targets.mapNotNull { it["token"] }.ifEmpty { tokens }) {
     val (pct, plugged) = battery(context)
     AlertSender.sendData(to, mapOf(
-      "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to (running && monitorMode), "playing" to roomPlaying, "sound" to roomSound,
+      "type" to "room", "from" to myToken, "name" to myName, "baby" to babyName, "listening" to (running && monitorMode),
+      // The mic is on for smart volume (white noise playing): a parent can make it the monitor.
+      "canMonitor" to (running && !monitorMode), "playing" to roomPlaying, "sound" to roomSound,
       "listenSince" to listenSince, "battery" to pct, "charging" to plugged, "at" to System.currentTimeMillis(),
     ))
   }

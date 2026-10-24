@@ -18,6 +18,8 @@ export type Room = {
   name?: string; baby?: string;
   /** Last time it reported listening (this phone's clock). */
   lastListen?: number;
+  /** Its mic is on for smart volume (white noise playing): it can be made the baby monitor. */
+  canMonitor?: boolean;
 };
 export type Sensitivity = "low" | "medium" | "high";
 export type Role = "nursery" | "parent";

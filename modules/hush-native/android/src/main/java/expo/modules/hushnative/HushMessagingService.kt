@@ -76,6 +76,17 @@ object RoomCommands {
     when (body.optString("cmd")) {
       "status" -> CryEngine.reportRoom(context, listOf(from))
       "clip" -> clip(context, from, parent, body.optInt("seconds", 10).coerceIn(5, 15))
+      // A parent makes this phone the baby monitor. Only when the mic is already on for smart
+      // volume (Android doesn't let the mic start from the background); otherwise the parent
+      // just gets the room as it is and sees it didn't switch.
+      "monitor" -> {
+        if (CryEngine.running && !CryEngine.monitorMode) {
+          CryEngine.setMonitor(true)
+          CryEngine.listener?.invoke("status", mapOf("monitorBy" to (parent["name"] ?: "")))
+          Diag.add("made the baby monitor by ${parent["name"] ?: "?"}")
+          CryEngine.reportRoom(context)
+        } else CryEngine.reportRoom(context, listOf(from))
+      }
       // "I'm on it": crying alerts go out quietly for a few minutes, naming who's going.
       "ack" -> {
         val until = body.optLong("until").coerceAtMost(System.currentTimeMillis() + 15 * 60_000L)

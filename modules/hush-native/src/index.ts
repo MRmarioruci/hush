@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo";
 type Subscription = { remove(): void };
 
 export type VolumeState = { step: number; max: number };
-export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string };
+export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string; /** a parent made this phone the baby monitor */ monitorBy?: string };
 
 type VolumeNative = {
   getVolume(): VolumeState;
@@ -29,6 +29,7 @@ type CryNative = {
   artworkFile?(resource: string): string;
   setMonitor?(on: boolean): void;
   setVisible?(on: boolean): void;
+  isMonitoring?(): boolean;
   lastClip?(): string;
   playClip?(url: string): boolean;
   stopClip?(): void;
@@ -96,6 +97,8 @@ export const cryDetector = cry
       setMonitor: (on: boolean) => { try { cry.setMonitor?.(on); } catch {} },
       /** Whether hush is on screen: the mic's frequent level updates are only sent then. */
       setVisible: (on: boolean) => { try { cry.setVisible?.(on); } catch {} },
+      /** Listening as the baby monitor (the mic can also be on just for smart volume). */
+      isMonitoring: (): boolean => { try { return cry.isMonitoring?.() ?? cry.isListening(); } catch { return false; } },
       /** The app's moon as a file:// URL for the playback notification, or "" (Android only). */
       artworkFile: (resource: string): string => { try { return cry.artworkFile?.(resource) ?? ""; } catch { return ""; } },
       deviceName: (): string => { try { return (cry.deviceName?.() ?? "").trim().slice(0, 30); } catch { return ""; } },
