@@ -46,6 +46,8 @@ object CryEngine {
   private const val WHIMPER = 21
   private const val WAIL = 22
   private const val SCREAMING = 11
+  private const val CHILDREN_SHOUTING = 10
+  private const val YELL = 9
   // Sounds that are easy to mistake for crying.
   private const val SPEECH = 0
   private const val CHILD_SPEECH = 1
@@ -374,6 +376,7 @@ object CryEngine {
       var filled = 0
       val history = ArrayDeque<Boolean>()
       var spellStart = 0L   // when the current crying spell began, 0 = none
+      var lastLoudNote = 0L
       var lastHeard = 0L    // last moment crying was detected
       var alerted = false   // already alerted for this spell
       var lastAlert = 0L
@@ -433,15 +436,25 @@ object CryEngine {
 
         val noisy = denoiser.noiseDb > NOISY_DB
         val scores = classify(model, if (noisy) clean else window, inShape, outShape, classes)
-        // Crying usually lights up several related classes at once, so add them up.
-        val cry = scores[BABY_CRY] + 0.6f * scores[CRYING_SOBBING] + 0.4f * scores[WHIMPER] + 0.4f * scores[WAIL] + 0.2f * scores[SCREAMING]
+        // Crying usually lights up several related classes at once, so add them up. A baby who is
+        // really screaming is often heard as "Screaming" or "Children shouting" rather than
+        // "Baby cry": those count too, unless the voice is clearly a grown-up's (low pitch).
+        val pf = pitch.factor()
+        val scream = if (pf < 1f) 0f else 0.8f * scores[SCREAMING] + 0.6f * scores[CHILDREN_SHOUTING] + 0.3f * scores[YELL]
+        val cry = scores[BABY_CRY] + 0.6f * scores[CRYING_SOBBING] + 0.4f * scores[WHIMPER] + 0.4f * scores[WAIL] + scream
         // Talking, babbling and laughing count against it when they're stronger than the crying.
-        val talk = scores[SPEECH] + 0.6f * scores[CHILD_SPEECH] + 0.5f * (scores[CONVERSATION] + scores[NARRATION]) +
+        val talk = scores[SPEECH] + 0.3f * scores[CHILD_SPEECH] + 0.5f * (scores[CONVERSATION] + scores[NARRATION]) +
           0.7f * scores[BABBLING] + scores[LAUGHTER] + scores[BABY_LAUGHTER]
-        val score = (max(0f, cry - 0.5f * max(0f, talk - cry)) * pitch.factor()).coerceIn(0f, 1f)
+        val score = (max(0f, cry - 0.5f * max(0f, talk - cry)) * pf).coerceIn(0f, 1f)
         var top = 0
         for (c in 1 until classes) if (scores[c] > scores[top]) top = c
 
+        // Loud but not counted as crying: note what it sounded like (once a minute), so a cry that
+        // was missed can be understood from the diagnostics.
+        if (monitorMode && levelDb > -32 && score < threshold && System.currentTimeMillis() - lastLoudNote > 60_000) {
+          lastLoudNote = System.currentTimeMillis()
+          Diag.add("loud, not crying: ${levelDb.toInt()} dB, top class $top (${"%.2f".format(scores[top])}), cry ${"%.2f".format(cry)} scream ${"%.2f".format(scream)} talk ${"%.2f".format(talk)} pitch $pf score ${"%.2f".format(score)} / ${"%.2f".format(threshold)}${if (noisy) " (white noise cleaned)" else ""}")
+        }
         // About 2 s of crying within the last 4 s.
         history.addLast(score >= threshold)
         if (history.size > 8) history.removeFirst()
@@ -488,7 +501,7 @@ object CryEngine {
         // crying for GAP_MS. Alert once it has lasted delayMs, then remind every REPEAT_MS.
         val t = System.currentTimeMillis()
         if (now) {
-          if (spellStart == 0L) spellStart = t
+          if (spellStart == 0L) { spellStart = t; Diag.add("crying heard (score ${"%.2f".format(score)}, top class $top)") }
           lastHeard = t
           if (score > peak) peak = score
         } else if (spellStart != 0L && t - lastHeard > GAP_MS) {
