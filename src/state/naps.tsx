@@ -56,6 +56,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   const lang = useLang();
   const [nights, setNights] = useState<Night[]>([]);
   const [openFrom, setOpenFrom] = useState<number | null>(null);
+  const [openBy, setOpenBy] = useState(""); // the phone that started it (logged sleeps are shared by the family)
   const [soundSleep, setSoundSleep] = useState<string | null>(null); // id of a sleep the sound started
   const [now, setNow] = useState(Date.now());
   const [peer, setPeer] = useState<PeerSleep | null>(null);
@@ -68,7 +69,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   const [loadedAt, setLoadedAt] = useState(0); // when `nights` was computed (an open sleep ends then)
   const reload = useCallback(() => {
     loadNights().then((n) => { setNights(n); setLoadedAt(Date.now()); }).catch(() => {});
-    openSleep().then((o) => { setOpenFrom(o?.from ?? null); if (!o) setSoundSleep(null); }).catch(() => {});
+    openSleep().then((o) => { setOpenFrom(o?.from ?? null); setOpenBy(o?.by ?? ""); if (!o) setSoundSleep(null); }).catch(() => {});
     setNow(Date.now());
   }, []);
   useEffect(reload, [reload, mon.nightsVersion, mon.listening]);
@@ -249,10 +250,8 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sl = mon.roomSleep;
     if (!sl || sl.asleep || sl.from === mon.me) return;
-    if (openFrom != null) {
-      if (sl.at <= Math.max(openFrom, saidAsleepAt.current)) return;
-      wakeRef.current(sl.from, Math.min(Date.now(), Math.max(sl.since, openFrom + 60_000)));
-    } else if (monitorAsleep && sl.at > Math.max(listenStart, saidAsleepAt.current)) {
+    // (A logged sleep ends for everyone through the family's shared list; this is for the monitor.)
+    if (openFrom == null && monitorAsleep && sl.at > Math.max(listenStart, saidAsleepAt.current)) {
       // This phone is the baby monitor counting the sleep: that sleep is over.
       setAwakeAt(Math.min(Date.now(), Math.max(sl.since, listenStart)));
     }
@@ -365,7 +364,8 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     const ID = "still-asleep";
     Notifications.cancelScheduledNotificationAsync(ID).catch(() => {});
     if (!state.asleep) { Notifications.dismissNotificationAsync(ID).catch(() => {}); return; }
-    if (!s.features.naps || !(openFrom != null || monitorAsleep)) return;
+    // Only on the phone that started the sleep (or the baby monitor counting it), not on every phone.
+    if (!s.features.naps || !((openFrom != null && (!openBy || openBy === mon.me)) || monitorAsleep)) return;
     const h = new Date(state.since).getHours();
     if (h < 6 || h >= 18) return;
     const at = state.since + 4 * 3600_000;
@@ -380,7 +380,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(at), channelId: INFO_CHANNEL },
     }).catch(() => {});
-  }, [state.asleep, state.asleep ? state.since : 0, openFrom, monitorAsleep, s.features.naps, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state.asleep, state.asleep ? state.since : 0, openFrom, openBy, monitorAsleep, s.features.naps, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Nap due soon": 10 minutes before the sweet spot opens.
   useEffect(() => {

@@ -5,8 +5,8 @@ import { dialog } from "../components/Dialog";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
 import { cryDetector, diag, type CryStatus } from "../../modules/hush-native/src";
-import { addEvents, dayKey, deviceId, fmtDur, lastSleep, ownNights, packNights, saveReceivedNights, unpackNights, type HushEvent, type Night } from "../nights";
-import { approve, askToJoin, createFamily, isMember, leaveFamily as leaveCloud, myUid, nativeCredentials, publishCode, readCode, removeByToken, removeFromFamily, signIn, updateMe, watchMembers, watchMyRequest, watchRoom, writeAct, writeDay, writePhone, writeRoom, type PhoneLive, type RoomSleep } from "../cloud";
+import { addEvents, applySharedSleeps, dayKey, dropReceivedOnce, deviceId, fmtDur, lastSleep, ownNights, packNights, RAW_DAYS, saveReceivedNights, setSleepSync, unpackNights, type HushEvent, type Night, type SharedSleep } from "../nights";
+import { approve, askToJoin, createFamily, isMember, leaveFamily as leaveCloud, myUid, nativeCredentials, publishCode, readCode, removeByToken, removeFromFamily, signIn, updateMe, watchMembers, watchMyRequest, watchRoom, writeAct, writeDay, writePhone, writeRoom, writeSleep, type PhoneLive, type RoomSleep } from "../cloud";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppActive } from "../components/ui";
 import * as Notifications from "expo-notifications";
@@ -877,6 +877,16 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [cloudReady, rid, me, hasFamily]);
   useEffect(() => { if (cloudReady && hasFamily && m.babyName.trim()) writeRoom(rid, { baby: m.babyName.trim() }); }, [cloudReady, rid, hasFamily, m.babyName]);
 
+  // Logged sleeps: every change here goes to the family's shared list (see nights.ts).
+  useEffect(() => { dropReceivedOnce().then(() => setNightsVersion((v) => v + 1)).catch(() => {}); }, []);
+  useEffect(() => {
+    setSleepSync({
+      me: () => mRef.current.me ?? "",
+      send: (x) => { if (cloudRef.current && ridRef.current) writeSleep(ridRef.current, { ...x }); },
+    });
+    return () => setSleepSync(null);
+  }, []);
+
   const writeLive = useCallback((live: Omit<PhoneLive, "seen">) => {
     const cur = mRef.current;
     if (!cloudRef.current || !ridRef.current || !cur.me) return;
@@ -904,7 +914,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         try { wroteDays.current = JSON.parse((await AsyncStorage.getItem(DAYS_KEY)) ?? "{}") ?? {}; } catch { wroteDays.current = {}; }
       }
       const done = wroteDays.current!;
-      const own = (await ownNights()).slice(0, 30);
+      // Logged sleeps are shared as their own list; the days carry what this phone recorded.
+      const own = (await ownNights(Date.now(), { logged: false })).slice(0, 30);
       const device = await deviceId();
       const baby = mRef.current.babyName.trim();
       const today = dayKey(Date.now());
@@ -983,7 +994,15 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
           }
           if (got.length) saveReceivedNights(got).then((ok) => { if (ok) setNightsVersion((v) => v + 1); });
         },
-      }, dayKey(Date.now() - 35 * 86400_000));
+        sleeps: (list) => {
+          if (!live()) return;
+          applySharedSleeps(list as SharedSleep[], sharedSince()).then(({ changed, missing }) => {
+            // Ours that the family doesn't have yet (made before joining, or offline): send them.
+            for (const x of missing) writeSleep(rid, { ...x, updated: x.updated ?? Date.now() });
+            if (changed) setNightsVersion((v) => v + 1);
+          }).catch(() => {});
+        },
+      }, dayKey(Date.now() - 35 * 86400_000), Date.now() - 20 * 86400_000);
     }).catch(() => {});
     return () => { stopped = true; unsub(); };
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1000,3 +1019,6 @@ function hashOf(s: string): string {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return `${s.length}:${h >>> 0}`;
 }
+
+/** Logged sleeps older than this are rolled up into each phone's day summaries (nights.ts). */
+const sharedSince = () => { const d = new Date(Date.now() - (RAW_DAYS - 1) * 86400_000); d.setHours(0, 0, 0, 0); return d.getTime(); };

@@ -816,6 +816,7 @@ export const zh: Record<Key, string> = {
   "rt.idleHint": "这部手机是婴儿监视器。它的麦克风现在关着。",
   "rx.remoteDo": "白噪音、收听和睡眠",
   "pair.requestGone": "{name} 已不再请求加入。",
+  "orb.napNow": "现在",
   "settings.title": "设置",
   "settings.babyName": "宝宝的名字",
   "settings.prefs": "偏好",

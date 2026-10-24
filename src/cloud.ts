@@ -255,6 +255,12 @@ export function writeAct(f: string, act: { id: string } & Record<string, unknown
   safe(() => setDoc(sub(f, "acts", act.id), act));
 }
 
+/** A logged sleep in the family's shared list (one document per sleep; deleted ones are marked). */
+export function writeSleep(f: string, s: { id: string } & Record<string, unknown>) {
+  if (!f || !s.id) return;
+  safe(() => setDoc(sub(f, "sleeps", s.id), s));
+}
+
 /** One of this phone's sleep days, packed (Firestore can't hold the timelines' nested arrays). */
 export function writeDay(f: string, device: string, key: string, rev: number, packed: string) {
   if (!f || !device || !key) return;
@@ -281,8 +287,9 @@ export type RoomHandlers = {
   phones: (list: PhoneDoc[]) => void;
   acts: (list: DocumentData[]) => void;
   days: (list: DayDoc[]) => void;
+  sleeps: (list: DocumentData[]) => void;
 };
-export function watchRoom(f: string, h: RoomHandlers, sinceKey: string): Unsubscribe {
+export function watchRoom(f: string, h: RoomHandlers, sinceKey: string, sleepsSince: number): Unsubscribe {
   if (!db || !f) return () => {};
   const subs: Unsubscribe[] = [];
   const err = () => {};
@@ -290,5 +297,6 @@ export function watchRoom(f: string, h: RoomHandlers, sinceKey: string): Unsubsc
   subs.push(onSnapshot(collection(db, "families", f, "phones"), (s) => h.phones(s.docs.map((d) => d.data() as PhoneDoc)), err));
   subs.push(onSnapshot(query(collection(db, "families", f, "acts"), orderBy("at", "desc"), limit(40)), (s) => h.acts(s.docs.map((d) => d.data())), err));
   subs.push(onSnapshot(query(collection(db, "families", f, "days"), where("key", ">=", sinceKey)), (s) => h.days(s.docs.map((d) => d.data() as DayDoc)), err));
+  subs.push(onSnapshot(query(collection(db, "families", f, "sleeps"), where("updated", ">=", sleepsSince)), (s) => h.sleeps(s.docs.map((d) => d.data())), err));
   return () => subs.forEach((u) => u());
 }

@@ -16,8 +16,14 @@ export type HushEvent =
 export type Sleep = { from: number; to: number; kind: "night" | "nap"; cries: number; cryMin: number; id?: string; note?: string; logged?: boolean };
 
 /** A sleep logged by hand ("fell asleep" / "woke up", or added later). `to` null = still asleep. */
-export type ManualSleep = { id: string; from: number; to: number | null; kind?: "night" | "nap"; note?: string };
-type ManualStore = { list: ManualSleep[]; cleared: Record<string, number> };
+export type ManualSleep = {
+  id: string; from: number; to: number | null; kind?: "night" | "nap"; note?: string;
+  /** The phone that started it (push address), and when it was last changed (newest wins). */
+  by?: string; updated?: number;
+};
+/** A logged sleep in the family's shared list (src/cloud.ts); deleted ones stay as a marker. */
+export type SharedSleep = ManualSleep & { deleted?: boolean };
+type ManualStore = { list: ManualSleep[]; cleared: Record<string, number>; gone?: Record<string, number> };
 
 /** One day, summarised. Also what the baby's phone sends to parents after a sleep. */
 export type Night = {
@@ -77,41 +83,105 @@ const write = (key: string, v: unknown) => AsyncStorage.setItem(key, JSON.string
 
 export async function loadManual(): Promise<ManualStore> {
   const m = await read<ManualStore>(MANUAL, { list: [], cleared: {} });
-  return { list: m.list ?? [], cleared: m.cleared ?? {} };
+  return { list: m.list ?? [], cleared: m.cleared ?? {}, gone: m.gone ?? {} };
 }
 async function saveManual(m: ManualStore) { await write(MANUAL, m); }
 
-/** The sleep in progress, if one was started by hand. */
+/*
+ * Logged sleeps are one list for the whole family: every change here goes to the family's shared
+ * list (the monitor state connects it, see setSleepSync), and changes from other phones come back
+ * through applySharedSleeps. Each sleep is changed as a whole; the newest change wins.
+ */
+let sleepSync: { send: (s: SharedSleep) => void; me: () => string } | null = null;
+export function setSleepSync(s: typeof sleepSync) { sleepSync = s; }
+const share = (s: SharedSleep) => { try { sleepSync?.send(s); } catch {} };
+// Changes are made one after another, so two quick taps (or a tap and a change from another phone)
+// can't overwrite each other.
+let manualQueue: Promise<unknown> = Promise.resolve();
+function withManual<T>(f: (m: ManualStore) => Promise<T> | T): Promise<T> {
+  const run = manualQueue.then(async () => f(await loadManual()));
+  manualQueue = run.catch(() => {});
+  return run;
+}
+
+/** The sleep in progress, if one was started by hand (on any phone in the family). */
 export async function openSleep(): Promise<ManualSleep | null> {
   return (await loadManual()).list.find((x) => x.to == null) ?? null;
 }
-export async function startSleep(at = Date.now()) {
-  const m = await loadManual();
-  if (m.list.some((x) => x.to == null)) return;
-  m.list.push({ id: Math.random().toString(36).slice(2, 10), from: at, to: null });
-  await saveManual(m);
+export function startSleep(at = Date.now()) {
+  return withManual(async (m) => {
+    if (m.list.some((x) => x.to == null)) return;
+    const x: ManualSleep = { id: Math.random().toString(36).slice(2, 10), from: at, to: null, by: sleepSync?.me() || undefined, updated: Date.now() };
+    m.list.push(x);
+    await saveManual(m);
+    share(x);
+  });
 }
-export async function endSleep(at = Date.now()) {
-  const m = await loadManual();
-  const open = m.list.find((x) => x.to == null);
-  if (!open) return;
-  open.to = Math.max(at, open.from + 60_000);
-  await saveManual(m);
+export function endSleep(at = Date.now()) {
+  return withManual(async (m) => {
+    // Every sleep still open ends (two phones may each have started one while offline).
+    const open = m.list.filter((x) => x.to == null);
+    if (!open.length) return;
+    for (const x of open) { x.to = Math.max(at, x.from + 60_000); x.updated = Date.now(); }
+    await saveManual(m);
+    open.forEach(share);
+  });
 }
-export async function upsertSleep(x: ManualSleep) {
-  const m = await loadManual();
-  const old = m.list.find((y) => y.id === x.id);
-  if (old) markCleared(m, old);
-  m.list = [...m.list.filter((y) => y.id !== x.id), x].sort((p, q) => p.from - q.from);
-  await saveManual(m);
+export function upsertSleep(x0: ManualSleep) {
+  return withManual(async (m) => {
+    const old = m.list.find((y) => y.id === x0.id);
+    if (old) markCleared(m, old);
+    const x = { ...x0, by: x0.by ?? old?.by ?? (sleepSync?.me() || undefined), updated: Date.now() };
+    m.list = [...m.list.filter((y) => y.id !== x.id), x].sort((p, q) => p.from - q.from);
+    await saveManual(m);
+    share(x);
+  });
 }
-export async function deleteSleep(id: string) {
-  const m = await loadManual();
-  const old = m.list.find((y) => y.id === id);
-  if (!old) return;
-  markCleared(m, old);
-  m.list = m.list.filter((y) => y.id !== id);
-  await saveManual(m);
+export function deleteSleep(id: string) {
+  return withManual(async (m) => {
+    const old = m.list.find((y) => y.id === id);
+    if (!old) return;
+    markCleared(m, old);
+    m.list = m.list.filter((y) => y.id !== id);
+    (m.gone ??= {})[id] = Date.now();
+    await saveManual(m);
+    share({ ...old, deleted: true, updated: Date.now() });
+  });
+}
+/**
+ * The family's shared list as the server has it: newer versions replace ours, deletions remove.
+ * Returns the sleeps only this phone has (made before joining, or while offline) for sending, and
+ * whether anything changed here.
+ */
+export function applySharedSleeps(list: SharedSleep[], since: number): Promise<{ changed: boolean; missing: SharedSleep[] }> {
+  return withManual(async (m) => {
+    let changed = false;
+    const theirs = new Map(list.map((x) => [x.id, x]));
+    m.gone ??= {};
+    for (const x of list) {
+      // Older ones are already rolled up into each phone's day summaries (see RAW_DAYS).
+      if ((x.to ?? Date.now()) < since) continue;
+      const mine = m.list.find((y) => y.id === x.id);
+      const up = x.updated ?? 0;
+      if (x.deleted) {
+        if (mine && (mine.updated ?? 0) <= up) { markCleared(m, mine); m.list = m.list.filter((y) => y.id !== x.id); changed = true; }
+        m.gone[x.id] = Math.max(m.gone[x.id] ?? 0, up);
+        continue;
+      }
+      if ((m.gone[x.id] ?? 0) >= up) continue; // deleted here after that version
+      if (!mine || (mine.updated ?? 0) < up) {
+        if (mine) markCleared(m, mine);
+        const { deleted: _d, ...clean } = x;
+        m.list = [...m.list.filter((y) => y.id !== x.id), clean].sort((p, q) => p.from - q.from);
+        changed = true;
+      }
+    }
+    const missing = m.list.filter((y) => !theirs.has(y.id) && (y.to ?? Date.now()) >= since);
+    // Ours, changed more recently than the server's copy (a change that hadn't reached it yet).
+    for (const y of m.list) { const x = theirs.get(y.id); if (x && !x.deleted && (y.updated ?? 0) > (x.updated ?? 0)) missing.push(y); }
+    if (changed) await saveManual(m);
+    return { changed, missing };
+  });
 }
 /** Days a changed or deleted sleep touched, so other phones replace their copies. */
 function markCleared(m: ManualStore, x: ManualSleep) {
@@ -371,13 +441,16 @@ export async function loadNights(now = Date.now()): Promise<Night[]> {
   return combineByDay(await loadAllRecords(now));
 }
 
-/** Only the days this phone recorded (what a sync sends), newest first. */
-export async function ownNights(now = Date.now()): Promise<Night[]> {
-  return (await loadAllRecords(now)).filter((n) => !n.device);
+/**
+ * Only the days this phone recorded, newest first. For the family's room: without logged sleeps
+ * (those are shared as a list of their own, so they're never in two places).
+ */
+export async function ownNights(now = Date.now(), opts: { logged?: boolean } = {}): Promise<Night[]> {
+  return (await loadAllRecords(now, opts.logged ?? true)).filter((n) => !n.device);
 }
 
 /** One record per day per phone. */
-async function loadAllRecords(now = Date.now()): Promise<Night[]> {
+async function loadAllRecords(now = Date.now(), withLogged = true): Promise<Night[]> {
   let events = await read<HushEvent[]>(EVENTS, []);
   let stored = await read<Night[]>(NIGHTS, []);
   const manual = await loadManual();
@@ -404,10 +477,11 @@ async function loadAllRecords(now = Date.now()): Promise<Night[]> {
     await saveManual(manual);
   }
 
-  const live = daysOf(events, now, manual.list).map((k) => summarise(k, events, now, manual.list)).filter((n): n is Night => !!n);
+  const logged = withLogged ? manual.list : [];
+  const live = daysOf(events, now, logged).map((k) => summarise(k, events, now, logged)).filter((n): n is Night => !!n);
   // A day whose logged sleeps were all deleted: an empty copy tells other phones to drop theirs.
   const liveKeys = new Set(live.map((n) => n.key));
-  const cleared: Night[] = Object.entries(manual.cleared)
+  const cleared: Night[] = Object.entries(withLogged ? manual.cleared : {})
     .filter(([k]) => !liveKeys.has(k))
     .map(([k, rev]) => ({ key: k, from: dayStart(k), to: dayStart(k), listenedMin: 0, sleptMin: 0, cries: 0, cryMin: 0, longestQuietMin: 0, firstWake: null, alerts: 0, hours: new Array(24).fill(0), sleeps: [], spells: [], listening: [], noise: [], logged: [], rev }));
   return mergeNights(stored, [...live, ...cleared]);
@@ -466,6 +540,18 @@ function combineByDay(records: Night[]): Night[] {
     .map((list) => combine(list.filter((n) => n.listenedMin > 0 || (n.sleeps ?? []).length > 0 || n.spells.length > 0)))
     .filter((n) => n.listenedMin > 0 || (n.sleeps ?? []).length > 0)
     .sort((x, y) => (x.key < y.key ? 1 : -1));
+}
+
+/**
+ * Once (1.32): forget days received from other phones. Older copies still held their logged sleeps,
+ * which now live in the shared list only; the family's room sends the days again without them.
+ */
+export async function dropReceivedOnce() {
+  const KEY = "hush:sharedSleeps";
+  if (await AsyncStorage.getItem(KEY).catch(() => "1")) return;
+  const stored = await read<Night[]>(NIGHTS, []);
+  await write(NIGHTS, stored.filter((n) => !n.device));
+  await AsyncStorage.setItem(KEY, "1").catch(() => {});
 }
 
 /** Keep days that arrived from another phone (never our own, echoed back). */

@@ -816,6 +816,7 @@ export const en = {
   "rt.idleHint": "This phone is the baby monitor. Its mic is off right now.",
   "rx.remoteDo": "White noise, listen in and sleep",
   "pair.requestGone": "{name} stopped asking to join.",
+  "orb.napNow": "Now",
   "settings.title": "Settings",
   "settings.babyName": "Baby's name",
   "settings.prefs": "Preferences",

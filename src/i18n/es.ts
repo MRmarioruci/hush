@@ -816,6 +816,7 @@ export const es: Record<Key, string> = {
   "rt.idleHint": "Este móvil es el vigilabebés. Su micrófono está apagado ahora.",
   "rx.remoteDo": "Ruido blanco, escuchar y sueño",
   "pair.requestGone": "{name} ya no pide unirse.",
+  "orb.napNow": "Ahora",
   "settings.title": "Ajustes",
   "settings.babyName": "Nombre del bebé",
   "settings.prefs": "Preferencias",

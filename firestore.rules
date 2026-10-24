@@ -51,6 +51,10 @@ service cloud.firestore {
         allow read, delete: if memberOf(f);
         allow create, update: if memberOf(f) && request.resource.data.size() <= 12;
       }
+      match /sleeps/{sleep} {
+        allow read: if memberOf(f);
+        allow create, update: if memberOf(f) && request.resource.data.size() <= 12;
+      }
       match /days/{day} {
         allow read, delete: if memberOf(f);
         allow create, update: if memberOf(f) && request.resource.data.j is string && request.resource.data.j.size() < 60000;

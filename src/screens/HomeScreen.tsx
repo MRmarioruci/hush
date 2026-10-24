@@ -100,7 +100,7 @@ export function HomeScreen() {
           {f.naps && (st.asleep ? (
             <Orb big={fmtClock(st.since)} label={t("orb.since")} color="#c9bfff" progress={1} small onPress={() => setGuide(true)} />
           ) : (
-            <Orb big={st.target ? fmtClock(st.target) : "–"} label={st.asleep ? "" : t(st.bedtime ? "orb.bedtime" : "orb.nextNap")} color={colors.peach} small
+            <Orb big={st.target ? (st.target < Date.now() ? t("orb.napNow") : fmtClock(st.target)) : "–"} label={st.asleep ? "" : t(st.bedtime ? "orb.bedtime" : "orb.nextNap")} color={colors.peach} small
               progress={st.awakeSince != null && st.sweet ? (now - st.awakeSince) / (st.sweet[1] - st.awakeSince) : 0} onPress={() => setGuide(true)} />
           ))}
           {f.monitor && <RoomOrb onPress={() => nav.navigate("Monitor")} />}

@@ -816,6 +816,7 @@ export const de: Record<Key, string> = {
   "rt.idleHint": "Dieses Handy ist das Babyphone. Das Mikro ist gerade aus.",
   "rx.remoteDo": "Rauschen, Mithören und Schlaf",
   "pair.requestGone": "{name} fragt nicht mehr an.",
+  "orb.napNow": "Jetzt",
   "settings.title": "Einstellungen",
   "settings.babyName": "Name des Babys",
   "settings.prefs": "Allgemein",

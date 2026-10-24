@@ -816,6 +816,7 @@ export const pt: Record<Key, string> = {
   "rt.idleHint": "Este telefone é a babá eletrônica. O microfone está desligado agora.",
   "rx.remoteDo": "Ruído branco, ouvir e sono",
   "pair.requestGone": "{name} parou de pedir para entrar.",
+  "orb.napNow": "Agora",
   "settings.title": "Ajustes",
   "settings.babyName": "Nome do bebê",
   "settings.prefs": "Preferências",

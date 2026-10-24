@@ -816,6 +816,7 @@ export const el: Record<Key, string> = {
   "rt.idleHint": "Αυτό το κινητό είναι η ενδοεπικοινωνία. Το μικρόφωνο είναι κλειστό τώρα.",
   "rx.remoteDo": "Λευκός θόρυβος, ακρόαση και ύπνος",
   "pair.requestGone": "Το {name} σταμάτησε να ζητά να μπει.",
+  "orb.napNow": "Τώρα",
   "settings.title": "Ρυθμίσεις",
   "settings.babyName": "Όνομα μωρού",
   "settings.prefs": "Προτιμήσεις",
