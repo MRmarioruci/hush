@@ -149,6 +149,8 @@ object CryEngine {
   @Volatile var myToken = ""
   @Volatile var myName = ""
   @Volatile var roomPlaying = false
+  /** What the Quick Settings tile shows: white noise here, or in the baby's room when this phone is its remote. */
+  @Volatile var tilePlaying: Boolean? = null
   @Volatile var roomSound = "womb"
   @Volatile var listenSince = 0L
   private const val HEARTBEAT_MS = 10 * 60 * 1000L

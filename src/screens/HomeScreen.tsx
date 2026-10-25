@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNoise } from "../state/noise";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, AppState } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Svg, { Circle } from "react-native-svg";
@@ -39,6 +40,9 @@ export function HomeScreen() {
   // Watching another room: ask how it is when Home opens.
   useEffect(() => { if (mon.role === "parent" && mon.target) roomCmd(mon.target, "status"); }, [mon.role, mon.target]); // eslint-disable-line react-hooks/exhaustive-deps
   const soundScroll = useRef<ScrollView>(null);
+  // White noise plays here, or on the baby monitor phone when this phone is its remote.
+  const noise = useNoise();
+  const remote = noise.where === "remote";
   const baby = mon.m.babyName.trim();
   const name = babyLabel(mon.m.babyName);
 
@@ -61,23 +65,27 @@ export function HomeScreen() {
       {f.sounds && (
         <View style={{ alignItems: "center" }}>
           <View>
-            <Moon size={176} playing={sleep.playing} beat={sleep.beat} softBeat={sleep.soundId === "womb" && sleep.beat % 2 === 1} slow={sleep.soundId === "ocean"} still={sleep.still} onPress={sleep.toggle} />
-            {timerProgress != null && (
+            <Moon size={176} playing={noise.playing} beat={remote ? 0 : sleep.beat} softBeat={!remote && sleep.soundId === "womb" && sleep.beat % 2 === 1} slow={noise.soundId === "ocean"} still={remote || sleep.still} onPress={noise.toggle} />
+            {!remote && timerProgress != null && (
               <Svg width={264} height={264} style={StyleSheet.absoluteFill} pointerEvents="none">
                 <Circle cx={132} cy={132} r={102} stroke={colors.peach} strokeWidth={5} fill="none" strokeLinecap="round"
                   strokeDasharray={`${2 * Math.PI * 102} ${2 * Math.PI * 102}`} strokeDashoffset={2 * Math.PI * 102 * (1 - timerProgress)} transform="rotate(-90 132 132)" />
               </Svg>
             )}
           </View>
-          <Text style={styles.name}>{t(`sound.${sleep.soundId}`)}{sleep.playing && sleep.timerLeft != null ? ` · ${t("home.leftShort", { time: fmtLeft(sleep.timerLeft) })}` : ""}</Text>
-          {!sleep.playing && sleep.lastStop && <Text style={styles.sub}>{stopLine(sleep.lastStop, t, fmtTime)}</Text>}
+          <Text style={styles.name}>{t(`sound.${noise.soundId}`)}{!remote && sleep.playing && sleep.timerLeft != null ? ` · ${t("home.leftShort", { time: fmtLeft(sleep.timerLeft) })}` : ""}</Text>
+          {remote ? (
+            <Text style={[styles.sub, noise.failed && { color: colors.rose }]}>
+              {noise.failed ? t("noise.noAnswer", { phone: noise.phone }) : noise.pending ? t(noise.playing ? "noise.starting" : "noise.stopping", { phone: noise.phone }) : t("noise.remote", { room: noise.room, phone: noise.phone })}
+            </Text>
+          ) : !sleep.playing && sleep.lastStop && <Text style={styles.sub}>{stopLine(sleep.lastStop, t, fmtTime)}</Text>}
 
           <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}
-            onLayout={() => soundScroll.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === sleep.soundId) - 2) * 58, animated: false })}>
+            onLayout={() => soundScroll.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === noise.soundId) - 2) * 58, animated: false })}>
             {SOUNDS.map((x) => {
-              const on = x.id === sleep.soundId;
+              const on = x.id === noise.soundId;
               return (
-                <Pressable key={x.id} onPress={() => sleep.set({ sound: x.id })} style={[styles.soundIcon, on && { backgroundColor: colors.peach }]} accessibilityLabel={t(`sound.${x.id}`)} accessibilityState={{ selected: on }}>
+                <Pressable key={x.id} onPress={() => noise.setSound(x.id)} style={[styles.soundIcon, on && { backgroundColor: colors.peach }]} accessibilityLabel={t(`sound.${x.id}`)} accessibilityState={{ selected: on }}>
                   <SvgXml width={22} height={22} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
                 </Pressable>
               );

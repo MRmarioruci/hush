@@ -80,6 +80,10 @@ type Monitor = {
   /** The room's shared sleep: asleep since / woke at, and which phone said so (null: not known yet). */
   roomSleep: RoomSleep | null;
   setRoomSleep: (s: RoomSleep) => void;
+  /** Make this phone the baby monitor (the current one stops). Returns an error to show, or null. */
+  becomeMonitor: () => Promise<string | null>;
+  /** Make another phone (with its mic on for smart volume) the baby monitor; this or any other one stops. */
+  handOver: (token: string) => Promise<boolean>;
   /** Whether another phone is known to be on the cloud room (then its pushes about shared state are redundant). */
   isOnCloud: (token: string) => boolean;
   /** This phone's live state, for the room (white noise etc.; the native side adds battery and the mic). */
@@ -153,10 +157,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   /** Pushes keep carrying shared things too while any phone isn't on the cloud room (older versions). */
   const pushAlso = () => !cloudRef.current;
   // "listening" is the baby monitor switch. The mic also runs when smart white noise wants it.
-  const [listening, setListeningRaw] = useState(() => cryDetector?.isListening() ?? false);
+  // The baby monitor, not just the mic (which smart volume can also have on).
+  const [listening, setListeningRaw] = useState(() => cryDetector?.isMonitoring() ?? false);
   const [lastStop, setLastStop] = useState<Stop | null>(null);
   // Every change of the switch goes through here, so a stop always has a reason.
-  const listeningNow = useRef(cryDetector?.isListening() ?? false);
+  const listeningNow = useRef(cryDetector?.isMonitoring() ?? false);
   const setListening = useCallback((on: boolean, why: StopWhy = "you", detail?: string) => {
     const was = listeningNow.current;
     listeningNow.current = on;
@@ -173,7 +178,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadStops().then((st) => {
       // hush was listening last time, but isn't any more: the phone closed it.
-      if (st.wasListening && cryDetector && !cryDetector.isListening()) {
+      if (st.wasListening && cryDetector && !cryDetector.isMonitoring()) {
         logAct("monOff", { why: "system" });
         const stop: Stop = { at: Date.now(), why: "system" };
         saveStops({ listen: stop, wasListening: false });
@@ -181,7 +186,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       } else setLastStop(st.listen ?? null);
     });
     // The switch says on, but the listener isn't running: the phone stopped it.
-    const check = () => { if (cryDetector && !cryDetector.isListening()) setListeningRaw((on) => { if (on) { if (listeningNow.current) { listeningNow.current = false; logAct("monOff", { why: "system" }); } const stop: Stop = { at: Date.now(), why: "system" }; setLastStop(stop); saveStops({ listen: stop, wasListening: false }); } return false; }); };
+    const check = () => { if (cryDetector && !cryDetector.isMonitoring()) setListeningRaw((on) => { if (on) { if (listeningNow.current) { listeningNow.current = false; logAct("monOff", { why: "system" }); } const stop: Stop = { at: Date.now(), why: "system" }; setLastStop(stop); saveStops({ listen: stop, wasListening: false }); } return false; }); };
     const app = AppState.addEventListener("change", (st) => st === "active" && setTimeout(check, 1500));
     return () => app.remove();
   }, []);
@@ -253,6 +258,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     let latest: CryStatus | null = null;
     const a = cryDetector.onStatus((st) => {
       if (st.monitorBy !== undefined) { setListening(true, "remote", st.monitorBy || undefined); return; }
+      // Another phone took over as the baby monitor (one per family): this one gets the alerts now.
+      if (st.monitorOffBy !== undefined) { setListening(false, "remote", st.monitorOffBy || undefined); update({ mode: "alerts" }); return; }
       latest = st;
       if (AppState.currentState === "active" || !!st.crying !== !!shown.crying || st.error) apply(st);
       if (st.crying) setCryHeardAt(Date.now());
@@ -343,8 +350,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { cryDetector?.setMe(me, m.myName.trim()); }, [me, m.myName]);
 
-  /* ---------- the rooms: other phones that are listening ---------- */
-  const [focus, setFocus] = useState<string | null>(null);
+  /* ---------- the baby monitor: one phone per family ---------- */
+  // Where every control acts follows from it: on the baby monitor itself, or with no monitor
+  // anywhere, everything acts on this phone; with another phone as the monitor, this phone is its
+  // remote and white noise, listen in, "I'm on it" and "woke up" act on that phone.
+  const setFocus = useCallback((_t: string | null) => {}, []);
   const [, tickRooms] = useState(0);
   useEffect(() => { const id = setInterval(() => tickRooms((x) => x + 1), 60_000); return () => clearInterval(id); }, []);
   const FRESH = 30 * 60_000; // listening phones report every 10 minutes
@@ -353,13 +363,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const rooms: RoomView[] = members
     .map((p) => ({ token: p.token, name: p.name, room: allRooms[p.token] ?? null }))
     .filter((x) => x.room?.listening && now - (x.room.got ?? x.room.at) < FRESH)
-    .sort((a, b) => (b.room!.got ?? 0) - (a.room!.got ?? 0));
-  const recent = members
-    .map((p) => ({ token: p.token, at: allRooms[p.token]?.lastListen ?? 0 }))
-    .filter((x) => x.at > 0)
-    .sort((a, b) => b.at - a.at)[0]?.token;
-  const target = (focus && members.some((p) => p.token === focus) ? focus : null)
-    ?? rooms[0]?.token ?? recent ?? (members.length === 1 ? members[0].token : null);
+    // Newest monitor first (two only for a moment, while one takes over from the other).
+    .sort((a, b) => (b.room!.listenSince ?? 0) - (a.room!.listenSince ?? 0) || (b.room!.got ?? 0) - (a.room!.got ?? 0));
+  /** The other phone that is the baby monitor (this phone is its remote), or null. */
+  const target = listening ? null : rooms[0]?.token ?? null;
   const room = target ? allRooms[target] ?? null : null;
   const targetMember = members.find((p) => p.token === target);
   const targetName = room?.name || targetMember?.name || "";
@@ -425,6 +432,40 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     setTimeout(() => cryDetector?.reportRoom(), 1500);
     return membersOf(mRef.current.family, mRef.current.me ?? "").length ? null : t("perm.pairToGet");
   }, [listening, syncEvents, sendNightSummary, unlock, setListening]);
+
+  /* ---------- one baby monitor per family ---------- */
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
+  /** Make this phone the baby monitor: the phone that is it now stops (it gets the alerts instead). */
+  const becomeMonitor = useCallback(async (): Promise<string | null> => {
+    const others = roomsRef.current.map((r) => r.token);
+    if (others.length) {
+      try { const me = await getMyToken(); await sendData(others, { type: "cmd", cmd: "unmonitor", from: me }); } catch {}
+    }
+    update({ mode: "monitor" });
+    return listeningNow.current ? null : toggleListening();
+  }, [toggleListening, update]);
+  /** Make another phone the baby monitor (it must have its mic on already, for smart volume). */
+  const handOver = useCallback(async (token: string): Promise<boolean> => {
+    let me = "";
+    try { me = await getMyToken(); } catch { return false; }
+    const others = roomsRef.current.map((r) => r.token).filter((x) => x !== token);
+    if (others.length) await sendData(others, { type: "cmd", cmd: "unmonitor", from: me }).catch(() => false);
+    if (listeningNow.current) { setListening(false, "remote"); update({ mode: "alerts" }); setTimeout(() => cryDetector?.reportRoom(), 600); }
+    return sendData([token], { type: "cmd", cmd: "monitor", from: me }).catch(() => false);
+  }, [setListening, update]);
+  // Two monitors at once (both started at about the same time, or a message got lost): the one
+  // that started last keeps it, this one steps back.
+  useEffect(() => {
+    if (!listening || !cryDetector) return;
+    const mine = cryDetector.listenSince();
+    const newer = rooms.find((r) => (r.room?.listenSince ?? 0) > mine + 5000);
+    if (!mine || !newer) return;
+    diag.mark(`two baby monitors: ${newer.name || "another phone"} is newer, stepping back`);
+    setListening(false, "remote", newer.name || undefined);
+    update({ mode: "alerts" });
+    setTimeout(() => cryDetector?.reportRoom(), 600);
+  }, [listening, rooms.map((r) => `${r.token}:${r.room?.listenSince ?? 0}`).join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- sleep sync between connected phones (no account, through silent pushes) ---------- */
   const [lastSync, setLastSync] = useState(0);
@@ -1010,7 +1051,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, becomeMonitor, handOver, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
   );
 }
 

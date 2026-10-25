@@ -1,4 +1,5 @@
 import { onShowMonitorMain } from "../monitorView";
+import { useNoise, type Noise } from "../state/noise";
 import { subscribeActs, type Act } from "../activity";
 import { dialog } from "../components/Dialog";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -90,37 +91,20 @@ export function MonitorScreen() {
   );
 }
 
-/** Which phone the remote controls, as one pill: its name, its room and what it's doing. Tap to pick another. */
+/** The phone this remote controls: the baby monitor (there's one per family). */
 function PhonePicker() {
-  const { members, rooms, target, setFocus, targetBaby } = useMonitor();
-  const [open, setOpen] = useState(false);
-  const monitors = new Set(rooms.map((r) => r.token));
-  const nameOf = (tok: string) => { const i = members.findIndex((p) => p.token === tok); return members[i]?.name.trim() || t("fam.unnamed", { n: i + 2 }); };
-  const cur = target ?? members[0]?.token ?? "";
-  const many = members.length > 1;
-  const dot = (tok: string) => <View style={[styles.pickDot, { backgroundColor: monitors.has(tok) ? colors.sage : "#c9bfff" }]} />;
+  const { members, target, targetBaby, targetName } = useMonitor();
+  const i = members.findIndex((p) => p.token === target);
+  const name = targetName.trim() || members[i]?.name.trim() || t("fam.unnamed", { n: i + 2 });
   return (
     <View style={{ flex: 1 }}>
-      <Pressable onPress={() => many && setOpen((x) => !x)} style={styles.pick} accessibilityRole={many ? "button" : "text"} accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${nameOf(cur)}, ${monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}`}>
-        {dot(cur)}
+      <View style={styles.pick} accessibilityLabel={`${name}, ${t("rt.isMonitor")}`}>
+        <View style={[styles.pickDot, { backgroundColor: colors.sage }]} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.pickName} numberOfLines={1}>{nameOf(cur)}{targetBaby ? <Text style={styles.pickRoom}>{"  ·  "}{t("hero.room", { name: babyLabel(targetBaby) })}</Text> : null}</Text>
-          <Text style={styles.pickSub} numberOfLines={1}>{t("rx.remote")} · {monitors.has(cur) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
+          <Text style={styles.pickName} numberOfLines={1}>{name}{targetBaby ? <Text style={styles.pickRoom}>{"  ·  "}{t("hero.room", { name: babyLabel(targetBaby) })}</Text> : null}</Text>
+          <Text style={styles.pickSub} numberOfLines={1}>{t("rx.remote")} · {t("rt.isMonitor")}</Text>
         </View>
-        {many && <Icon d={open ? '<path d="M6 15l6-6 6 6"/>' : '<path d="M6 9l6 6 6-6"/>'} size={18} color={colors.muted} width={2.2} />}
-      </Pressable>
-      {open && (
-        <View style={styles.pickList}>
-          {members.map((p) => (
-            <Pressable key={p.token} onPress={() => { setFocus(p.token); setOpen(false); }} style={[styles.pickItem, p.token === cur && { backgroundColor: colors.card2 }]} accessibilityRole="menuitem" accessibilityState={{ selected: p.token === cur }}>
-              {dot(p.token)}
-              <Text style={styles.pickItemName} numberOfLines={1}>{nameOf(p.token)}</Text>
-              <Text style={styles.pickSub}>{monitors.has(p.token) ? t("rt.isMonitor") : t("rt.isAlerts")}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      </View>
     </View>
   );
 }
@@ -193,7 +177,7 @@ const REMOTE = '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="1
 
 /** What this phone does, chosen explicitly: get the alerts, or be the baby monitor by the crib. */
 function RolePicker() {
-  const { listening, toggleListening, rooms, m, update } = useMonitor();
+  const { listening, toggleListening, rooms, m, update, becomeMonitor } = useMonitor();
   const isMon = listening || m.mode === "monitor";
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -208,6 +192,15 @@ function RolePicker() {
   const pick = async (monitor: boolean) => {
     if (busy || monitor === isMon) return;
     setMsg(null);
+    // One baby monitor per family: taking over from another phone asks first.
+    if (monitor && rooms.length) {
+      const other = rooms[0].name.trim() || t("rt.otherPhone");
+      dialog(t("mon.takeTitle", { name: other }), t("mon.takeBody", { name: other }), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("mon.takeDo"), onPress: async () => { setBusy(true); setMsg(await becomeMonitor()); setBusy(false); } },
+      ]);
+      return;
+    }
     update({ mode: monitor ? "monitor" : "alerts" });
     if (monitor === listening) return;
     setBusy(true); setMsg(await toggleListening()); setBusy(false);
@@ -296,7 +289,7 @@ function RoomActivity() {
 /* ---------------- the family: every phone that joined ---------------- */
 
 function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => void }) {
-  const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms } = useMonitor();
+  const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms, handOver } = useMonitor();
   // What each phone does: the baby monitor (listening by the crib) or getting the alerts.
   const role = (monitor: boolean) => (
     <View style={styles.roleLine}>
@@ -319,7 +312,8 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
   const makeMonitor = async (tok: string) => {
     setMade(null);
     setMaking({ token: tok, at: Date.now() });
-    try { const me = await getMyToken(); await sendData([tok], { type: "cmd", cmd: "monitor", from: me }); } catch { setMaking(null); setMade({ token: tok, ok: false }); }
+    // The phone that is the monitor now (this one or another) stops: one per family.
+    if (!(await handOver(tok))) { setMaking(null); setMade({ token: tok, ok: false }); }
   };
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -785,27 +779,24 @@ function Tonight({ alerts }: { alerts: AlertRecord[] }) {
 }
 
 /** What's happening with the last request to the room, in words: sending, no answer (and why), or couldn't send. */
-function RemoteNotice({ r }: { r: Remote }) {
-  const { targetBaby, targetName } = useMonitor();
-  const name = targetBaby ? t("hero.room", { name: babyLabel(targetBaby) }) : targetName || t("rt.otherPhone");
-  if (r.fail) return <Notice bad text={t("rt.sendFail")} onPress={() => r.send(r.fail!.cmd === "status" ? "status" : r.fail!.cmd)} />;
-  if (r.cmdOpen) return <Notice spin text={t(r.cmdOpen === "stop" ? "rt.stopping" : r.cmdOpen === "play" ? "rt.starting" : "rt.sending", { name })} />;
-  if (r.cmdLate) return <Notice bad text={t("rt.noAnswer", { name })} onPress={() => r.send("status")} />;
-  if (r.noReply) return <Notice bad text={t("rt.noAnswer", { name })} onPress={() => r.send("status")} />;
+function RemoteNotice({ r, noise }: { r: Remote; noise: Noise }) {
+  // White noise: pending until the baby monitor shows the change; no answer after 15 s.
+  if (noise.pending) return <Notice spin text={t(noise.playing ? "noise.starting" : "noise.stopping", { phone: noise.phone })} />;
+  if (noise.failed) return <Notice bad text={t("noise.noAnswer", { phone: noise.phone })} onPress={() => r.send("status")} />;
+  if (r.noReply) return <Notice bad text={t("noise.noAnswer", { phone: noise.phone })} onPress={() => r.send("status")} />;
   return null;
 }
 
 /** The sounds on the baby's phone, as a strip of circles. */
-function SoundStrip({ r }: { r: Remote }) {
-  const room = r.room;
+function SoundStrip({ noise }: { noise: Noise }) {
   const strip = useRef<ScrollView>(null);
   return (
     <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}
-      onLayout={() => strip.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === room?.sound) - 2) * 62, animated: false })}>
+      onLayout={() => strip.current?.scrollTo({ x: Math.max(0, SOUNDS.findIndex((x) => x.id === noise.soundId) - 2) * 62, animated: false })}>
       {SOUNDS.map((x) => {
-        const on = room?.sound === x.id;
+        const on = noise.soundId === x.id;
         return (
-          <Pressable key={x.id} onPress={() => r.send("sound", x.id)} style={styles.stripItem} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
+          <Pressable key={x.id} onPress={() => noise.setSound(x.id)} disabled={noise.pending} style={styles.stripItem} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
             <View style={[styles.stripIcon, on && { backgroundColor: colors.peach }]}>
               <SvgXml width={20} height={20} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : colors.muted}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
             </View>
@@ -840,12 +831,13 @@ function useAlerts() {
 
 /** The room the remote acts on (pick one when several phones listen), with listen-in and white noise. */
 function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
-  const { rooms, target, setFocus } = useMonitor();
+  const { target } = useMonitor();
   const remote = useRemote();
+  const noise = useNoise();
   const naps = useNaps();
   const napsOn = useSleep().s.features.naps;
   const [sounds, setSounds] = useState(false);
-  const playing = !!remote.room?.playing;
+  const playing = noise.playing;
   if (!target) return (
     <Card style={{ gap: 6 }}>
       <Label>{t("rooms.title")}</Label>
@@ -856,9 +848,9 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
     <>
       <RoomCircle r={remote} lastAlert={alerts[0] ?? null} onSound={() => setSounds((x) => !x)} />
       <View style={styles.remoteRow}>
-        <RoundBtn onPress={() => remote.send(playing ? "stop" : "play")} disabled={!!remote.cmdOpen} bg={playing ? colors.peach : colors.card}
+        <RoundBtn onPress={noise.toggle} disabled={noise.pending} bg={playing ? colors.peach : colors.card}
           label={playing ? t("rt.pause") : t("remote.noise")} a11y={playing ? t("remote.stop") : t("remote.play")}>
-          {remote.cmdOpen ? <ActivityIndicator color={playing ? "#4a3412" : colors.cream} /> : (
+          {noise.pending ? <ActivityIndicator color={playing ? "#4a3412" : colors.cream} /> : (
             <Icon d={playing ? '<path d="M8 5v14M16 5v14"/>' : '<path d="M8 5.5v13l11-6.5z"/>'} size={28} color={playing ? "#4a3412" : colors.cream} width={2.2} />
           )}
         </RoundBtn>
@@ -868,8 +860,8 @@ function OtherRooms({ alerts }: { alerts: AlertRecord[] }) {
           </RoundBtn>
         )}
       </View>
-      <RemoteNotice r={remote} />
-      {sounds && <SoundStrip r={remote} />}
+      <RemoteNotice r={remote} noise={noise} />
+      {sounds && <SoundStrip noise={noise} />}
       <Tonight alerts={alerts} />
     </>
   );

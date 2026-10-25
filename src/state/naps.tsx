@@ -211,6 +211,10 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       savePeer({ ...said, asleep: false, at });
       return null;
     }
+    // Asleep because the baby monitor (another phone) is counting it: that phone ends its sleep too.
+    if (!openFrom && roomAsleep && mon.target && mon.target !== skip) {
+      getMyToken().then((me) => sendData([mon.target!], { type: "cmd", cmd: "woke", from: me })).catch(() => {});
+    }
     if (openFrom) await endSleep(at);
     if (state.asleep) logAct("awake", skip ? { why: "remote", asker: who } : {});
     if (mon.listening) setAwakeAt(at); // the monitor keeps listening; this sleep is over
@@ -219,7 +223,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     if (peer?.asleep) savePeer({ ...peer, asleep: false, at });
     if (state.asleep) say(false, at);
     return mon.listening ? t("nap.stillListening") : null;
-  }, [mon, reload, playing, stop, openFrom, monitorAsleep, peerAsleep, peer, said, savePeer, state, notify, say]);
+  }, [mon, reload, playing, stop, openFrom, monitorAsleep, roomAsleep, peerAsleep, peer, said, savePeer, state, notify, say]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
   const wokeAt = useCallback((at: number) => wakeUp(undefined, Math.min(Date.now(), Math.max(at, state.asleep ? state.since + 60_000 : at))), [wakeUp, state]);
 

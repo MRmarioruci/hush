@@ -15,7 +15,7 @@ class HushTileService : TileService() {
   override fun onStartListening() {
     super.onStartListening()
     qsTile?.let {
-      it.state = if (CryEngine.roomPlaying) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+      it.state = if (CryEngine.tilePlaying ?: CryEngine.roomPlaying) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
       it.updateTile()
     }
   }

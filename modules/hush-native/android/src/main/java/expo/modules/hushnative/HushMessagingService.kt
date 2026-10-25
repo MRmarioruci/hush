@@ -89,6 +89,16 @@ object RoomCommands {
           CryEngine.reportRoom(context)
         } else CryEngine.reportRoom(context, listOf(from))
       }
+      // Another phone became the baby monitor (one per family): stop being it. The mic stays on
+      // only if smart volume still wants it (the app decides when it runs).
+      "unmonitor" -> {
+        if (CryEngine.running && CryEngine.monitorMode) {
+          CryEngine.setMonitor(false)
+          CryEngine.listener?.invoke("status", mapOf("monitorOffBy" to (parent["name"] ?: "")))
+          Diag.add("no longer the baby monitor: ${parent["name"] ?: "?"} took over")
+        }
+        CryEngine.reportRoom(context)
+      }
       // "I'm on it": crying alerts go out quietly for a few minutes, naming who's going.
       "ack" -> {
         val until = body.optLong("until").coerceAtMost(System.currentTimeMillis() + 15 * 60_000L)

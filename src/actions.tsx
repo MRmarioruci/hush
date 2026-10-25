@@ -1,5 +1,7 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
+import { cryDetector } from "../modules/hush-native/src";
+import { remoteNoise } from "./state/noise";
 import { showMonitorMain } from "./monitorView";
 import { dialog } from "./components/Dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,7 +18,6 @@ import { useSleep } from "./state/sleep";
 import { useMonitor } from "./state/monitor";
 import { useNaps } from "./state/naps";
 import { listenFromOutside, playFromOutside } from "./components/Listen";
-import { roomCmd } from "./screens/MonitorScreen";
 import { getMyToken, CLIP_SECONDS } from "./monitor";
 import { fmtClock, fmtDur } from "./nights";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
@@ -46,14 +47,17 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       case "listenBg":
         if (role === "parent" && mon.target) mon.requestClip(mon.m.clipSeconds ?? CLIP_SECONDS);
         break;
+      // White noise follows the one rule (src/state/noise.ts): on the baby monitor phone when this
+      // phone is its remote, else here. Same for the widget, the tile, shortcuts and notifications.
       case "noise":
-        if (role === "parent" && mon.target) roomCmd(mon.target, mon.room?.playing ? "stop" : "play");
+        if (role === "parent" && mon.target) remoteNoise(mon.target, { playing: !mon.room?.playing });
         else sleep.toggle();
         break;
       case "asleep": if (!naps.state.asleep) naps.fellAsleep(); break;
       case "woke": if (naps.state.asleep) naps.wokeUp(); break;
       case "sleepToggle": naps.state.asleep ? naps.wokeUp() : naps.fellAsleep(); break;
-      case "monitor": go("Monitor"); mon.toggleListening(); break;
+      // Becoming the baby monitor turns off the one there is (one per family).
+      case "monitor": go("Monitor"); if (mon.listening) mon.toggleListening(); else mon.becomeMonitor(); break;
       case "onit": mon.ackCry(); break;
       case "fixEnd": go("Home"); break; // Home asks when they woke (the "still asleep?" card)
       case "syncClip": mon.syncClip(); break;
@@ -251,6 +255,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       const key = JSON.stringify(snap);
       if (key === lastSnap.current && !fetching) return;
       lastSnap.current = key;
+      // The Quick Settings tile shows the same white noise as the widget (here, or the baby's room).
+      cryDetector?.setTile(snap.playing);
       writeSnap(snap).then(() => {
         requestWidgetUpdate({ widgetName: "Hush", renderWidget: (w) => <HushWidget snap={snap} small={w.width < 220} /> }).catch(() => {});
         requestWidgetUpdate({ widgetName: "HushSmall", renderWidget: () => <HushWidget snap={snap} small /> }).catch(() => {});

@@ -13,6 +13,7 @@ import { Card, Chip, Label, Pill, Screen } from "../components/ui";
 import { TIMERS, fmtDist, fmtLeft, fmtMinDist, useSleep } from "../state/sleep";
 import { fmtTime, useT } from "../i18n";
 import { stopLine } from "../stops";
+import { useNoise, type Noise } from "../state/noise";
 
 export function SleepScreen() {
   const z = useSleep();
@@ -33,6 +34,10 @@ export function SleepScreen() {
   const setVol = (v: number) => (z.dev ? z.setStep(Math.round(v * z.dev.max)) : z.set({ vol: Math.round(v * 100) }));
   const timerIdx = Math.max(0, TIMERS.findIndex(([m]) => m === s.timer));
   const smart = s.mode === "smart";
+  // Another phone is the baby monitor: this screen is its remote (the sound plays there; its
+  // volume, timer and smart mode are set on that phone).
+  const noise = useNoise();
+  if (noise.where === "remote") return <RemoteSounds n={noise} />;
 
   return (
     <Screen title={t("sounds.title")}>
@@ -90,6 +95,37 @@ export function SleepScreen() {
         </View>
       )}
       {Platform.OS === "ios" && <Text style={styles.hint}>{t("sounds.iosVolume")}</Text>}
+    </Screen>
+  );
+}
+
+/** The Sounds screen on a phone that is the baby monitor's remote. */
+function RemoteSounds({ n }: { n: Noise }) {
+  const t = useT();
+  const status = n.failed ? t("noise.noAnswer", { phone: n.phone }) : n.pending ? t(n.playing ? "noise.starting" : "noise.stopping", { phone: n.phone }) : t("noise.remote", { room: n.room, phone: n.phone });
+  return (
+    <Screen title={t("sounds.title")}>
+      <View style={{ alignItems: "center", gap: 12, marginTop: 10 }}>
+        <Pressable onPress={n.toggle} disabled={n.pending} style={({ pressed }) => [styles.play, { position: "relative", bottom: 0, width: 120, height: 120, borderRadius: 60, borderWidth: 0 }, pressed && { transform: [{ scale: 0.94 }] }]} accessibilityRole="button" accessibilityLabel={n.playing ? t("common.pause") : t("common.play")}>
+          <Svg width={44} height={44} viewBox="0 0 24 24"><Path d={n.playing ? "M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" : "M8.5 5.5v13l10.5-6.5z"} fill={colors.bg} /></Svg>
+        </Pressable>
+        <Text style={styles.nowName}>{t(`sound.${n.soundId}`)}</Text>
+        <Text style={[styles.hint, { textAlign: "center" }, n.failed && { color: colors.rose }]}>{status}</Text>
+      </View>
+      <View style={styles.grid}>
+        {SOUNDS.map((x) => {
+          const on = x.id === n.soundId;
+          return (
+            <Pressable key={x.id} onPress={() => n.setSound(x.id)} disabled={n.pending} style={styles.tile} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={t(`sound.${x.id}`)}>
+              <View style={[styles.tileIcon, on && { backgroundColor: colors.peach }]}>
+                <SvgXml width={24} height={24} xml={`<svg viewBox="0 0 24 24" fill="none" stroke="${on ? colors.bg : "#c9bfff"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${x.icon}</svg>`} />
+              </View>
+              <Text style={[styles.tileText, on && { color: colors.cream }]} numberOfLines={1}>{t(`sound.${x.id}`)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={[styles.hint, { textAlign: "center" }]}>{t("noise.setThere", { phone: n.phone })}</Text>
     </Screen>
   );
 }

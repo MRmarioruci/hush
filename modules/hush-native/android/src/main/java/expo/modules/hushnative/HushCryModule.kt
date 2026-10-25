@@ -45,6 +45,20 @@ class HushCryModule : Module() {
       if (room.isEmpty()) CloudSync.clear(ctx) else CloudSync.configure(ctx, apiKey, projectId, room, phone, refreshToken)
       true
     }
+    // The Quick Settings tile follows the white noise the app shows (here, or the baby's room).
+    Function("setTile") { playing: Boolean ->
+      CryEngine.tilePlaying = playing
+      appContext.reactContext?.let { ctx ->
+        try { android.service.quicksettings.TileService.requestListeningState(ctx, android.content.ComponentName(ctx, HushTileService::class.java)) } catch (_: Exception) {}
+      }
+      Unit
+    }
+    // On a call (or one ringing): a pause of the white noise then is an interruption, not a choice.
+    Function("inCall") {
+      val am = appContext.reactContext?.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+      val mode = am?.mode ?: android.media.AudioManager.MODE_NORMAL
+      mode == android.media.AudioManager.MODE_IN_CALL || mode == android.media.AudioManager.MODE_IN_COMMUNICATION || mode == android.media.AudioManager.MODE_RINGTONE
+    }
     // Room reports that arrived natively (also while hush was closed): JSON { token: report }.
     Function("rooms") { appContext.reactContext?.let { RoomStore.all(it) } ?: "{}" }
 
@@ -93,6 +107,8 @@ class HushCryModule : Module() {
     Function("setVisible") { on: Boolean -> CryEngine.uiVisible = on }
     // Listening as the baby monitor (not just for smart volume).
     Function("isMonitoring") { CryEngine.running && CryEngine.monitorMode }
+    // When this phone became the baby monitor (0 = it isn't).
+    Function("listenSince") { if (CryEngine.running && CryEngine.monitorMode) CryEngine.listenSince.toDouble() else 0.0 }
 
     Function("setTexts") { texts: Map<String, String> ->
       texts["crying"]?.let { CryEngine.txtCrying = it }

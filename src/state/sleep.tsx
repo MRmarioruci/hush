@@ -135,6 +135,12 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   useEffect(() => {
     if (playing === wasPlaying.current) return;
     if (wasPlaying.current && !playing) {
+      // Paused from the lock screen or the notification's media controls: hush's own player is
+      // fine and no call took the sound, so it's a choice, not an interruption. Don't bring it back.
+      if (!stopWhy.current && player.isLoaded && !player.isBuffering && !(cryDetector?.inCall() ?? false)) {
+        diag.mark("sound paused from the media controls");
+        stopWhy.current = { why: "you" };
+      }
       if (!stopWhy.current) {
         // Interrupted: try again, and only report it if it can't come back.
         const since = Date.now();

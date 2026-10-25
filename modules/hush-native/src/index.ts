@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo";
 type Subscription = { remove(): void };
 
 export type VolumeState = { step: number; max: number };
-export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string; /** a parent made this phone the baby monitor */ monitorBy?: string };
+export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string; /** a parent made this phone the baby monitor */ monitorBy?: string; /** another phone took over as the baby monitor */ monitorOffBy?: string };
 
 type VolumeNative = {
   getVolume(): VolumeState;
@@ -31,6 +31,9 @@ type CryNative = {
   setVisible?(on: boolean): void;
   isMonitoring?(): boolean;
   rooms?(): string;
+  setTile?(playing: boolean): void;
+  listenSince?(): number;
+  inCall?(): boolean;
   setCloud?(apiKey: string, projectId: string, room: string, phone: string, refreshToken: string): boolean;
   setBaby?(name: string): void;
   lastClip?(): string;
@@ -104,6 +107,12 @@ export const cryDetector = cry
       isMonitoring: (): boolean => { try { return cry.isMonitoring?.() ?? cry.isListening(); } catch { return false; } },
       /** Room reports from the other phones that arrived natively (also while hush was closed). */
       rooms: (): Record<string, Record<string, unknown>> => { try { return JSON.parse(cry.rooms?.() ?? "{}") ?? {}; } catch { return {}; } },
+      /** When this phone became the baby monitor (0 = it isn't). */
+      listenSince: (): number => { try { return cry.listenSince?.() ?? 0; } catch { return 0; } },
+      /** What the Quick Settings tile shows (white noise here, or in the baby's room for its remote). */
+      setTile: (playing: boolean) => { try { cry.setTile?.(playing); } catch {} },
+      /** A call is on or ringing (a pause then is an interruption). */
+      inCall: (): boolean => { try { return cry.inCall?.() ?? false; } catch { return false; } },
       /** The family's cloud room, so the native side keeps this phone's state there while hush sleeps ("" room = none). */
       setCloud: (apiKey: string, projectId: string, room: string, phone: string, refreshToken: string) => { try { cry.setCloud?.(apiKey, projectId, room, phone, refreshToken); } catch {} },
       /** The baby's name, kept natively so a woken phone answers with it. */
