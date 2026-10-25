@@ -82,8 +82,10 @@ type Monitor = {
   setRoomSleep: (s: RoomSleep) => void;
   /** Make this phone the baby monitor (the current one stops). Returns an error to show, or null. */
   becomeMonitor: () => Promise<string | null>;
-  /** Make another phone (with its mic on for smart volume) the baby monitor; this or any other one stops. */
+  /** Ask another phone (with its mic on for smart volume) to become the baby monitor. */
   handOver: (token: string) => Promise<boolean>;
+  /** It did: every other monitor (this phone too) stops. */
+  finishHandOver: (token: string) => Promise<void>;
   /** Whether another phone is known to be on the cloud room (then its pushes about shared state are redundant). */
   isOnCloud: (token: string) => boolean;
   /** This phone's live state, for the room (white noise etc.; the native side adds battery and the mic). */
@@ -434,32 +436,56 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [listening, syncEvents, sendNightSummary, unlock, setListening]);
 
   /* ---------- one baby monitor per family ---------- */
+  // Another phone took over while hush wasn't running here: this phone gets the alerts now.
+  useEffect(() => {
+    ready.current!.then(() => {
+      const by = cryDetector?.takeUnmonitored();
+      if (by == null) return;
+      update({ mode: "alerts" });
+      const stop: Stop = { at: Date.now(), why: "remote", detail: by || undefined };
+      setLastStop(stop);
+      saveStops({ listen: stop, wasListening: false });
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
   /** Make this phone the baby monitor: the phone that is it now stops (it gets the alerts instead). */
   const becomeMonitor = useCallback(async (): Promise<string | null> => {
+    update({ mode: "monitor" });
+    // Start here first; the old monitor stops only once this one really listens (no gap with none).
+    const err = listeningNow.current ? null : await toggleListening();
+    if (!listeningNow.current) return err;
     const others = roomsRef.current.map((r) => r.token);
     if (others.length) {
       try { const me = await getMyToken(); await sendData(others, { type: "cmd", cmd: "unmonitor", from: me }); } catch {}
     }
-    update({ mode: "monitor" });
-    return listeningNow.current ? null : toggleListening();
+    return err;
   }, [toggleListening, update]);
   /** Make another phone the baby monitor (it must have its mic on already, for smart volume). */
   const handOver = useCallback(async (token: string): Promise<boolean> => {
     let me = "";
     try { me = await getMyToken(); } catch { return false; }
-    const others = roomsRef.current.map((r) => r.token).filter((x) => x !== token);
-    if (others.length) await sendData(others, { type: "cmd", cmd: "unmonitor", from: me }).catch(() => false);
-    if (listeningNow.current) { setListening(false, "remote"); update({ mode: "alerts" }); setTimeout(() => cryDetector?.reportRoom(), 600); }
     return sendData([token], { type: "cmd", cmd: "monitor", from: me }).catch(() => false);
+  }, []);
+  /** That phone now really is the baby monitor: every other one (this one too) stops. */
+  const finishHandOver = useCallback(async (token: string) => {
+    let me = "";
+    try { me = await getMyToken(); } catch {}
+    const others = roomsRef.current.map((r) => r.token).filter((x) => x !== token);
+    if (others.length && me) await sendData(others, { type: "cmd", cmd: "unmonitor", from: me }).catch(() => false);
+    if (listeningNow.current) { setListening(false, "remote"); update({ mode: "alerts" }); setTimeout(() => cryDetector?.reportRoom(), 600); }
   }, [setListening, update]);
   // Two monitors at once (both started at about the same time, or a message got lost): the one
   // that started last keeps it, this one steps back.
   useEffect(() => {
     if (!listening || !cryDetector) return;
     const mine = cryDetector.listenSince();
-    const newer = rooms.find((r) => (r.room?.listenSince ?? 0) > mine + 5000);
+    // Started within 5 s of each other: settled the same way on both phones (by push address).
+    const newer = rooms.find((r) => {
+      const theirs = r.room?.listenSince ?? 0;
+      if (!theirs) return false;
+      return theirs > mine + 5000 || (Math.abs(theirs - mine) <= 5000 && r.token > (mRef.current.me ?? ""));
+    });
     if (!mine || !newer) return;
     diag.mark(`two baby monitors: ${newer.name || "another phone"} is newer, stepping back`);
     setListening(false, "remote", newer.name || undefined);
@@ -1051,7 +1077,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, becomeMonitor, handOver, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, becomeMonitor, handOver, finishHandOver, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
   );
 }
 

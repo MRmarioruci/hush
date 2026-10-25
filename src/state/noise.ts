@@ -18,14 +18,16 @@ const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 
 /** Send a change to the baby monitor phone and wait for it to show up. */
+const fail = () => { want = null; failedAt = Date.now(); emit(); setTimeout(emit, 10_500); };
 export async function remoteNoise(token: string, change: { playing?: boolean; sound?: string }) {
-  want = { token, ...change, at: Date.now() };
+  const mine: Want = { token, ...change, at: Date.now() };
+  want = mine;
   failedAt = 0;
   emit();
   const cmd = change.sound ? "sound" : change.playing ? "play" : "stop";
   let ok = false;
   try { ok = await sendData([token], { type: "cmd", cmd, sound: change.sound, from: await getMyToken() }); } catch {}
-  if (!ok && want?.at && want.token === token) { want = null; failedAt = Date.now(); emit(); }
+  if (!ok && want === mine) fail();
 }
 
 export type Noise = {
@@ -53,7 +55,9 @@ export function useNoise(): Noise {
     subs.add(f);
     return () => { subs.delete(f); };
   }, []);
-  const token = mon.listening ? null : mon.target;
+  // White noise playing on this phone stays this phone's to stop (e.g. it just handed over the
+  // baby monitor while playing); otherwise the baby monitor phone's, when there is one.
+  const token = mon.listening || sleep.playing ? null : mon.target;
   const r = token ? mon.room : null;
 
   // Done once the baby monitor reports what was asked for; no answer after 15 s.
@@ -62,7 +66,7 @@ export function useNoise(): Noise {
   useEffect(() => {
     if (!w) return;
     if (done) { want = null; emit(); return; }
-    const id = setTimeout(() => { if (want === w) { want = null; failedAt = Date.now(); emit(); } }, Math.max(0, w.at + 15_000 - Date.now()));
+    const id = setTimeout(() => { if (want === w) fail(); }, Math.max(0, w.at + 15_000 - Date.now()));
     return () => clearTimeout(id);
   }, [w, done]);
 

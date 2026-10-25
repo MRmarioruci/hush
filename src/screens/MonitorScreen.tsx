@@ -289,7 +289,7 @@ function RoomActivity() {
 /* ---------------- the family: every phone that joined ---------------- */
 
 function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => void }) {
-  const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms, handOver } = useMonitor();
+  const { m, update, members, removeMember, leaveFamily, join, joining, baby, listening, rooms, handOver, finishHandOver } = useMonitor();
   // What each phone does: the baby monitor (listening by the crib) or getting the alerts.
   const role = (monitor: boolean) => (
     <View style={styles.roleLine}>
@@ -305,7 +305,8 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
   const [made, setMade] = useState<{ token: string; ok: boolean } | null>(null);
   useEffect(() => {
     if (!making) return;
-    if (monitorTokens.has(making.token)) { setMade({ token: making.token, ok: true }); setMaking(null); return; }
+    // It really listens now: only then does the old monitor (this phone or another) stop.
+    if (monitorTokens.has(making.token)) { finishHandOver(making.token); setMade({ token: making.token, ok: true }); setMaking(null); return; }
     const id = setTimeout(() => { setMade({ token: making.token, ok: false }); setMaking(null); }, Math.max(0, making.at + 20_000 - Date.now()));
     return () => clearTimeout(id);
   }, [making, rooms.length]); // eslint-disable-line react-hooks/exhaustive-deps

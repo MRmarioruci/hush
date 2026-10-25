@@ -137,7 +137,7 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     if (wasPlaying.current && !playing) {
       // Paused from the lock screen or the notification's media controls: hush's own player is
       // fine and no call took the sound, so it's a choice, not an interruption. Don't bring it back.
-      if (!stopWhy.current && player.isLoaded && !player.isBuffering && !(cryDetector?.inCall() ?? false)) {
+      if (!stopWhy.current && Platform.OS === "android" && cryDetector && player.isLoaded && !player.isBuffering && !cryDetector.inCall()) {
         diag.mark("sound paused from the media controls");
         stopWhy.current = { why: "you" };
       }
@@ -369,7 +369,10 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     // Listening only counts as the baby monitor; the mic can also be on just for smart volume.
     const listening = cryDetector ? cryDetector.isMonitoring() : r.listening;
     const canMonitor = !!cryDetector && cryDetector.isListening() && !listening;
-    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening, canMonitor, listenSince: listenSince.current, at: Date.now() };
+    // When it became the baby monitor: the native value (the same one the cloud has), so phones
+    // compare like with like when settling which one is the monitor.
+    const since = cryDetector ? cryDetector.listenSince() : listenSince.current;
+    return { type: "room", from: r.me, name: r.name.trim(), baby: r.baby.trim(), playing: player.playing, sound: r.soundId, listening, canMonitor, listenSince: since, at: Date.now() };
   }, [player]);
   useEffect(() => {
     const sub = addPushListener((n) => {

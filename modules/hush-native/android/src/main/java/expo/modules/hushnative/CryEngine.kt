@@ -298,6 +298,9 @@ object CryEngine {
     if (running) return
     running = true
     stopRequested = false
+    // From now, not from when the previous session's thread has wound down (it's compared with
+    // other phones to settle which one is the baby monitor).
+    listenSince = if (monitorMode) System.currentTimeMillis() else 0L
     val app = context.applicationContext
     EventLog.init(app)
     wakeLock = (app.getSystemService(Context.POWER_SERVICE) as PowerManager)
@@ -324,6 +327,7 @@ object CryEngine {
 
   fun stop() {
     running = false
+    listenSince = 0L
     thread?.interrupt() // kept (not cleared) so the next start waits for it to finish
     try { wakeLock?.release() } catch (_: Exception) {}
     wakeLock = null

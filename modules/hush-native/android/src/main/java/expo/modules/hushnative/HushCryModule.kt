@@ -107,6 +107,13 @@ class HushCryModule : Module() {
     Function("setVisible") { on: Boolean -> CryEngine.uiVisible = on }
     // Listening as the baby monitor (not just for smart volume).
     Function("isMonitoring") { CryEngine.running && CryEngine.monitorMode }
+    // Another phone took over as the baby monitor while hush wasn't running here: who (once).
+    Function("takeUnmonitored") {
+      val p = appContext.reactContext?.getSharedPreferences("hush-native", android.content.Context.MODE_PRIVATE) ?: return@Function null
+      val v = p.getString("unmonitoredBy", null)
+      if (v != null) p.edit().remove("unmonitoredBy").apply()
+      v
+    }
     // When this phone became the baby monitor (0 = it isn't).
     Function("listenSince") { if (CryEngine.running && CryEngine.monitorMode) CryEngine.listenSince.toDouble() else 0.0 }
 

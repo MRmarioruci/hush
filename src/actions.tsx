@@ -50,14 +50,15 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       // White noise follows the one rule (src/state/noise.ts): on the baby monitor phone when this
       // phone is its remote, else here. Same for the widget, the tile, shortcuts and notifications.
       case "noise":
-        if (role === "parent" && mon.target) remoteNoise(mon.target, { playing: !mon.room?.playing });
+        if (role === "parent" && mon.target && !sleep.playing) remoteNoise(mon.target, { playing: !mon.room?.playing });
         else sleep.toggle();
         break;
       case "asleep": if (!naps.state.asleep) naps.fellAsleep(); break;
       case "woke": if (naps.state.asleep) naps.wokeUp(); break;
       case "sleepToggle": naps.state.asleep ? naps.wokeUp() : naps.fellAsleep(); break;
       // Becoming the baby monitor turns off the one there is (one per family).
-      case "monitor": go("Monitor"); if (mon.listening) mon.toggleListening(); else mon.becomeMonitor(); break;
+      // (With another phone as the monitor, the Monitor tab asks first; nothing changes silently.)
+      case "monitor": go("Monitor"); if (mon.listening) mon.toggleListening(); else if (!mon.rooms.length) mon.becomeMonitor(); break;
       case "onit": mon.ackCry(); break;
       case "fixEnd": go("Home"); break; // Home asks when they woke (the "still asleep?" card)
       case "syncClip": mon.syncClip(); break;
@@ -234,7 +235,7 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
     }
     const snap: Snap = {
       role, title, status, line, short, scene, tone,
-      playing: role === "parent" ? !!room?.playing : sleep.playing,
+      playing: role === "parent" && !sleep.playing ? !!room?.playing : sleep.playing,
       asleep,
       monitorOn: mon.listening,
       showMonitor: role === "nursery",

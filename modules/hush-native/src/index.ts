@@ -33,6 +33,7 @@ type CryNative = {
   rooms?(): string;
   setTile?(playing: boolean): void;
   listenSince?(): number;
+  takeUnmonitored?(): string | null;
   inCall?(): boolean;
   setCloud?(apiKey: string, projectId: string, room: string, phone: string, refreshToken: string): boolean;
   setBaby?(name: string): void;
@@ -107,6 +108,8 @@ export const cryDetector = cry
       isMonitoring: (): boolean => { try { return cry.isMonitoring?.() ?? cry.isListening(); } catch { return false; } },
       /** Room reports from the other phones that arrived natively (also while hush was closed). */
       rooms: (): Record<string, Record<string, unknown>> => { try { return JSON.parse(cry.rooms?.() ?? "{}") ?? {}; } catch { return {}; } },
+      /** Another phone took over as the baby monitor while hush wasn't running: who (once), or null. */
+      takeUnmonitored: (): string | null => { try { return cry.takeUnmonitored?.() ?? null; } catch { return null; } },
       /** When this phone became the baby monitor (0 = it isn't). */
       listenSince: (): number => { try { return cry.listenSince?.() ?? 0; } catch { return 0; } },
       /** What the Quick Settings tile shows (white noise here, or in the baby's room for its remote). */

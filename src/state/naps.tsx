@@ -211,9 +211,12 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       savePeer({ ...said, asleep: false, at });
       return null;
     }
-    // Asleep because the baby monitor (another phone) is counting it: that phone ends its sleep too.
+    // Asleep because the baby monitor (another phone) is counting it: that phone ends it, and
+    // tells everyone (so they hear it once, not from both phones).
     if (!openFrom && roomAsleep && mon.target && mon.target !== skip) {
+      say(false, at);
       getMyToken().then((me) => sendData([mon.target!], { type: "cmd", cmd: "woke", from: me })).catch(() => {});
+      return null;
     }
     if (openFrom) await endSleep(at);
     if (state.asleep) logAct("awake", skip ? { why: "remote", asker: who } : {});

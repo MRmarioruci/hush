@@ -94,8 +94,16 @@ object RoomCommands {
       "unmonitor" -> {
         if (CryEngine.running && CryEngine.monitorMode) {
           CryEngine.setMonitor(false)
+          // Remembered for the app (hush may not be running here): it shows who took over.
+          context.getSharedPreferences("hush-native", Context.MODE_PRIVATE).edit().putString("unmonitoredBy", parent["name"] ?: "").apply()
           CryEngine.listener?.invoke("status", mapOf("monitorOffBy" to (parent["name"] ?: "")))
           Diag.add("no longer the baby monitor: ${parent["name"] ?: "?"} took over")
+          // No white noise here wanting the mic for smart volume: stop listening altogether.
+          if (!CryEngine.roomPlaying) {
+            CryEngine.stopRequested = true
+            try { context.stopService(android.content.Intent(context, CryListenerService::class.java)) } catch (_: Exception) {}
+            CryEngine.stop()
+          }
         }
         CryEngine.reportRoom(context)
       }
