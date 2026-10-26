@@ -135,10 +135,12 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   useEffect(() => {
     if (playing === wasPlaying.current) return;
     if (wasPlaying.current && !playing) {
-      // Paused from the lock screen or the notification's media controls: hush's own player is
-      // fine and no call took the sound, so it's a choice, not an interruption. Don't bring it back.
-      if (!stopWhy.current && Platform.OS === "android" && cryDetector && player.isLoaded && !player.isBuffering && !cryDetector.inCall()) {
-        diag.mark("sound paused from the media controls");
+      // Android: hush never gives up the audio to other apps (it mixes with them), so the only
+      // thing that stops the white noise without hush asking is a call, or a person: the pause
+      // or stop button in the notification, on the lock screen, a headset or the car. A person's
+      // stop is final; only a call is waited out and the sound brought back.
+      if (!stopWhy.current && Platform.OS === "android" && cryDetector && !cryDetector.inCall()) {
+        diag.mark(`sound stopped from the media controls (${player.isLoaded ? "paused" : "stopped"}): not starting it again`);
         stopWhy.current = { why: "you" };
       }
       if (!stopWhy.current) {
@@ -348,6 +350,8 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
     if (player.playing) { stopWhy.current = { why: "you" }; return player.pause(); }
     setStarts((n) => n + 1);
     player.volume = gainRef.current;
+    // Stopped (not just paused) from the media controls: the player has to load the sound again.
+    try { if (!player.isLoaded && !player.isBuffering) { player.replace(soundRef.current.file); player.loop = true; } } catch {}
     player.play();
     try { player.setActiveForLockScreen(true, { title: t(`sound.${loaded.current}`), artist: "hush", artworkUrl: artwork }); } catch {}
   }, [player]);
