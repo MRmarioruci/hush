@@ -142,10 +142,10 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   const saidAsleepAt = useRef(0); // when this phone last said "asleep" (an older "awake" can't end that sleep)
   const meRef = useRef(mon.me);
   meRef.current = mon.me;
-  const say = useCallback((asleep: boolean, at: number) => {
+  const say = useCallback((asleep: boolean, at: number, saidAt = Date.now()) => {
     if (asleep) saidAsleepAt.current = Date.now();
     if (!cloudRef.current || !meRef.current) return;
-    setRoomSleep({ asleep, since: at, at: Date.now(), from: meRef.current });
+    setRoomSleep({ asleep, since: at, at: saidAt, from: meRef.current });
   }, [setRoomSleep]);
 
 
@@ -263,18 +263,19 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { AsyncStorage.getItem(ACK).then((v) => v && setAck(Number(v) || 0)).catch(() => {}); }, []);
   const stillAsleep = useCallback(() => { const at = Date.now(); setAck(at); AsyncStorage.setItem(ACK, String(at)).catch(() => {}); }, []);
   let stale: NapsCtx["stale"] = null;
-  if (state.asleep) {
-    const h = new Date(state.since).getHours();
-    const limit = (h >= 17 || h < 5 ? 14 : 4) * 3600_000;
+  // The first sign a sleep ended: white noise turned off, or the monitor stopped, after it began.
+  const firstSign = (since: number) => [lastStop, mon.lastStop]
+    .filter((x): x is NonNullable<typeof x> => !!x && x.at > since + 20 * 60_000 && x.why !== "interrupted" && x.why !== "system")
+    .map((x) => x.at)
+    .sort((a, b) => a - b)[0] ?? null;
+  const nightStart = state.asleep && (new Date(state.since).getHours() >= 17 || new Date(state.since).getHours() < 5);
+  // Longer than any real sleep (a nap 6 h, a night 16 h): ended by itself, nobody is asked.
+  const tooLong = state.asleep && now - state.since > (nightStart ? 16 : 6) * 3600_000;
+  if (state.asleep && !tooLong) {
+    // Long enough to be worth asking (a nap 4 h, a night 14 h).
+    const limit = (nightStart ? 14 : 4) * 3600_000;
     const asked = ack > state.since ? ack : 0;
-    if (now - state.since > limit && (!asked || now - asked > limit / 3)) {
-      // The first sign it ended: white noise turned off, or the monitor stopped, after it began.
-      const signs = [lastStop, mon.lastStop]
-        .filter((x): x is NonNullable<typeof x> => !!x && x.at > state.since + 20 * 60_000 && x.why !== "interrupted" && x.why !== "system")
-        .map((x) => x.at)
-        .sort((a, b) => a - b);
-      stale = { since: state.since, guess: signs[0] ?? null };
-    }
+    if (now - state.since > limit && (!asked || now - asked > limit / 3)) stale = { since: state.since, guess: firstSign(state.since) };
   }
 
   /**
@@ -283,18 +284,28 @@ export function NapsProvider({ children }: { children: ReactNode }) {
    * past. Returns whether there was one.
    */
   const closeStale = async (): Promise<boolean> => {
-    if (!stale) return false;
-    const h = new Date(stale.since).getHours();
-    const typical = (h >= 17 || h < 5 ? 10 * 60 : 90) * 60_000;
-    const end = Math.max(stale.since + 60_000, Math.min(Date.now() - 60_000, stale.guess ?? stale.since + typical));
+    if (!state.asleep || (!stale && !tooLong)) return false;
+    const since = state.since;
+    const typical = (nightStart ? 10 * 60 : 90) * 60_000;
+    const end = Math.max(since + 60_000, Math.min(Date.now() - 60_000, firstSign(since) ?? since + typical));
     if (openFrom != null) await endSleep(end);
-    else if (monitorAsleep) setAwakeAt(end);
-    else return false;
-    diag.mark("forgotten sleep closed when a new one started");
-    say(false, end);
+    if (monitorAsleep) setAwakeAt(end);
+    // Asleep only because another phone said so (or the monitor counts it): the family's room
+    // hears it's over, which ends it on every phone.
+    diag.mark(`forgotten sleep closed (since ${new Date(since).toISOString()})`);
+    // Said as of when it ended, so it never overrides anything newer (a sleep the monitor is
+    // counting right now, say).
+    say(false, end, end);
+    if (peer?.asleep && peer.since <= since) savePeer({ ...peer, asleep: false, at: end });
     return true;
   };
   closeStaleRef.current = closeStale;
+  // Past the longest a sleep can be: close it now (on whichever phone sees it first; logged sleeps
+  // are shared, so it ends for everyone).
+  useEffect(() => {
+    if (!tooLong) return;
+    closeStaleRef.current().then((ok) => { if (ok) reload(); }).catch(() => {});
+  }, [tooLong, state.asleep ? state.since : 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Messages from the paired phones: "asleep / awake", and "the baby woke up" from the other side.
   const wakeRef = useRef(wakeUp);
