@@ -194,11 +194,14 @@ export function ListenRound({ children }: { children?: React.ReactNode }) {
 }
 
 /** One line of feedback under the round buttons: working on it, or what went wrong and what to do. */
+/** Keeps a number with its unit ("5 s", "10 min") on one line when text wraps. */
+export const keepUnits = (s: string) => s.replace(/(\d) (?=[^\s\d]{1,3}(?=$|[\s.,;:·…)]))/gu, "$1\u00A0");
+
 export function Notice({ text, bad, spin, onPress }: { text: string; bad?: boolean; spin?: boolean; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={[styles.notice, bad && { backgroundColor: "rgba(255,157,176,0.14)" }]} accessibilityRole={bad ? "alert" : "text"} accessibilityLiveRegion="polite">
       {spin ? <ActivityIndicator size="small" color={colors.muted} /> : bad ? <Icon d='<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>' size={18} color={colors.rose} width={2.2} /> : null}
-      <Text style={[styles.noticeText, bad && { color: colors.cream }]}>{text}</Text>
+      <Text style={[styles.noticeText, bad && { color: colors.cream }, { flexShrink: 1 }]}>{keepUnits(text)}</Text>
     </Pressable>
   );
 }
@@ -210,7 +213,7 @@ export function RoundBtn({ onPress, onLongPress, disabled, bg = colors.card, lab
   return (
     <Pressable onPress={onPress} onLongPress={onLongPress} disabled={disabled} style={({ pressed }) => [styles.roundItem, pressed && { transform: [{ scale: 0.95 }] }]} accessibilityRole="button" accessibilityLabel={a11y ?? label}>
       <View style={[styles.roundBtn, { backgroundColor: bg, width: size, height: size, borderRadius: size / 2 }, progress != null && { opacity: 0.6 + 0.4 * progress }]}>{children}</View>
-      <Text style={styles.roundLabel} numberOfLines={2}>{label}</Text>
+      <Text style={styles.roundLabel} numberOfLines={2}>{keepUnits(label)}</Text>
     </Pressable>
   );
 }

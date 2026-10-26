@@ -211,9 +211,10 @@ function RolePicker() {
     return (
       <Pressable onPress={() => pick(monitor)} disabled={busy} style={[styles.roleOpt, on && { backgroundColor: tone }]} accessibilityRole="radio" accessibilityState={{ checked: on, busy }}>
         {busy && !on ? <ActivityIndicator size="small" color={colors.cream} /> : <Icon d={monitor ? ICONS.mic : BELL} size={20} color={on ? colors.bg : tone} width={2.2} />}
-        <View style={{ flexShrink: 1 }}>
-          <Text style={[styles.roleOptTitle, on && { color: colors.bg }]} numberOfLines={1}>{t(monitor ? "rx.asMonitor" : "rx.asAlerts")}</Text>
-          <Text style={[styles.roleOptSub, on && { color: "rgba(34,27,69,0.7)" }]} numberOfLines={1}>{t(monitor ? "rx.asMonitorSub" : "rx.asAlertsSub")}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {/* The title shrinks a little to fit on one line; the line under it wraps (2 lines at most). */}
+          <Text style={[styles.roleOptTitle, on && { color: colors.bg }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{t(monitor ? "rx.asMonitor" : "rx.asAlerts")}</Text>
+          <Text style={[styles.roleOptSub, on && { color: "rgba(34,27,69,0.7)" }]} numberOfLines={2}>{t(monitor ? "rx.asMonitorSub" : "rx.asAlertsSub")}</Text>
         </View>
       </Pressable>
     );
@@ -881,7 +882,7 @@ const xstyles = StyleSheet.create({
   pickItemName: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   roleQ: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.muted, marginLeft: 4, marginTop: -6 },
   rolePick: { flexDirection: "row", gap: 8 },
-  roleOpt: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 14, minHeight: 62 },
+  roleOpt: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card, borderRadius: 22, paddingVertical: 11, paddingHorizontal: 12, minHeight: 66 },
   roleOptTitle: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
   roleOptSub: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   rxBell: { width: 84, height: 84, borderRadius: 42, alignItems: "center", justifyContent: "center", marginBottom: 6 },

@@ -347,7 +347,10 @@ function sessionsOf(evs: HushEvent[], now: number): Sleep[] {
   const cries = evs.filter((e): e is Cry => e.type === "cry");
   return spans(evs, "listen_start", "listen_stop", now)
     .flatMap(([s, e]) => (smart ? minus(s, e, wakings(evs, s, e, now), now) : [[s, e] as [number, number]]))
-    .flatMap(([s, e]) => sleepSpans(s, e)).map(([a, b]) => {
+    .flatMap(([s, e]) => sleepSpans(s, e))
+    // Listening for a minute or two (switched on and off again) isn't a sleep. Still going: counts.
+    .filter(([a, b]) => b - a >= 2 * 60_000 || b >= now - 1000)
+    .map(([a, b]) => {
     const mine = cries.filter((c) => c.start >= a - 60_000 && c.start <= b);
     return {
       from: a,

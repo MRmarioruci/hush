@@ -1,6 +1,7 @@
 // Nap timing state: all known sleeps (any phone), the sleep in progress, and the next-nap guess.
 // Also keeps the "nap due soon" reminder scheduled on this phone, and tells the paired phones
 // when the baby falls asleep, wakes up, or white noise starts on the baby's phone.
+import { diag } from "../../modules/hush-native/src";
 import { logAct } from "../activity";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform } from "react-native";
@@ -39,6 +40,8 @@ type NapsCtx = {
 const Ctx = createContext<NapsCtx | null>(null);
 export const useNaps = () => useContext(Ctx)!;
 const REMINDER = "nap-reminder";
+/** Shorter than this, a "sleep" didn't happen. */
+const SHORT_SLEEP = 2 * 60_000;
 const PEER = "hush:peerSleep";
 const ACK = "hush:stillAsleepAt";
 /** What a paired phone last said: asleep since when, or awake. */
@@ -183,15 +186,38 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     }
   }, [peers, s.notifyOthers, mon.m.babyName, mon.rooms, soundId]);
 
+  // A sleep that ends within 2 minutes didn't happen (a mis-tap, or the baby didn't settle): it
+  // isn't kept, and nobody hears about it. So "fell asleep" is only announced (notifications to
+  // the other phones, the activity log) once it has lasted 2 minutes.
+  const announce = useRef<{ timer: ReturnType<typeof setTimeout>; from: number } | null>(null);
+  const announceLater = useCallback((from: number, fn: () => void) => {
+    if (announce.current) clearTimeout(announce.current.timer);
+    const timer = setTimeout(async () => {
+      announce.current = null;
+      const o = await openSleep().catch(() => null);
+      if (o && o.to == null && Math.abs(o.from - from) < 5000) fn();
+    }, SHORT_SLEEP);
+    announce.current = { timer, from };
+  }, []);
+  /** Throw away a sleep that only just started (under 2 minutes): no record, no notifications. */
+  const dropShort = useCallback(async (at: number) => {
+    if (announce.current) { clearTimeout(announce.current.timer); announce.current = null; }
+    const o = await openSleep();
+    if (o) await deleteSleep(o.id);
+    setSoundSleep(null);
+    reload();
+    say(false, at);
+  }, [reload, say]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fellAsleep = useCallback(async () => {
     const at = Date.now();
+    await closeStaleRef.current();
     await startSleep(at);
     reload();
-    notify("asleep", at);
-    logAct("asleep");
     say(true, at);
+    announceLater(at, () => { notify("asleep", at); logAct("asleep"); });
     return null;
-  }, [reload, notify, say]);
+  }, [reload, notify, say, announceLater]);
 
   /** `skip`: the phone that asked (it already knows). Never turns the baby monitor off. */
   const wakeUp = useCallback(async (skip?: string, at = Date.now()) => {
@@ -218,6 +244,7 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       getMyToken().then((me) => sendData([mon.target!], { type: "cmd", cmd: "woke", from: me })).catch(() => {});
       return null;
     }
+    if (openFrom != null && at - openFrom < SHORT_SLEEP) { await dropShort(at); return null; }
     if (openFrom) await endSleep(at);
     if (state.asleep) logAct("awake", skip ? { why: "remote", asker: who } : {});
     if (mon.listening) setAwakeAt(at); // the monitor keeps listening; this sleep is over
@@ -226,12 +253,13 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     if (peer?.asleep) savePeer({ ...peer, asleep: false, at });
     if (state.asleep) say(false, at);
     return mon.listening ? t("nap.stillListening") : null;
-  }, [mon, reload, playing, stop, openFrom, monitorAsleep, roomAsleep, peerAsleep, peer, said, savePeer, state, notify, say]);
+  }, [mon, reload, playing, stop, openFrom, monitorAsleep, roomAsleep, peerAsleep, peer, said, savePeer, state, notify, say, dropShort]);
   const wokeUp = useCallback(() => wakeUp(), [wakeUp]);
   const wokeAt = useCallback((at: number) => wakeUp(undefined, Math.min(Date.now(), Math.max(at, state.asleep ? state.since + 60_000 : at))), [wakeUp, state]);
 
   // A sleep that can't still be going on: over 14 h from an evening start, over 4 h from a daytime one.
   const [ack, setAck] = useState(0); // "still asleep" pressed at
+  const closeStaleRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => { AsyncStorage.getItem(ACK).then((v) => v && setAck(Number(v) || 0)).catch(() => {}); }, []);
   const stillAsleep = useCallback(() => { const at = Date.now(); setAck(at); AsyncStorage.setItem(ACK, String(at)).catch(() => {}); }, []);
   let stale: NapsCtx["stale"] = null;
@@ -248,6 +276,25 @@ export function NapsProvider({ children }: { children: ReactNode }) {
       stale = { since: state.since, guess: signs[0] ?? null };
     }
   }
+
+  /**
+   * The forgotten sleep, ended quietly: at the first sign it was over (white noise off, monitor
+   * stopped), else after a typical length (a nap 1.5 h, a night 10 h). No notifications: it's long
+   * past. Returns whether there was one.
+   */
+  const closeStale = async (): Promise<boolean> => {
+    if (!stale) return false;
+    const h = new Date(stale.since).getHours();
+    const typical = (h >= 17 || h < 5 ? 10 * 60 : 90) * 60_000;
+    const end = Math.max(stale.since + 60_000, Math.min(Date.now() - 60_000, stale.guess ?? stale.since + typical));
+    if (openFrom != null) await endSleep(end);
+    else if (monitorAsleep) setAwakeAt(end);
+    else return false;
+    diag.mark("forgotten sleep closed when a new one started");
+    say(false, end);
+    return true;
+  };
+  closeStaleRef.current = closeStale;
 
   // Messages from the paired phones: "asleep / awake", and "the baby woke up" from the other side.
   const wakeRef = useRef(wakeUp);
@@ -301,6 +348,8 @@ export function NapsProvider({ children }: { children: ReactNode }) {
     if (!st || st.at < mountedAt.current || Date.now() - st.at > 60_000 || (st.why !== "you" && st.why !== "remote")) return;
     if (!s.features.naps || !s.smartSleep || !state.asleep) return;
     const since = state.since;
+    // Sound on and off again within 2 minutes: there was no sleep.
+    if (openFrom != null && st.at - openFrom < SHORT_SLEEP) { dropShort(st.at).catch(() => {}); return; }
     (async () => {
       if (openFrom) {
         const o = await openSleep();
@@ -340,19 +389,22 @@ export function NapsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!starts) return;
     const at = Date.now();
-    if (!s.features.naps || !s.soundStartsSleep || state.asleep) {
+    // A sleep that can't still be going on (nobody tapped "woke up" last time): starting the sound
+    // again says it's over. Close it quietly at the best guess and start this one; no question.
+    const restart = !!stale && s.features.naps && s.soundStartsSleep;
+    if (!s.features.naps || !s.soundStartsSleep || (state.asleep && !restart)) {
       // Just the sound: worth telling the parents when it's the baby's phone.
       if (mon.listening) notify("soundOn", at);
       return;
     }
     (async () => {
+      await closeStaleRef.current();
       await startSleep(at);
       const o = await openSleep();
       setSoundSleep(o?.id ?? null);
       reload();
-      notify("asleepSound", at);
-      logAct("asleep", { why: "sound" });
       say(true, at);
+      announceLater(at, () => { notify("asleepSound", at); logAct("asleep", { why: "sound" }); });
     })().catch(() => {});
   }, [starts]); // eslint-disable-line react-hooks/exhaustive-deps
   const undoSound = useCallback(async () => {
