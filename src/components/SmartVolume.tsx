@@ -22,14 +22,14 @@ const secs = (t: T, s: number) => (s < 60 ? t("smart.secs", { s }) : mins(t, s /
 function PlanChart({ plan, now }: { plan: SmartPlan; now?: { min: number; level: number } | null }) {
   const t = useT();
   const [w, setW] = useState(300);
-  const H = 132, top = 10, bottom = H - 24;
-  const X = (m: number) => 6 + (Math.min(120, m) / 120) * (w - 12);
+  const H = 128, top = 14, bottom = H - 24;
+  const X = (m: number) => 12 + (Math.min(120, m) / 120) * (w - 24);
   const Y = (l: number) => top + (1 - l) * (bottom - top);
   const pts: [number, number][] = [];
   for (let m = 0; m <= 120; m += 0.5) pts.push([m, planLevel(plan, m).level]);
   const line = "M" + pts.map(([m, l]) => `${X(m).toFixed(1)} ${Y(l).toFixed(1)}`).join(" L");
   const h = plan.fade + plan.hold, e = h + plan.ease;
-  const ticks: [number, string][] = [[0, t("smart.start")], [30, mins(t, 30)], [60, mins(t, 60)], [90, mins(t, 90)], [120, mins(t, 120)]];
+  const ticks: [number, string][] = [[0, "0"], [30, t("smart.t30")], [60, t("smart.t60")], [90, t("smart.t90")], [120, t("smart.t120")]];
   return (
     <View onLayout={(ev) => setW(ev.nativeEvent.layout.width)}>
       <Svg width={w} height={H}>
@@ -45,7 +45,7 @@ function PlanChart({ plan, now }: { plan: SmartPlan; now?: { min: number; level:
           </>
         )}
         {ticks.map(([m, label], i) => (
-          <SvgText key={m} x={i === ticks.length - 1 ? X(m) : X(m)} y={H - 6} fontSize={11} fontWeight="700" fill="#8f86bf" textAnchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"}>{label}</SvgText>
+          <SvgText key={m} x={X(m)} y={H - 6} fontSize={11} fontWeight="700" fill="#8f86bf" textAnchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"}>{label}</SvgText>
         ))}
       </Svg>
     </View>
@@ -56,10 +56,10 @@ function PlanChart({ plan, now }: { plan: SmartPlan; now?: { min: number; level:
 function StirChart({ plan }: { plan: SmartPlan }) {
   const t = useT();
   const [w, setW] = useState(300);
-  const H = 112, top = 10, bottom = H - 24;
+  const H = 104, top = 14, bottom = H - 24;
   const low = plan.low / 100, peak = Math.max(low, plan.peak / 100);
   const lead = 120, t1 = lead + plan.riseS, t2 = t1 + plan.stay * 60, t3 = t2 + plan.back * 60, total = t3 + 120;
-  const X = (s: number) => 6 + (s / total) * (w - 12);
+  const X = (s: number) => 12 + (s / total) * (w - 24);
   const Y = (l: number) => top + (1 - l) * (bottom - top);
   const line = `M${X(0)} ${Y(low)} L${X(lead)} ${Y(low)} L${X(t1)} ${Y(peak)} L${X(t2)} ${Y(peak)} L${X(t3)} ${Y(low)} L${X(total)} ${Y(low)}`;
   return (
@@ -69,9 +69,9 @@ function StirChart({ plan }: { plan: SmartPlan }) {
         <Path d={`${line} L${X(total)} ${bottom} L${X(0)} ${bottom} Z`} fill={colors.sage} opacity={0.12} />
         <Path d={line} stroke={colors.sage} strokeWidth={3} fill="none" strokeLinejoin="round" strokeLinecap="round" />
         <Circle cx={X(lead)} cy={Y(low)} r={5} fill={colors.rose} />
-        <SvgText x={X(lead)} y={H - 6} fontSize={11} fontWeight="700" fill={colors.rose} textAnchor="middle">{t("smart.stirs")}</SvgText>
+        <SvgText x={Math.max(12, X(lead) - 14)} y={H - 6} fontSize={11} fontWeight="700" fill={colors.rose} textAnchor="start">{t("smart.stirs")}</SvgText>
         <SvgText x={(X(t1) + X(t2)) / 2} y={H - 6} fontSize={11} fontWeight="700" fill="#8f86bf" textAnchor="middle">{t("smart.staysUp")}</SvgText>
-        <SvgText x={Math.min(w - 6, (X(t2) + X(t3)) / 2 + 10)} y={H - 6} fontSize={11} fontWeight="700" fill="#8f86bf" textAnchor={X(t3) > w - 40 ? "end" : "middle"}>{t("smart.easesBack")}</SvgText>
+        <SvgText x={Math.min(w - 12, (X(t2) + X(t3)) / 2)} y={H - 6} fontSize={11} fontWeight="700" fill="#8f86bf" textAnchor={(X(t2) + X(t3)) / 2 > w - 50 ? "end" : "middle"}>{t("smart.easesBack")}</SvgText>
       </Svg>
     </View>
   );
@@ -115,24 +115,24 @@ export function SmartCard() {
   return (
     <View style={styles.box}>
       <View style={styles.headRow}>
-        <Text style={styles.cardTitle}>{t("smart.title")}</Text>
+        <Text style={[styles.cardTitle, { flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{t("smart.title")}</Text>
         <Pressable onPress={() => setOpen(true)} style={styles.adjust} accessibilityRole="button">
           <Icon d='<path d="M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4"/>' size={16} color={colors.bg} width={2.2} />
-          <Text style={styles.adjustText}>{t("smart.adjust")}</Text>
+          <Text style={styles.adjustText} maxFontSizeMultiplier={1.2}>{t("smart.adjust")}</Text>
         </Pressable>
       </View>
-      <Text style={styles.sub}>{plan.low >= 100 ? t("smart.lowFull") : t("smart.summary", { hold: mins(t, plan.fade + plan.hold), quiet: mins(t, quietBy), pct: plan.low })}</Text>
+      <Text style={styles.sub} maxFontSizeMultiplier={1.25}>{plan.low >= 100 ? t("smart.lowFull") : t("smart.summary", { hold: mins(t, plan.fade + plan.hold), quiet: mins(t, quietBy), pct: plan.low })}</Text>
       <PlanChart plan={plan} now={now} />
       <View style={styles.nowRow}>
         <View style={[styles.dot, { backgroundColor: v ? (v.phase === "rising" || v.phase === "up" ? colors.rose : colors.sage) : colors.card2 }]} />
-        <Text style={styles.sub} numberOfLines={2}>{phase}</Text>
+        <Text style={[styles.sub, { flex: 1 }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>{phase}</Text>
       </View>
       <SmartSheet visible={open} onClose={() => setOpen(false)} />
     </View>
   );
 }
 
-/** The settings page: two charts, each with its sliders. */
+/** The settings page: two cards, each a curve with two sliders under it. */
 function SmartSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const z = useSleep();
   const mon = useMonitor();
@@ -144,17 +144,23 @@ function SmartSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
   // Drawn live while dragging; saved when the finger lifts.
   const live = (patch: Partial<SmartPlan>) => setP((x) => ({ ...x, ...patch }));
   const save = (patch: Partial<SmartPlan>) => setP((x) => { const next = { ...x, ...patch }; z.set({ smartPlan: next }); return next; });
-  const riseIdx = Math.max(0, RISE_STEPS.indexOf(p.riseS) >= 0 ? RISE_STEPS.indexOf(p.riseS) : RISE_STEPS.findIndex((s) => s >= p.riseS));
+  // One slider for how quickly it gets quiet: a short soft start, a third of the time at full,
+  // the rest dropping.
+  const quietAfter = Math.round(p.hold + p.ease);
+  const quiet = (q: number): Partial<SmartPlan> => { const hold = Math.round(q / 3); return { fade: 0.5, hold, ease: q - hold }; };
+  const riseIdx = Math.max(0, RISE_STEPS.findIndex((x) => x >= p.riseS));
+  // Stays up after the last sound, then eases back over the same time.
+  const upFor = p.stay + p.back;
+  const upPatch = (m: number): Partial<SmartPlan> => ({ stay: Math.ceil(m / 2), back: Math.floor(m / 2) || 1 });
   const row = (label: string, value: string, slider: React.ReactNode, color = colors.peach) => (
-    <View style={{ gap: 0 }}>
+    <View>
       <View style={styles.sliderHead}>
-        <Text style={styles.sliderLabel}>{label}</Text>
-        <Text style={[styles.sliderValue, { color }]}>{value}</Text>
+        <Text style={styles.sliderLabel} numberOfLines={1} maxFontSizeMultiplier={1.25}>{label}</Text>
+        <Text style={[styles.sliderValue, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{value}</Text>
       </View>
       {slider}
     </View>
   );
-  const quietBy = p.fade + p.hold + p.ease;
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.page, { paddingTop: insets.top + 12 }]}>
@@ -162,70 +168,50 @@ function SmartSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("common.back")}>
             <Icon d='<path d="M15 6l-6 6 6 6"/>' size={22} color={colors.cream} width={2.2} />
           </Pressable>
-          <Text style={styles.pageTitle}>{t("smart.title")}</Text>
+          <Text style={styles.pageTitle} numberOfLines={1} maxFontSizeMultiplier={1.2}>{t("smart.title")}</Text>
           <Pressable onPress={() => { setP(PLAN_DEFAULTS); z.set({ smartPlan: PLAN_DEFAULTS }); }} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.reset}>{t("smart.reset")}</Text>
+            <Text style={styles.reset} maxFontSizeMultiplier={1.2}>{t("smart.reset")}</Text>
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: insets.bottom + 30 }}>
+          {/* How it gets quiet */}
+          <View style={styles.box}>
+            <Text style={styles.cardTitle} maxFontSizeMultiplier={1.25}>{t("smart.planTitle")}</Text>
+            <PlanChart plan={p} />
+            {row(t("smart.quietAfter"), mins(t, quietAfter),
+              <Slider label={t("smart.quietAfter")} value={quietAfter} min={10} max={90} step={5} onChange={(q) => live(quiet(q))} onDone={(q) => save(quiet(q))} />)}
+            {row(t("smart.low"), `${p.low}%`,
+              <Slider label={t("smart.low")} value={p.low} min={20} max={100} step={5} onChange={(low) => live({ low })} onDone={(low) => save({ low })} />)}
+            <Text style={styles.small} maxFontSizeMultiplier={1.25}>{p.low >= 100 ? t("smart.lowFull") : t("smart.lowSounds", { pct: Math.round(sounds(p.low / 100) * 100) })}</Text>
+          </View>
+
+          {/* When the baby stirs */}
           <View style={styles.box}>
             <View style={styles.headRow}>
-              <Text style={styles.sliderLabel}>{t("smart.planTitle")}</Text>
-              <Text style={[styles.sub, { color: colors.peach }]}>{t("smart.quietBy", { time: mins(t, quietBy) })}</Text>
-            </View>
-            <PlanChart plan={p} />
-          </View>
-          {row(t("smart.fade"), p.fade === 0 ? t("smart.off") : p.fade < 1 ? secs(t, p.fade * 60) : mins(t, p.fade),
-            <Slider label={t("smart.fade")} value={p.fade} min={0} max={3} step={0.5} onChange={(fade) => live({ fade })} onDone={(fade) => save({ fade })} />)}
-          {row(t("smart.hold"), p.hold === 0 ? t("smart.holdNone") : mins(t, p.hold),
-            <Slider label={t("smart.hold")} value={p.hold} min={0} max={60} step={5} onChange={(hold) => live({ hold })} onDone={(hold) => save({ hold })} />)}
-          {row(t("smart.ease"), mins(t, p.ease),
-            <Slider label={t("smart.ease")} value={p.ease} min={5} max={90} step={5} onChange={(ease) => live({ ease })} onDone={(ease) => save({ ease })} />)}
-          {row(t("smart.low"), `${p.low}%`,
-            <Slider label={t("smart.low")} value={p.low} min={20} max={100} step={5} onChange={(low) => live({ low })} onDone={(low) => save({ low })} />)}
-          <Text style={[styles.sub, { textAlign: "center" }]}>{p.low >= 100 ? t("smart.lowFull") : t("smart.lowSounds", { pct: Math.round(sounds(p.low / 100) * 100) })} {t("smart.never")}</Text>
-
-          <View style={[styles.box, { marginTop: 10 }]}>
-            <View style={styles.headRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{t("smart.stirTitle", { name: mon.baby })}</Text>
-                <Text style={styles.sub}>{t("smart.stirSub")}</Text>
-              </View>
+              <Text style={[styles.cardTitle, { flex: 1 }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>{t("smart.stirTitle", { name: mon.baby })}</Text>
               <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} accessibilityLabel={t("smart.stirTitle", { name: mon.baby })} />
             </View>
-            {z.s.smartCry && <StirChart plan={p} />}
-            {z.s.smartCry && <Text style={[styles.sub, { color: colors.sage }]}>{t("smart.upFor", { rise: secs(t, p.riseS), min: p.stay + p.back })}</Text>}
+            {z.s.smartCry ? (
+              <>
+                <StirChart plan={{ ...p, peak: 100 }} />
+                {row(t("smart.rise"), secs(t, RISE_STEPS[riseIdx]),
+                  <Slider label={t("smart.rise")} value={riseIdx} min={0} max={RISE_STEPS.length - 1} step={1} color={colors.sage}
+                    onChange={(i) => live({ riseS: RISE_STEPS[i] })} onDone={(i) => save({ riseS: RISE_STEPS[i], peak: 100 })} />, colors.sage)}
+                {row(t("smart.upFor2"), mins(t, upFor),
+                  <Slider label={t("smart.upFor2")} value={upFor} min={4} max={40} step={2} color={colors.sage} onChange={(m) => live(upPatch(m))} onDone={(m) => save(upPatch(m))} />, colors.sage)}
+                <View style={styles.hears}>
+                  <Icon d='<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>' size={16} color={hearing.ok ? colors.sage : colors.rose} width={2} />
+                  <Text style={[styles.small, { flex: 1, textAlign: "left" }]} maxFontSizeMultiplier={1.25}>{hearing.text}</Text>
+                  {!hearing.ok && (
+                    <Pressable onPress={async () => { const problem = await askMicAndNotifications(); hearing.setMicOk(!problem); }} style={styles.allow} accessibilityRole="button">
+                      <Text style={styles.allowText} maxFontSizeMultiplier={1.2}>{t("smart.allowMic")}</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </>
+            ) : <Text style={styles.small} maxFontSizeMultiplier={1.25}>{t("smart.stirSub")}</Text>}
           </View>
-          {z.s.smartCry && (
-            <>
-              {row(t("smart.rise"), secs(t, RISE_STEPS[riseIdx]),
-                <Slider label={t("smart.rise")} value={riseIdx} min={0} max={RISE_STEPS.length - 1} step={1} color={colors.sage}
-                  onChange={(i) => live({ riseS: RISE_STEPS[i] })} onDone={(i) => save({ riseS: RISE_STEPS[i] })} />, colors.sage)}
-              {row(t("smart.peak"), p.peak >= 100 ? t("smart.peakFull") : `${p.peak}%`,
-                <Slider label={t("smart.peak")} value={p.peak} min={Math.min(100, Math.max(30, p.low))} max={100} step={5} color={colors.sage} onChange={(peak) => live({ peak })} onDone={(peak) => save({ peak })} />, colors.sage)}
-              {row(t("smart.stay"), mins(t, p.stay),
-                <Slider label={t("smart.stay")} value={p.stay} min={1} max={30} step={1} color={colors.sage} onChange={(stay) => live({ stay })} onDone={(stay) => save({ stay })} />, colors.sage)}
-              {row(t("smart.back"), mins(t, p.back),
-                <Slider label={t("smart.back")} value={p.back} min={2} max={30} step={1} color={colors.sage} onChange={(back) => live({ back })} onDone={(back) => save({ back })} />, colors.sage)}
-              <Text style={styles.sliderLabel}>{t("smart.on", { name: mon.baby })}</Text>
-              <View style={styles.seg} accessibilityRole="radiogroup">
-                {(["fuss", "cry"] as const).map((k) => (
-                  <Pressable key={k} onPress={() => save({ on: k })} style={[styles.segItem, p.on === k && { backgroundColor: colors.sage }]} accessibilityRole="radio" accessibilityState={{ checked: p.on === k }}>
-                    <Text style={[styles.segText, p.on === k && { color: "#1e4a39" }]}>{t(k === "fuss" ? "smart.onFuss" : "smart.onCry")}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <View style={styles.hears}>
-                <Icon d='<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>' size={18} color={hearing.ok ? colors.sage : colors.rose} width={2} />
-                <Text style={[styles.sub, { flex: 1 }]}>{hearing.text}</Text>
-                {!hearing.ok && (
-                  <Pressable onPress={async () => { const problem = await askMicAndNotifications(); hearing.setMicOk(!problem); }} style={styles.allow} accessibilityRole="button">
-                    <Text style={styles.allowText}>{t("smart.allowMic")}</Text>
-                  </Pressable>
-                )}
-              </View>
-            </>
-          )}
+          <Text style={[styles.small, { paddingHorizontal: 10 }]} maxFontSizeMultiplier={1.25}>{t("smart.never")}</Text>
         </ScrollView>
       </View>
     </Modal>
@@ -233,7 +219,7 @@ function SmartSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
 }
 
 const styles = StyleSheet.create({
-  box: { backgroundColor: colors.card, borderRadius: 24, padding: 14, gap: 10 },
+  box: { backgroundColor: colors.card, borderRadius: 24, padding: 16, gap: 10, overflow: "hidden" },
   headRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   cardTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.cream },
   sub: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.muted },
@@ -246,12 +232,13 @@ const styles = StyleSheet.create({
   pageTitle: { flex: 1, fontFamily: fonts.display, fontSize: 24, color: colors.cream },
   reset: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.muted },
   sliderHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  sliderLabel: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: colors.cream },
-  sliderValue: { fontFamily: fonts.display, fontSize: 17 },
+  sliderLabel: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.cream },
+  sliderValue: { fontFamily: fonts.display, fontSize: 16, marginLeft: 8 },
+  small: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17, color: colors.muted, textAlign: "center" },
   seg: { flexDirection: "row", backgroundColor: colors.card, borderRadius: 24, padding: 4, gap: 4 },
   segItem: { flex: 1, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   segText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.muted },
-  hears: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderRadius: 20, padding: 12 },
+  hears: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.card2, borderRadius: 16, paddingVertical: 9, paddingHorizontal: 12 },
   allow: { backgroundColor: colors.card2, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 7 },
   allowText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.peach },
 });
