@@ -302,15 +302,25 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
   // Phones playing smart-volume white noise have their mic on already: they can become the
   // monitor from here (Android won't let a phone start its mic from the background otherwise).
   const fresh = (tok: string) => { const r = m.rooms?.[tok]; return r && Date.now() - (r.got ?? r.at) < 15 * 60_000 ? r : null; };
-  const [making, setMaking] = useState<{ token: string; at: number } | null>(null);
+  // Making another phone the baby monitor. With its mic already on (white noise playing) it switches
+  // by itself; otherwise Android needs a tap on that phone, so it shows a notification and says so
+  // here ("tap the notification on …"), and this keeps waiting for it.
+  const [making, setMaking] = useState<{ token: string; at: number; tap?: boolean } | null>(null);
   const [made, setMade] = useState<{ token: string; ok: boolean } | null>(null);
   useEffect(() => {
     if (!making) return;
     // It really listens now: only then does the old monitor (this phone or another) stop.
     if (monitorTokens.has(making.token)) { finishHandOver(making.token); setMade({ token: making.token, ok: true }); setMaking(null); return; }
-    const id = setTimeout(() => { setMade({ token: making.token, ok: false }); setMaking(null); }, Math.max(0, making.at + 20_000 - Date.now()));
+    const id = setTimeout(() => { setMade({ token: making.token, ok: false }); setMaking(null); }, Math.max(0, making.at + (making.tap ? 3 * 60_000 : 25_000) - Date.now()));
     return () => clearTimeout(id);
   }, [making, rooms.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const sub = addPushListener((n) => {
+      const d = n.request.content.data as { type?: string; from?: string } | undefined;
+      if (d?.type === "monitor-asked" && d.from) setMaking((x) => (x && x.token === d.from ? { ...x, tap: true } : x));
+    });
+    return () => sub.remove();
+  }, []);
   const makeMonitor = async (tok: string) => {
     setMade(null);
     setMaking({ token: tok, at: Date.now() });
@@ -358,15 +368,11 @@ function FamilyCard({ onInvite, onJoin }: { onInvite: () => void; onJoin: () => 
             <View style={[styles.avatar, monitorTokens.has(p.token) && { backgroundColor: colors.sage }]}><Text style={styles.avatarText}>{nameOf(p.name, i).slice(0, 1).toUpperCase()}</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.personName} numberOfLines={1}>{nameOf(p.name, i)}</Text>
-              {!monitorTokens.has(p.token) && fresh(p.token)?.canMonitor ? (
-                <View style={styles.roleLine}>
-                  <Icon d={ICONS.mic} size={12} color={colors.peach} width={2.2} />
-                  <Text style={[styles.roleText, { color: colors.peach }]} numberOfLines={1}>{t("fam.canMonitor")}</Text>
-                </View>
-              ) : role(monitorTokens.has(p.token))}
-              {made?.token === p.token && <Text style={[styles.roleText, { color: made.ok ? colors.sage : colors.rose, marginTop: 2 }]} numberOfLines={2}>{made.ok ? t("fam.madeMonitor") : t("fam.makeFailed")}</Text>}
+              {role(monitorTokens.has(p.token))}
+              {making?.token === p.token && <Text style={[styles.roleText, { color: colors.peach, marginTop: 2 }]} numberOfLines={3}>{making.tap ? t("fam.tapThere", { name: nameOf(p.name, i) }) : t("fam.asking")}</Text>}
+              {made?.token === p.token && <Text style={[styles.roleText, { color: made.ok ? colors.sage : colors.rose, marginTop: 2 }]} numberOfLines={3}>{made.ok ? t("fam.madeMonitor") : t("fam.makeFailed2", { name: nameOf(p.name, i) })}</Text>}
             </View>
-            {!monitorTokens.has(p.token) && fresh(p.token)?.canMonitor && (
+            {!monitorTokens.has(p.token) && (
               <Pressable onPress={() => makeMonitor(p.token)} disabled={making?.token === p.token} style={styles.makeBtn} accessibilityRole="button">
                 {making?.token === p.token ? <ActivityIndicator size="small" color={colors.bg} /> : <Text style={styles.makeBtnText}>{t("fam.makeMonitor")}</Text>}
               </Pressable>

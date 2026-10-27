@@ -125,6 +125,7 @@ class HushCryModule : Module() {
       texts["listenTitle"]?.let { CryEngine.txtListenTitle = it }
       texts["listenText"]?.let { CryEngine.txtListenText = it }
       texts["allowAsk"]?.let { CryEngine.txtAllowAsk = it }
+      texts["monitorAsk"]?.let { CryEngine.txtMonitorAsk = it }
       texts["acked"]?.let { CryEngine.txtAcked = it }
       if (texts.containsKey("listenText")) appContext.reactContext?.let { CryListenerService.refresh(it) }
     }

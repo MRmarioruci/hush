@@ -179,6 +179,7 @@ object CryEngine {
   @Volatile var bucket = ""
   @Volatile var txtListenNotice = "{who} is listening to the room for {s} seconds"
   @Volatile var txtAllowAsk = "{who} wants to listen in. Tap to allow."
+  @Volatile var txtMonitorAsk = "{who} wants this phone to be the baby monitor. Tap to start listening."
 
   /** Seconds of sound sent with each crying alert (needs "listen in" on); 0 = none. */
   @Volatile var cryClipSecs = 10

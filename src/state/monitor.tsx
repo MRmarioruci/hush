@@ -214,6 +214,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       lowBattery: t("push.lowBattery", { name: baby, pct: "{pct}" }),
       stopped: t("push.stopped", { name: baby }),
       allowAsk: t("allow.notif", { who: "{who}" }),
+      monitorAsk: t("mon.askNotif", { who: "{who}" }),
       acked: t("push.acked", { name: baby, who: "{who}" }),
     });
   }, [lang, baby]);

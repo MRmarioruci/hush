@@ -85,12 +85,18 @@ object RoomCommands {
       // volume (Android doesn't let the mic start from the background); otherwise the parent
       // just gets the room as it is and sees it didn't switch.
       "monitor" -> {
-        if (CryEngine.running && !CryEngine.monitorMode) {
+        if (CryEngine.running && CryEngine.monitorMode) CryEngine.reportRoom(context, listOf(from)) // already is
+        else if (CryEngine.running) {
           CryEngine.setMonitor(true)
           CryEngine.listener?.invoke("status", mapOf("monitorBy" to (parent["name"] ?: "")))
           Diag.add("made the baby monitor by ${parent["name"] ?: "?"}")
           CryEngine.reportRoom(context)
-        } else CryEngine.reportRoom(context, listOf(from))
+        } else {
+          // The mic is off here, and Android only lets it start with someone touching this phone:
+          // ask whoever is near it, with one tap to start (hush://do/monitorHere).
+          askToMonitor(context, parent["name"] ?: "")
+          AlertSender.sendData(listOf(from), mapOf("type" to "monitor-asked", "from" to CryEngine.myToken, "at" to System.currentTimeMillis()))
+        }
       }
       // Another phone became the baby monitor (one per family): stop being it. The mic stays on
       // only if smart volume still wants it (the app decides when it runs).
@@ -145,6 +151,27 @@ object RoomCommands {
   }
 
   private const val ASK = "hush-ask"
+
+  /** Another phone wants this one to be the baby monitor, but the mic can't start without a tap. */
+  private fun askToMonitor(context: Context, who: String) {
+    try {
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(ASK) == null) {
+        nm.createNotificationChannel(android.app.NotificationChannel(ASK, "Requests from your phones", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+          setSound(null, null); enableVibration(false)
+        })
+      }
+      val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("hush://do/monitorHere")).setPackage(context.packageName)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      val pi = android.app.PendingIntent.getActivity(context, 4345, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+      val builder = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(context, ASK)
+        else @Suppress("DEPRECATION") android.app.Notification.Builder(context)
+      Diag.add("asked to be the baby monitor by $who (mic off: needs a tap)")
+      nm.notify(4345, builder.setSmallIcon(NotifIcon.small(context)).setColor(NotifIcon.COLOR).setContentTitle("hush")
+        .setContentText(CryEngine.txtMonitorAsk.replace("{who}", who)).setStyle(android.app.Notification.BigTextStyle().bigText(CryEngine.txtMonitorAsk.replace("{who}", who)))
+        .setContentIntent(pi).setAutoCancel(true).build())
+    } catch (_: Exception) {}
+  }
   @Volatile private var lastAsk = 0L
 
   /** Listening in is off here: ask whoever is near this phone to allow it (tap opens hush with the question). */

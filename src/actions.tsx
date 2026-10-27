@@ -22,7 +22,7 @@ import { getMyToken, CLIP_SECONDS } from "./monitor";
 import { fmtClock, fmtDur } from "./nights";
 import { babyLabel, babyLabelIn, getLang, t, tIn, useLang } from "./i18n";
 
-export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip" | "syncClip" | "fixEnd";
+export type Action = "listen" | "listenBg" | "noise" | "asleep" | "woke" | "monitor" | "sleepToggle" | "onit" | "playClip" | "syncClip" | "fixEnd" | "monitorHere";
 
 export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurrent<Record<string, object | undefined>> }) {
   const sleep = useSleep();
@@ -59,6 +59,11 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       // Becoming the baby monitor turns off the one there is (one per family).
       // (With another phone as the monitor, the Monitor tab asks first; nothing changes silently.)
       case "monitor": go("Monitor"); if (mon.listening) mon.toggleListening(); else if (!mon.rooms.length) mon.becomeMonitor(); break;
+      // Tapped "… wants this phone to be the baby monitor": become it (the one there is stops).
+      case "monitorHere":
+        go("Monitor");
+        if (!mon.listening) mon.becomeMonitor().then((err) => { if (err) dialog("hush", err); });
+        break;
       case "onit": mon.ackCry(); break;
       case "fixEnd": go("Home"); break; // Home asks when they woke (the "still asleep?" card)
       case "syncClip": mon.syncClip(); break;
