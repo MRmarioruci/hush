@@ -112,6 +112,7 @@ object CryEngine {
   /** hush is on screen (set by the app): the mic's level updates are only sent then. */
   @Volatile var uiVisible = true
   private var lastSentCrying = false
+  private var lastSentFussing = false
   private var lastSentAt = 0L
   fun setMonitor(on: Boolean) {
     if (on == monitorMode) return
@@ -381,6 +382,7 @@ object CryEngine {
       val pcm = ShortArray(HOP)
       var filled = 0
       val history = ArrayDeque<Boolean>()
+      val fussHistory = ArrayDeque<Boolean>()
       var spellStart = 0L   // when the current crying spell began, 0 = none
       var lastLoudNote = 0L
       var lastHeard = 0L    // last moment crying was detected
@@ -465,6 +467,11 @@ object CryEngine {
         history.addLast(score >= threshold)
         if (history.size > 8) history.removeFirst()
         val now = history.count { it } >= 4
+        // Fussing: something like crying, softer or shorter (1 s of the last 2 s at half the
+        // threshold). Smart volume can turn up for this, before it becomes crying.
+        fussHistory.addLast(score >= threshold * 0.5f)
+        if (fussHistory.size > 4) fussHistory.removeFirst()
+        val fussing = now || fussHistory.count { it } >= 2
         // Adult speech (not babbling or crying), for about 1.5 s of the last 4 s.
         val adult = scores[SPEECH] + 0.5f * (scores[CONVERSATION] + scores[NARRATION])
         talkHistory.addLast(adult >= TALK_SCORE && adult > cry && pitch.factor() <= 1f)
@@ -475,12 +482,13 @@ object CryEngine {
         // (and every 5 s while it goes on, for smart volume). Every event is work queued for the
         // app; on some phones a backlog of them ran it out of memory over a night.
         val tNow = System.currentTimeMillis()
-        if (uiVisible || now != lastSentCrying || (now && tNow - lastSentAt > 5000)) {
+        if (uiVisible || now != lastSentCrying || fussing != lastSentFussing || ((now || fussing) && tNow - lastSentAt > 5000)) {
           lastSentCrying = now
+          lastSentFussing = fussing
           lastSentAt = tNow
           listener?.invoke(
             "status",
-            mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
+            mapOf("score" to score.toDouble(), "level" to levelDb, "crying" to now, "fussing" to fussing, "top" to top, "topScore" to scores[top].toDouble(), "noiseDb" to denoiser.noiseDb.toDouble())
           )
         }
 

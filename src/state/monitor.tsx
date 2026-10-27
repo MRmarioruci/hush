@@ -61,6 +61,10 @@ type Monitor = {
   nightsVersion: number;
   /** Last moment crying was heard on this phone. */
   cryHeardAt: number | null;
+  /** Last moment something like crying (fussing, or crying) was heard on this phone. */
+  fussAt: number | null;
+  /** Last crying alert from the baby monitor (another phone) that reached this phone. */
+  roomCryAt: number | null;
   /** Smart white noise asks for the mic here, so it can react to crying even when the monitor is off. */
   setSoundWantsMic: (want: boolean) => void;
   micOn: boolean;
@@ -197,6 +201,8 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<CryStatus>({});
   const [lastCry, setLastCry] = useState<number | null>(null);
   const [cryHeardAt, setCryHeardAt] = useState<number | null>(null);
+  const [fussAt, setFussAt] = useState<number | null>(null);
+  const [roomCryAt, setRoomCryAt] = useState<number | null>(null);
 
   // Native alerts and the "listening" notification use the app's language.
   const lang = useLang();
@@ -260,11 +266,13 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     let latest: CryStatus | null = null;
     const a = cryDetector.onStatus((st) => {
       if (st.monitorBy !== undefined) { setListening(true, "remote", st.monitorBy || undefined); return; }
+      if (st.roomCry !== undefined) { setRoomCryAt(st.roomCry); return; }
       // Another phone took over as the baby monitor (one per family): this one gets the alerts now.
       if (st.monitorOffBy !== undefined) { setListening(false, "remote", st.monitorOffBy || undefined); update({ mode: "alerts" }); return; }
       latest = st;
       if (AppState.currentState === "active" || !!st.crying !== !!shown.crying || st.error) apply(st);
       if (st.crying) setCryHeardAt(Date.now());
+      if (st.fussing) setFussAt(Date.now());
       if (st.error) { setListening(false, "error", st.error); setMicOn(false); }
     });
     const b = cryDetector.onCry((e) => setLastCry(e.at));
@@ -1077,7 +1085,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   }, [cloudReady, rid, hasFamily, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, becomeMonitor, handOver, finishHandOver, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ m, members, me, rooms, target, room, targetName, targetBaby, setFocus, role, invite, join, joining, removeMember, leaveFamily, update, listening, requestClip, askAllow, cancelJoin, lastStop, status, lastCry, toggleListening, baby, nightsVersion, cryHeardAt, fussAt, roomCryAt, setSoundWantsMic, micOn, syncSleep, lastSync, ackCry, ack, clipAsked, syncClip, becomeMonitor, handOver, finishHandOver, cloudReady, roomSleep: cloudReady ? roomSleep : null, setRoomSleep, writeLive, isOnCloud: () => cloudReady }}>{children}</Ctx.Provider>
   );
 }
 

@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo";
 type Subscription = { remove(): void };
 
 export type VolumeState = { step: number; max: number };
-export type CryStatus = { score?: number; level?: number; crying?: boolean; top?: number; topScore?: number; error?: string; /** a parent made this phone the baby monitor */ monitorBy?: string; /** another phone took over as the baby monitor */ monitorOffBy?: string };
+export type CryStatus = { score?: number; level?: number; crying?: boolean; /** softer than crying (smart volume can react) */ fussing?: boolean; top?: number; topScore?: number; error?: string; /** a parent made this phone the baby monitor */ monitorBy?: string; /** the baby monitor (another phone) heard crying, at */ roomCry?: number; /** another phone took over as the baby monitor */ monitorOffBy?: string };
 
 type VolumeNative = {
   getVolume(): VolumeState;

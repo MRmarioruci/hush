@@ -10,7 +10,7 @@ import { outputDb, safeDistance, stepDb } from "../safety";
 import { DEFAULTS, saveSettings, type Settings } from "../storage";
 import { addEvent } from "../nights";
 import { LIMIT_DB } from "../safety";
-import { smartTarget, type SmartPhase } from "../smart";
+import { smartLevel, stirOver, type SmartPhase, type Stir } from "../smart";
 import { useMonitor } from "./monitor";
 import { t } from "../i18n";
 import * as Notifications from "expo-notifications";
@@ -54,8 +54,9 @@ type Sleep = {
   level: number | null;
   beat: number;
   still: boolean;
-  /** Smart mode: what it's doing now and the level it's aiming for (dB at the crib). */
-  smart: { phase: SmartPhase; db: number; nextChange: number | null; hearing: boolean } | null;
+  /** Smart mode: what it's doing now, its level (share of full, and dB at the crib), when that
+   *  changes next, and whether it can hear the baby (this phone's mic or the baby monitor). */
+  smart: { phase: SmartPhase; level: number; db: number; minutes: number; nextChange: number | null; hearing: boolean } | null;
 };
 
 const Ctx = createContext<Sleep | null>(null);
@@ -223,38 +224,50 @@ export function SleepProvider({ initial, still, children }: { initial: Settings;
   const mon = useMonitor();
   const isSmart = s.mode === "smart";
   const startedAt = useRef(0);
-  const smartDb = useRef(LIMIT_DB); // current level, eased toward the target
   const [smartView, setSmartView] = useState<Sleep["smart"]>(null);
+  const planRef = useRef(s.smartPlan);
+  planRef.current = s.smartPlan;
 
   useEffect(() => {
-    if (playing && !startedAt.current) {
-      startedAt.current = Date.now();
-      smartDb.current = LIMIT_DB;
-    }
-    if (!playing) startedAt.current = 0;
+    if (playing && !startedAt.current) startedAt.current = Date.now();
+    if (!playing) { startedAt.current = 0; stir.current = null; }
   }, [playing]);
 
-  // React to crying using this phone's mic while smart white noise plays.
+  // Listen for the baby with this phone's mic while smart white noise plays (also when the baby
+  // monitor is another phone: its crying alerts count too, see below).
   useEffect(() => {
     mon.setSoundWantsMic(playing && isSmart && s.smartCry);
   }, [playing, isSmart, s.smartCry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cryRef = useRef<number | null>(null);
-  cryRef.current = mon.cryHeardAt;
+  /* The baby stirred: a stirring spell starts (or carries on), and smart volume rises for it. */
+  const stir = useRef<Stir | null>(null);
+  const heard = useCallback((at: number) => {
+    if (!startedAt.current || at < startedAt.current) return;
+    const cur = stir.current;
+    if (!cur || stirOver(planRef.current, cur, at)) { stir.current = { start: at, last: at }; diag.mark("smart volume: baby stirred, rising"); }
+    else cur.last = Math.max(cur.last, at);
+  }, []);
+  const stirOn = playing && isSmart && s.smartCry;
+  // Heard on this phone: crying, or (if chosen) fussing too.
+  useEffect(() => { if (stirOn && mon.cryHeardAt) heard(mon.cryHeardAt); }, [mon.cryHeardAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (stirOn && mon.fussAt && planRef.current.on === "fuss") heard(mon.fussAt); }, [mon.fussAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Heard by the baby monitor (another phone): its crying alerts reach this phone, also with hush
+  // in the background.
+  useEffect(() => { if (stirOn && mon.roomCryAt) heard(Math.min(Date.now(), mon.roomCryAt)); }, [mon.roomCryAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Extra quieting from smart mode, as a volume multiplier (1 = full safe level). */
+  /** Smart volume's level right now, as a volume multiplier (1 = the full, safe level). It follows
+   *  the curve smoothly (a ramp, not a jump), whatever the timer tick. */
   const smartFactor = useCallback(() => {
     if (!isSmart || !startedAt.current) return 1;
     const now = Date.now();
-    const cry = cryRef.current && cryRef.current >= startedAt.current ? cryRef.current : null;
-    const target = smartTarget(now, startedAt.current, cry);
-    // Rise quickly when crying starts, settle slowly.
-    const cur = smartDb.current;
-    smartDb.current = target.db > cur ? Math.min(target.db, cur + 2) : Math.max(target.db, cur - 0.2);
+    const v = smartLevel(planRef.current, now, startedAt.current, stir.current);
+    if (stir.current && stirOver(planRef.current, stir.current, now)) stir.current = null;
     // (Only redrawn on screen; see the timer tick below for why.)
-    if (AppState.currentState === "active") setSmartView({ phase: target.phase, db: smartDb.current, nextChange: target.nextChange, hearing: mon.micOn });
-    return Math.pow(10, (smartDb.current - LIMIT_DB) / 20);
-  }, [isSmart, mon.micOn]);
+    if (AppState.currentState === "active") {
+      setSmartView({ phase: v.phase, level: v.level, db: LIMIT_DB + 20 * Math.log10(Math.max(0.01, v.level)), minutes: (now - startedAt.current) / 60_000, nextChange: v.nextChange, hearing: mon.micOn || !!mon.target });
+    }
+    return v.level;
+  }, [isSmart, mon.micOn, mon.target]);
 
   // iPhone: while the mic listens (monitor or smart volume), the shared audio session has to
   // allow recording and mixing, or starting/stopping the white noise would cut the mic off.

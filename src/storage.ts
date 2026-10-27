@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PLAN_DEFAULTS, type SmartPlan } from "./smart";
 
 export type Settings = {
   sound: string;
@@ -8,8 +9,10 @@ export type Settings = {
   vol: number;
   /** Smart lowers the noise once the baby settles and raises it when the baby cries. */
   mode: "smart" | "manual";
-  /** Smart mode listens for crying on this phone to react to it. */
+  /** Smart mode turns back up when the baby stirs (heard here, or by the baby monitor). */
   smartCry: boolean;
+  /** How smart mode drops and rises (see src/smart.ts). */
+  smartPlan: SmartPlan;
   /** First-time setup finished. */
   onboarded: boolean;
   /** The parent chose to go past the safe level at the crib (after a warning). */
@@ -32,14 +35,14 @@ export type Settings = {
 };
 export type Features = { sounds: boolean; naps: boolean; monitor: boolean };
 const KEY = "hush:settings";
-export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true, soundStartsSleep: true, smartSleep: true, globe: true, notifyOthers: true };
+export const DEFAULTS: Settings = { sound: "womb", timer: 0, dist: 2, unit: "m", vol: 70, mode: "smart", smartCry: true, smartPlan: PLAN_DEFAULTS, onboarded: false, allowLoud: false, features: { sounds: true, naps: true, monitor: true }, birthday: null, napReminders: true, soundStartsSleep: true, smartSleep: true, globe: true, notifyOthers: true };
 
 export async function loadSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
     const saved = JSON.parse(raw);
-    return { ...DEFAULTS, ...saved, features: { ...DEFAULTS.features, ...(saved.features ?? {}) } };
+    return { ...DEFAULTS, ...saved, features: { ...DEFAULTS.features, ...(saved.features ?? {}) }, smartPlan: { ...PLAN_DEFAULTS, ...(saved.smartPlan ?? {}) } };
   } catch {
     return DEFAULTS;
   }

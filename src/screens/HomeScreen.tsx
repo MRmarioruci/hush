@@ -78,6 +78,11 @@ export function HomeScreen() {
             <Text style={[styles.sub, noise.failed && { color: colors.rose }]}>
               {noise.failed ? t("noise.noAnswer", { phone: noise.phone }) : noise.pending ? t(noise.playing ? "noise.starting" : "noise.stopping", { phone: noise.phone }) : t("noise.remote", { room: noise.room, phone: noise.phone })}
             </Text>
+          ) : sleep.smart && (sleep.smart.phase === "rising" || sleep.smart.phase === "up") ? (
+            // Smart volume turning up because the baby stirred.
+            <Text style={[styles.sub, { color: colors.sage }]}>
+              {sleep.smart.phase === "rising" ? t("smart.rising", { name: babyLabel(mon.m.babyName), pct: Math.round(sleep.smart.level * 100) }) : t("smart.up", { name: babyLabel(mon.m.babyName) })}
+            </Text>
           ) : !sleep.playing && sleep.lastStop && <Text style={styles.sub}>{stopLine(sleep.lastStop, t, fmtTime)}</Text>}
 
           <ScrollView ref={soundScroll} horizontal showsHorizontalScrollIndicator={false} style={styles.soundScroll} contentContainerStyle={styles.soundRow}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
-import { SMART } from "../smart";
+import { SmartCard } from "../components/SmartVolume";
 import { useMonitor } from "../state/monitor";
 import { askMicAndNotifications, hasMic } from "../monitor";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -192,77 +192,3 @@ const styles = StyleSheet.create({
   gaugeMark: { position: "absolute", top: -5, bottom: -5, width: 3, marginLeft: -1.5, borderRadius: 2, backgroundColor: colors.cream },
 });
 
-/** Smart vs manual volume, with a small picture of the night's volume curve. */
-function SmartCard() {
-  const z = useSleep();
-  const mon = useMonitor();
-  const smart = z.s.mode === "smart";
-  const t = useT();
-  const [micMsg, setMicMsg] = useState<string | null>(null);
-  const [micOk, setMicOk] = useState(true);
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    hasMic().then(setMicOk).catch(() => setMicOk(false));
-  }, [z.s.smartCry]);
-
-  const phaseText = (() => {
-    const v = z.smart;
-    if (!v) return t("smart.idle", { start: SMART.startDb, sleep: SMART.sleepDb, min: SMART.holdMin });
-    const at = v.nextChange ? " " + t("smart.until", { time: fmtTime(v.nextChange) }) : "";
-    switch (v.phase) {
-      case "settling": return t("smart.settling", { name: mon.baby }) + at;
-      case "easing": return t("smart.easing") + at;
-      case "sleeping": return t("smart.sleeping");
-      case "calming": return t("smart.calming", { name: mon.baby }) + at;
-    }
-  })();
-
-  return (
-    <View style={styles.smartBox}>
-      <Text style={styles.smartWhat}>{t("smart.what", { name: mon.baby })}</Text>
-      <Curve phase={z.smart?.phase ?? null} startedAt={null} />
-      <View style={styles.smartNow}>
-        <View style={[styles.nowDot, { backgroundColor: z.smart ? colors.sage : colors.card2 }]} />
-        <Text style={styles.hint} numberOfLines={2}>{z.smart ? phaseText : t("smart.idleShort")}</Text>
-      </View>
-      <View style={styles.smartRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowLabel}>{t("smart.respond")}</Text>
-          <Text style={styles.hint}>{t("smart.respondSub", { name: mon.baby })}</Text>
-        </View>
-        <Switch value={z.s.smartCry} onValueChange={(v) => z.set({ smartCry: v })} trackColor={{ false: colors.card2, true: colors.sage }} thumbColor={colors.cream} />
-      </View>
-      {z.s.smartCry && !micOk && (
-        <Pressable onPress={async () => { const problem = await askMicAndNotifications(); setMicMsg(problem); setMicOk(!problem); }} style={styles.allow}>
-          <Text style={styles.allowText}>{t("smart.allowMic")}</Text>
-        </Pressable>
-      )}
-      {micMsg && <Text style={styles.hint}>{micMsg}</Text>}
-    </View>
-  );
-}
-
-/** The smart volume plan as a line: high while settling, easing down, a bump when crying. */
-function Curve({ phase }: { phase: string | null; startedAt: null }) {
-  const t = useT();
-  const W = 300, H = 64;
-  const y = (db: number) => 8 + ((SMART.startDb - db) / (SMART.startDb - SMART.sleepDb)) * (H - 22);
-  const x = (min: number) => (min / 120) * W;
-  const h = SMART.holdMin, e = SMART.holdMin + SMART.easeMin;
-  const d = `M0 ${y(SMART.startDb)} L${x(h)} ${y(SMART.startDb)} L${x(e)} ${y(SMART.sleepDb)} L${x(78)} ${y(SMART.sleepDb)} L${x(80)} ${y(SMART.startDb)} L${x(85)} ${y(SMART.startDb)} L${x(95)} ${y(SMART.sleepDb)} L${W} ${y(SMART.sleepDb)}`;
-  const dot = phase === "settling" ? [x(h / 2), y(SMART.startDb)] : phase === "easing" ? [x((h + e) / 2), y((SMART.startDb + SMART.sleepDb) / 2)] : phase === "calming" ? [x(82), y(SMART.startDb)] : phase === "sleeping" ? [x(105), y(SMART.sleepDb)] : null;
-  return (
-    <View>
-      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <Path d={`${d} L${W} ${H - 12} L0 ${H - 12} Z`} fill={colors.peach} opacity={0.12} />
-        <Path d={d} stroke={colors.peach} strokeWidth={2} fill="none" strokeLinejoin="round" />
-        {dot && <Circle cx={dot[0]} cy={dot[1]} r={5} fill={colors.cream} />}
-      </Svg>
-      <View style={styles.curveAxis}>
-        <Text style={styles.curveText}>{t("smart.curveAsleep")}</Text>
-        <Text style={styles.curveText}>{t("smart.curveCry")}</Text>
-        <Text style={styles.curveText}>{t("smart.curveRest")}</Text>
-      </View>
-    </View>
-  );
-}
