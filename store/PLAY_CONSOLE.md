@@ -152,7 +152,10 @@ one-time unlock. Copies installed outside Google Play (the GitHub APK) are alway
 2. **Monetize → Products → One-time products → Create:**
    - Product ID: **`hush_unlock`** (must match exactly; it can't be changed later)
    - Name: *Baby monitor unlock* · Description: *Keep the baby monitor on this phone. One-time purchase, no subscription.*
-   - Price: **€2.99**. Let Play set local prices for other countries.
+   - Price: **€2.99 for the launch** (until 31 January 2027), then change it to **€4.99**. Let Play set
+     local prices for other countries. Until that date the unlock screen shows a "Launch price" tag with
+     the regular price struck through (worked out from the store's price × 4.99/2.99, in its currency);
+     change `LAUNCH_UNTIL` in `src/state/unlock.tsx` if the launch runs longer or shorter.
    - Activate it.
 3. **Setup → License testing:** add your testers' Gmail addresses so they can test-buy without being charged.
 4. Free trial note: Play only runs trials for subscriptions, so the 4 days are counted by the app itself.

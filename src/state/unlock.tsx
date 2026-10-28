@@ -6,6 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import { cryDetector } from "../../modules/hush-native/src";
 import { colors, fonts } from "../theme";
 import { useT } from "../i18n";
@@ -13,6 +14,14 @@ import { ICONS, Icon } from "../components/ui";
 
 export const PRODUCT_ID = "hush_unlock";
 export const TRIAL_DAYS = 4;
+/**
+ * Launch price: until this date the unlock screen shows the regular price struck through next to
+ * the store's price (set the product to €2.99 in Play for the launch, then €4.99 after; regular
+ * prices in other currencies are worked out from the store's price with the same ratio).
+ */
+export const LAUNCH_UNTIL = new Date(2027, 0, 31).getTime();
+const REGULAR_EUR = 4.99, LAUNCH_EUR = 2.99;
+const TRIAL_NOTE = "trial-ended";
 const KEY = "hush:unlock";
 const DAY = 86_400_000;
 
@@ -28,6 +37,8 @@ type UnlockCtx = {
   /** Whole days left in the trial (1–3) while status is "trial". */
   daysLeft: number;
   price: string | null;
+  /** The regular price while the launch price runs (shown struck through), else null. */
+  regular: string | null;
   pending: boolean;
   /** Call before the baby's phone starts listening. Starts the trial if needed. False = blocked (paywall shown). */
   beforeListen: () => Promise<boolean>;
@@ -53,6 +64,8 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [saved, setSaved] = useState<Saved>({ trialStartedAt: null, unlocked: !IS_STORE_BUILD });
   const [price, setPrice] = useState<string | null>(null);
+  // The regular price in the store's currency, shown struck through while the launch price runs.
+  const [regular, setRegular] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +129,16 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
         }));
         const products = await lib.fetchProducts({ skus: [PRODUCT_ID], type: "in-app" });
         const product = (products ?? []).find((p) => p.id === PRODUCT_ID);
-        if (alive && product) setPrice(product.displayPrice);
+        if (alive && product) {
+          setPrice(product.displayPrice);
+          const p = product as unknown as { price?: number; currency?: string };
+          if (Date.now() < LAUNCH_UNTIL && typeof p.price === "number" && p.currency && p.price > 0) {
+            // Same ratio as €2.99 → €4.99, ending in .99 where that's how prices look.
+            const raw = p.price * (REGULAR_EUR / LAUNCH_EUR);
+            const val = raw >= 10 ? Math.ceil(raw) - 0.01 : Math.ceil(raw * 10) / 10 - 0.01;
+            try { setRegular(new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(val)); } catch {}
+          }
+        }
       } catch {
         // Store not reachable (offline, or Play not on this phone): keep what we saved.
       }
@@ -130,6 +152,21 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
       ? "notStarted"
       : now - saved.trialStartedAt < TRIAL_DAYS * DAY ? "trial" : "expired";
   const daysLeft = saved.trialStartedAt == null ? TRIAL_DAYS : Math.max(1, Math.ceil((saved.trialStartedAt + TRIAL_DAYS * DAY - now) / DAY));
+
+  // One gentle reminder: the morning after the free trial ends (9:30), with one tap to the unlock
+  // screen. Nothing before that, nothing after, and none once unlocked.
+  useEffect(() => {
+    if (Platform.OS === "web" || !IS_STORE_BUILD) return;
+    if (status === "unlocked" || saved.trialStartedAt == null) { Notifications.cancelScheduledNotificationAsync(TRIAL_NOTE).catch(() => {}); return; }
+    const end = new Date(saved.trialStartedAt + TRIAL_DAYS * DAY);
+    const at = new Date(end.getFullYear(), end.getMonth(), end.getDate() + (end.getHours() >= 9 ? 1 : 0), 9, 30).getTime();
+    if (at <= Date.now()) return;
+    Notifications.scheduleNotificationAsync({
+      identifier: TRIAL_NOTE,
+      content: { title: "hush", body: price ? t("unlock.notif", { price }) : t("unlock.notifNoPrice"), data: { type: "unlock" } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(at), channelId: "hush-info-2" },
+    }).catch(() => {});
+  }, [status, saved.trialStartedAt, price]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const beforeListen = useCallback(async () => {
     if (status === "unlocked" || status === "trial") return true;
@@ -176,7 +213,7 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
   }, [t]);
 
   return (
-    <Ctx.Provider value={{ status, daysLeft, price, pending, beforeListen, showPaywall: () => { setError(null); setOpen(true); }, restore }}>
+    <Ctx.Provider value={{ status, daysLeft, price, regular, pending, beforeListen, showPaywall: () => { setError(null); setOpen(true); }, restore }}>
       {children}
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
@@ -195,6 +232,13 @@ export function UnlockProvider({ children }: { children: ReactNode }) {
           </View>
           {status !== "unlocked" && (
             <>
+              {regular && price && (
+                <View style={styles.launch}>
+                  <Text style={styles.launchTag}>{t("unlock.launch")}</Text>
+                  <Text style={styles.was}>{regular}</Text>
+                  <Text style={styles.now}>{price}</Text>
+                </View>
+              )}
               <Pressable onPress={buy} disabled={busy || pending || !iap.current} style={({ pressed }) => [styles.buy, (pressed || busy) && { opacity: 0.7 }, !iap.current && { opacity: 0.4 }]} accessibilityRole="button">
                 {busy ? <ActivityIndicator color={colors.bg} /> : (
                   <Text style={styles.buyText}>{pending ? t("unlock.pending") : price ? t("unlock.buy", { price }) : t("unlock.buyNoPrice")}</Text>
@@ -256,4 +300,8 @@ const styles = StyleSheet.create({
   codeBtn: { backgroundColor: colors.card2, borderRadius: 14, paddingHorizontal: 18, justifyContent: "center" },
   codeBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.peach },
   link: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.peach, paddingVertical: 4 },
+  launch: { flexDirection: "row", alignItems: "center", gap: 10 },
+  launchTag: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.bg, backgroundColor: colors.sage, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" },
+  was: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.muted, textDecorationLine: "line-through" },
+  now: { fontFamily: fonts.display, fontSize: 22, color: colors.cream },
 });

@@ -414,8 +414,9 @@ function TrialNote() {
   const u = useUnlock();
   if (u.status === "unlocked") return null;
   const text = u.status === "notStarted" ? t("unlock.noteStart", { count: TRIAL_DAYS })
+    : u.status === "trial" && u.daysLeft <= 1 ? (u.price ? t("unlock.noteLast", { price: u.price }) : t("unlock.noteLeft", { count: 1 }))
     : u.status === "trial" ? t("unlock.noteLeft", { count: u.daysLeft })
-    : t("unlock.noteEnded");
+    : u.price ? t("unlock.noteEndedPrice", { price: u.price }) : t("unlock.noteEnded");
   return (
     <Pressable onPress={u.showPaywall} style={({ pressed }) => [styles.trial, pressed && { opacity: 0.7 }]} accessibilityRole="button">
       <View style={[styles.trialDot, u.status === "expired" && { backgroundColor: colors.rose }]} />

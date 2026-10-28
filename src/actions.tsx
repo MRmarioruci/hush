@@ -1,5 +1,6 @@
 // Quick actions from outside the app: home-screen widget, long-press shortcuts on the app icon,
 // the Quick Settings tile and notification buttons. They all end up as hush://do/<action>.
+import { useUnlock } from "./state/unlock";
 import { cryDetector } from "../modules/hush-native/src";
 import { remoteNoise } from "./state/noise";
 import { showMonitorMain } from "./monitorView";
@@ -75,6 +76,9 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
       }
     }
   };
+  const unlock = useUnlock();
+  const unlockRef = useRef(unlock);
+  unlockRef.current = unlock;
   const joinRef = useRef(mon.join);
   joinRef.current = mon.join;
   const askRef = useRef(mon.askAllow);
@@ -121,6 +125,8 @@ export function QuickActionsHub({ nav }: { nav: NavigationContainerRefWithCurren
         setTimeout(() => { goMonitor(); playFromOutside(d.url!); }, 400);
         return;
       }
+      // The free trial ended: the unlock screen.
+      if (d?.type === "unlock") { setTimeout(() => { go("Monitor"); unlockRef.current.showPaywall(); }, 500); return; }
       // "Still asleep?": Home, where it asks when they woke.
       if (d?.type === "still") { setTimeout(() => go("Home"), 400); return; }
       // Crying (and anything else about the baby's room): straight to where the cry and its recording are.
